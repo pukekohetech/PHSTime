@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Classroom Timetable Screen</title>
+  <style>
+    :root{
+      --bgGrey:#9aa0a6;
+      --bgGreen:#2ecc71;
+      --bgOrange:#f39c12;
+      --bgRed:#e74c3c;
+
+      --breakBlue:#bfe7f6;
+      --periodGreen:#d9f3d2;
+      --specialPink:#f0cbed;
+    }
+
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      transition: background-color 1200ms ease;
+      background: var(--bgGrey);
+    }
+
+    /* ================= TOP CONTROLS (smaller) ================= */
+    .controls{
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      display:flex;
+      gap: 8px;
+      z-index: 30;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: calc(100% - 20px);
+    }
+    button, .pillBtn, input[type="range"]{
+      border: 0;
+      padding: 7px 9px;
+      border-radius: 10px;
+      cursor:pointer;
+      font-weight: 850;
+      font-size: 12px;
+      line-height: 1;
+      background: rgba(255,255,255,0.88);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.13);
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+    }
+    button:active{ transform: translateY(1px); }
+    .pillBtn{
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      padding: 6px 9px;
+    }
+    .pillBtn label{ cursor:pointer; font-weight: 900; }
+    .pillBtn input{ transform: scale(1.05); }
+
+    /* ================= MAIN MESSAGE (unchanged size) ================= */
+    .messageWrap{
+      width: min(1200px, calc(100% - 40px));
+      padding: 22px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 14px 40px rgba(0,0,0,0.18);
+      backdrop-filter: blur(6px);
+    }
+    #studentMessage{
+      outline:none;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.5px;
+      font-size: clamp(44px, 6vw, 96px);
+      text-align: center;
+      margin: 0;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .hint{
+      text-align:center;
+      margin-top: 10px;
+      opacity: 0.75;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    /* ================= BIG COUNTDOWN (only in RED) ================= */
+    #countdownOverlay{
+      position: fixed;
+      left: 10px;
+      top: 10px;
+      z-index: 25;
+      padding: 10px 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.88);
+      box-shadow: 0 12px 34px rgba(0,0,0,0.16);
+      backdrop-filter: blur(6px);
+      display:none;
+      min-width: 180px;
+    }
+    #countdownOverlay .label{
+      font-size: 12px;
+      font-weight: 900;
+      opacity: .7;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    #countdownOverlay .time{
+      font-size: 40px;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    /* ================= PANELS ================= */
+    .panel{
+      position: fixed;
+      bottom: 10px;
+      z-index: 20;
+      background: rgba(255,255,255,0.88);
+      padding: 14px 16px;
+      border-radius: 16px;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.16);
+      backdrop-filter: blur(6px);
+    }
+    .hidden{ display:none !important; }
+
+    #infoCard{ left: 10px; width: min(520px, calc(100% - 20px)); }
+    #timetableCard{ right: 10px; width: min(520px, calc(100% - 20px)); }
+
+    .big { font-size: 16px; font-weight: 950; margin: 0 0 6px; }
+    .row { margin: 5px 0; font-size: 13px; }
+    .muted { opacity: 0.75; }
+
+    .pill{
+      display:inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.08);
+      font-weight: 900;
+      margin-left: 8px;
+      font-size: 12px;
+    }
+    code{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    /* ================= TIMETABLE TABLE ================= */
+    table{
+      width:100%;
+      border-collapse: collapse;
+      overflow:hidden;
+      border-radius: 12px;
+      font-weight: 850;
+    }
+    thead th{
+      background: #111;
+      color: #fff;
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 12px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    tbody td{
+      border: 1px solid rgba(0,0,0,0.1);
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    tbody tr.period{ background: var(--periodGreen); }
+    tbody tr.break{ background: var(--breakBlue); }
+    tbody tr.special{ background: var(--specialPink); }
+    tbody tr.active{
+      outline: 4px solid rgba(0,0,0,0.35);
+      outline-offset: -4px;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.65);
+    }
+
+    /* ================= SETTINGS (auto messages) ================= */
+    .settings{
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      display: grid;
+      gap: 8px;
+    }
+    .settings label{
+      font-size: 11px;
+      font-weight: 950;
+      opacity: .75;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    textarea{
+      width: 100%;
+      min-height: 52px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.15);
+      padding: 10px 12px;
+      font-family: inherit;
+      font-weight: 750;
+      background: rgba(255,255,255,0.8);
+      font-size: 13px;
+    }
+
+    .testBtn{ padding: 6px 8px; }
+  </style>
+</head>
+
+<body>
+  <div id="countdownOverlay">
+    <div class="label">Pack up time left</div>
+    <div class="time" id="packupTimeLeft">5:00</div>
+  </div>
+
+  <div class="controls">
+    <button id="fullscreenBtn">Full screen</button>
+    <button id="toggleInfo">Hide info</button>
+    <button id="toggleTable">Hide timetable</button>
+
+    <span class="pillBtn" title="Play sounds on transition points">
+      <input id="soundOn" type="checkbox" />
+      <label for="soundOn">Sounds</label>
+    </span>
+
+    <span class="pillBtn" title="Play a short pack-up tune during red (optional)">
+      <input id="packupSongOn" type="checkbox" />
+      <label for="packupSongOn">Pack-up</label>
+    </span>
+
+    <span class="pillBtn" title="Automatically set the big message by phase">
+      <input id="autoMsgOn" type="checkbox" />
+      <label for="autoMsgOn">Auto msg</label>
+    </span>
+
+    <span class="pillBtn" title="Volume">
+      🔊 <input id="volume" type="range" min="0" max="100" value="40" />
+    </span>
+
+    <button id="resetMsg">Reset</button>
+
+    <!-- TEST SOUND BUTTONS -->
+    <button class="testBtn" id="testChime" title="Green → Orange cue">Test chime</button>
+    <button class="testBtn" id="testDouble" title="Orange → Red cue">Test pack-up cue</button>
+    <button class="testBtn" id="testBell" title="End of block cue">Test end bell</button>
+    <button class="testBtn" id="testSong" title="Plays ~3 seconds">Test song</button>
+  </div>
+
+  <div class="messageWrap" aria-label="Student message">
+    <p id="studentMessage" contenteditable="true" spellcheck="false"></p>
+    <div class="hint" id="saveHint">Click the big text to edit • Auto-saves on this device</div>
+  </div>
+
+  <div id="infoCard" class="panel">
+    <p class="big" id="status">Loading…</p>
+    <div class="row"><span class="muted">Now:</span> <span id="now"></span></div>
+    <div class="row"><span class="muted">Block:</span> <span id="block"></span></div>
+    <div class="row"><span class="muted">Time range:</span> <span id="range"></span></div>
+    <div class="row"><span class="muted">Phase:</span> <span id="phase"></span></div>
+    <div class="row"><span class="muted">Next change in:</span> <span id="nextChange"></span></div>
+
+    <div class="settings">
+      <div>
+        <label for="tplGreen">Do Now / Mahi Ināianei (Green)</label>
+        <textarea id="tplGreen"></textarea>
+      </div>
+      <div>
+        <label for="tplOrange">Work Time (Orange)</label>
+        <textarea id="tplOrange"></textarea>
+      </div>
+      <div>
+        <label for="tplRed">Pack up (Red)</label>
+        <textarea id="tplRed"></textarea>
+      </div>
+      <div>
+        <label for="tplGrey">Outside timetable (Grey)</label>
+        <textarea id="tplGrey"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div id="timetableCard" class="panel">
+    <p class="big">Timetable</p>
+    <table>
+      <thead>
+        <tr><th>Period</th><th>Time</th></tr>
+      </thead>
+      <tbody id="ttBody"></tbody>
+    </table>
+  </div>
+
+<script>
+  // ================= SETTINGS (minutes) =================
+  const GREEN_MIN = 5; // Do Now / Mahi Ināianei
+  const RED_MIN   = 5; // Pack up
+
+  // ================= TIMETABLE =================
+  const blocks = [
+    { name: "PERIOD 1",   start: "09:00", end: "09:55", type: "period" },
+    { name: "PERIOD 2",   start: "10:00", end: "10:55", type: "period" },
+    { name: "TE MAAHURI", start: "10:55", end: "11:25", type: "special" },
+    { name: "BREAK 1",    start: "11:25", end: "12:00", type: "break" },
+    { name: "PERIOD 3",   start: "12:00", end: "12:55", type: "period" },
+    { name: "PERIOD 4",   start: "13:00", end: "13:55", type: "period" },
+    { name: "BREAK 2",    start: "13:55", end: "14:20", type: "break" },
+    { name: "PERIOD 5",   start: "14:20", end: "15:15", type: "period" },
+  ];
+
+  // ================= HELPERS =================
+  const $ = (id) => document.getElementById(id);
+
+  function todayAt(hhmm){
+    const [h, m] = hhmm.split(":").map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
+  function fmtClock(d){
+    return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  }
+  function fmtRange(hhmm){
+    const d = todayAt(hhmm);
+    return d.toLocaleTimeString([], { hour:"numeric", minute:"2-digit" });
+  }
+  function secondsBetween(a, b){
+    return Math.max(0, Math.floor((b - a) / 1000));
+  }
+  function mmss(totalSeconds){
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2,"0")}`;
+  }
+  function setBg(color){
+    document.body.style.backgroundColor = color;
+  }
+  function findCurrentBlock(now){
+    for (const b of blocks){
+      const s = todayAt(b.start);
+      const e = todayAt(b.end);
+      if (now >= s && now < e) return { ...b, s, e };
+    }
+    return null;
+  }
+
+  // ================= PHASE LOGIC =================
+  function phaseFor(now, current){
+    if (!current) return { key:"grey", label:"Outside timetable", bg:"var(--bgGrey)" };
+
+    const { s, e } = current;
+    const greenUntil = new Date(s.getTime() + GREEN_MIN * 60 * 1000);
+    const redFrom    = new Date(e.getTime() - RED_MIN   * 60 * 1000);
+
+    if (now < greenUntil) return { key:"green", label:"Do Now / Mahi Ināianei", bg:"var(--bgGreen)", nextAt: greenUntil };
+    if (now >= redFrom)    return { key:"red",   label:"Pack up",               bg:"var(--bgRed)",   nextAt: e };
+    return                 { key:"orange",label:"Work Time",             bg:"var(--bgOrange)",nextAt: redFrom };
+  }
+
+  function currentPhaseKeyNow(){
+    const now = new Date();
+    const current = findCurrentBlock(now);
+    return phaseFor(now, current).key;
+  }
+
+  // ================= RENDER TIMETABLE =================
+  const ttBody = $("ttBody");
+  function renderTimetable(activeName){
+    ttBody.innerHTML = "";
+    for (const b of blocks){
+      const tr = document.createElement("tr");
+      tr.className = b.type + (b.name === activeName ? " active" : "");
+      const td1 = document.createElement("td");
+      td1.textContent = b.name;
+      const td2 = document.createElement("td");
+      td2.textContent = `${fmtRange(b.start)} – ${fmtRange(b.end)}`;
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      ttBody.appendChild(tr);
+    }
+  }
+
+  // ================= STORAGE SAFETY (for autosave) =================
+  function storageOK(){
+    try{
+      const k = "__storage_test__";
+      localStorage.setItem(k, "1");
+      localStorage.removeItem(k);
+      return true;
+    } catch (e){
+      return false;
+    }
+  }
+
+  // ================= STUDENT MESSAGE (manual editable + saved) =================
+  const msgEl = $("studentMessage");
+
+  // ✅ stable key (won't change if you rename the file)
+  const MSG_KEY = "pukekohe_class_screen_student_message_v1";
+
+  const defaultManualMsg = "Do Now:\nOpen your book and begin the starter.";
+
+  function loadMsg(){
+    try{
+      const saved = localStorage.getItem(MSG_KEY);
+      msgEl.textContent = (saved !== null && saved !== "") ? saved : defaultManualMsg;
+    } catch (e){
+      msgEl.textContent = defaultManualMsg;
+    }
+  }
+
+  function saveMsg(){
+    try{
+      localStorage.setItem(MSG_KEY, msgEl.textContent);
+    } catch (e){
+      // storage blocked (private mode/iframe/etc.)
+    }
+  }
+
+  // contenteditable is quirky: save on multiple events
+  ["input","keyup","blur","paste"].forEach(ev => msgEl.addEventListener(ev, saveMsg));
+
+  // ================= AUTO MESSAGE TEMPLATES =================
+  const AUTO_KEY = "autoMsgOn_v3";
+  const TPL_KEY  = "autoMsgTemplates_v3";
+
+  const defaultTemplates = {
+    green: "Do Now / Mahi Ināianei:\n• Sit down\n• Devices closed\n• Start the task on the board",
+    orange:"Work Time:\n• Focus + meet success criteria\n• Ask 3 before me",
+    red:   "Pack up:\n• Save + submit\n• Tidy your area\n• Stand behind your chair",
+    grey:  "Please wait quietly.\n(We start at the next bell time)"
+  };
+
+  function loadTemplates(){
+    const raw = localStorage.getItem(TPL_KEY);
+    const t = raw ? JSON.parse(raw) : defaultTemplates;
+    $("tplGreen").value  = t.green;
+    $("tplOrange").value = t.orange;
+    $("tplRed").value    = t.red;
+    $("tplGrey").value   = t.grey;
+  }
+
+  function readTemplates(){
+    const t = {
+      green: $("tplGreen").value,
+      orange:$("tplOrange").value,
+      red:   $("tplRed").value,
+      grey:  $("tplGrey").value
+    };
+    localStorage.setItem(TPL_KEY, JSON.stringify(t));
+    return t;
+  }
+
+  function applyAutoMessage(phaseKey){
+    if (!$("autoMsgOn").checked) return;
+    const t = readTemplates();
+    const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey };
+    msgEl.textContent = map[phaseKey] ?? "";
+    saveMsg();
+  }
+
+  ["tplGreen","tplOrange","tplRed","tplGrey"].forEach(id=>{
+    $(id).addEventListener("input", () => {
+      readTemplates();
+      if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
+    });
+  });
+
+  function setAutoOnUI(){
+    $("autoMsgOn").checked = localStorage.getItem(AUTO_KEY) === "1";
+  }
+
+  $("autoMsgOn").addEventListener("change", () => {
+    const on = $("autoMsgOn").checked;
+    localStorage.setItem(AUTO_KEY, on ? "1" : "0");
+    if (on) applyAutoMessage(currentPhaseKeyNow());
+  });
+
+  // ================= RESET (fixed) =================
+  $("resetMsg").addEventListener("click", () => {
+    localStorage.removeItem(MSG_KEY);
+
+    if ($("autoMsgOn").checked) {
+      applyAutoMessage(currentPhaseKeyNow());
+    } else {
+      msgEl.textContent = defaultManualMsg;
+      saveMsg();
+    }
+  });
+
+  // ================= PANELS HIDE/SHOW =================
+  const INFO_KEY = "infoHidden_v4";
+  const TABLE_KEY = "tableHidden_v4";
+
+  function applyPanelVisibility(){
+    const infoHidden = localStorage.getItem(INFO_KEY) === "1";
+    const tableHidden = localStorage.getItem(TABLE_KEY) === "1";
+    $("infoCard").classList.toggle("hidden", infoHidden);
+    $("timetableCard").classList.toggle("hidden", tableHidden);
+    $("toggleInfo").textContent = infoHidden ? "Show info" : "Hide info";
+    $("toggleTable").textContent = tableHidden ? "Show timetable" : "Hide timetable";
+  }
+
+  $("toggleInfo").addEventListener("click", ()=>{
+    const hidden = localStorage.getItem(INFO_KEY) === "1";
+    localStorage.setItem(INFO_KEY, hidden ? "0":"1");
+    applyPanelVisibility();
+  });
+
+  $("toggleTable").addEventListener("click", ()=>{
+    const hidden = localStorage.getItem(TABLE_KEY) === "1";
+    localStorage.setItem(TABLE_KEY, hidden ? "0":"1");
+    applyPanelVisibility();
+  });
+
+  // ================= FULLSCREEN =================
+  $("fullscreenBtn").addEventListener("click", async ()=>{
+    try{
+      if (!document.fullscreenElement){
+        await document.documentElement.requestFullscreen();
+        $("fullscreenBtn").textContent = "Exit full screen";
+      } else {
+        await document.exitFullscreen();
+        $("fullscreenBtn").textContent = "Full screen";
+      }
+    } catch (e) {
+      alert("Fullscreen blocked by the browser. Try pressing F11.");
+    }
+  });
+  document.addEventListener("fullscreenchange", ()=>{
+    $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
+
+  // ================= SOUNDS (WebAudio) =================
+  let audioCtx = null;
+  let packupInterval = null;
+
+  const SOUND_KEY = "soundOn_v3";
+  const SONG_KEY  = "packupSongOn_v3";
+  const VOL_KEY   = "volume_v3";
+
+  function getVolume(){
+    return Number($("volume").value) / 100;
+  }
+  function ensureAudio(){
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  }
+
+  // NOTE: if this is too loud/distorted, drop gain values from 5 → 2
+  function beep(freq=880, durationMs=180, type="sine", gain=5){
+    ensureAudio();
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+
+    const vol = gain * getVolume();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.02);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + durationMs/1000);
+
+    osc.connect(g);
+    g.connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + durationMs/1000 + 0.05);
+  }
+
+  function chime(){
+    beep(660, 140, "sine", 5);
+    setTimeout(()=>beep(880, 160, "sine", 5), 120);
+    setTimeout(()=>beep(990, 180, "sine", 5), 250);
+  }
+  function doubleTap(){
+    beep(740, 120, "triangle", 5);
+    setTimeout(()=>beep(740, 120, "triangle", 5), 180);
+  }
+  function endBell(){
+    beep(523, 180, "sine", 5);
+    setTimeout(()=>beep(659, 180, "sine", 5), 190);
+    setTimeout(()=>beep(784, 220, "sine", 5), 380);
+  }
+
+  function stopPackupSong(){
+    if (packupInterval) {
+      clearInterval(packupInterval);
+      packupInterval = null;
+    }
+  }
+  function startPackupSong(){
+    stopPackupSong();
+    const pattern = [
+      [784,140],[880,140],[988,160],[880,140],
+      [784,140],[659,160],[784,180],[659,160]
+    ];
+    let i = 0;
+    packupInterval = setInterval(()=>{
+      const [f, d] = pattern[i % pattern.length];
+      beep(f, d, "sine", 5);
+      i++;
+    }, 220);
+  }
+
+  function loadSoundSettings(){
+    $("soundOn").checked = localStorage.getItem(SOUND_KEY) === "1";
+    $("packupSongOn").checked = localStorage.getItem(SONG_KEY) === "1";
+    const v = localStorage.getItem(VOL_KEY);
+    if (v !== null) $("volume").value = v;
+  }
+
+  $("soundOn").addEventListener("change", ()=>{
+    localStorage.setItem(SOUND_KEY, $("soundOn").checked ? "1":"0");
+    if ($("soundOn").checked) ensureAudio();
+  });
+
+  $("packupSongOn").addEventListener("change", ()=>{
+    localStorage.setItem(SONG_KEY, $("packupSongOn").checked ? "1":"0");
+    if ($("packupSongOn").checked) ensureAudio();
+  });
+
+  $("volume").addEventListener("input", ()=>{
+    localStorage.setItem(VOL_KEY, $("volume").value);
+  });
+
+  // ================= TEST SOUND BUTTONS =================
+  function stopSongAfter(ms){
+    setTimeout(() => stopPackupSong(), ms);
+  }
+
+  $("testChime").addEventListener("click", () => {
+    ensureAudio();
+    chime();
+  });
+
+  $("testDouble").addEventListener("click", () => {
+    ensureAudio();
+    doubleTap();
+  });
+
+  $("testBell").addEventListener("click", () => {
+    ensureAudio();
+    endBell();
+  });
+
+  $("testSong").addEventListener("click", () => {
+    ensureAudio();
+    startPackupSong();
+    stopSongAfter(3000);
+  });
+
+  // ================= STATE + UPDATE LOOP =================
+  let lastPhaseKey = null;
+  let lastBlockName = null;
+
+  function update(){
+    const now = new Date();
+    $("now").textContent = fmtClock(now);
+
+    const current = findCurrentBlock(now);
+    const ph = phaseFor(now, current);
+
+    renderTimetable(current ? current.name : null);
+
+    if (!current){
+      $("status").textContent = "No active block";
+      $("block").textContent = "—";
+      $("range").textContent = "—";
+      $("phase").innerHTML = `${ph.label} <span class="pill">GREY</span>`;
+      $("nextChange").textContent = "—";
+      $("countdownOverlay").style.display = "none";
+    } else {
+      $("status").textContent = current.name;
+      $("block").textContent = current.name;
+      $("range").textContent = `${fmtRange(current.start)} – ${fmtRange(current.end)}`;
+
+      $("phase").innerHTML = `${ph.label} <span class="pill">${ph.key.toUpperCase()}</span>`;
+
+      const secs = ph.nextAt ? secondsBetween(now, ph.nextAt) : 0;
+      $("nextChange").textContent = secs ? `${mmss(secs)} (${secs}s)` : "—";
+
+      if (ph.key === "red"){
+        const leftSecs = secondsBetween(now, current.e);
+        $("packupTimeLeft").textContent = mmss(leftSecs);
+        $("countdownOverlay").style.display = "block";
+      } else {
+        $("countdownOverlay").style.display = "none";
+      }
+    }
+
+    setBg(ph.bg);
+
+    const blockName = current ? current.name : null;
+    const phaseKey = ph.key;
+
+    const blockEnded = (lastBlockName && !blockName);
+    const changedBlock = (blockName !== lastBlockName);
+    const changedPhase = (phaseKey !== lastPhaseKey);
+
+    if (changedPhase || changedBlock || blockEnded){
+      const soundsOn = $("soundOn").checked;
+
+      if (soundsOn){
+        if (blockEnded) endBell();
+        else if (lastPhaseKey === "green" && phaseKey === "orange") chime();
+        else if (lastPhaseKey === "orange" && phaseKey === "red") doubleTap();
+        else if (lastPhaseKey === "grey" && phaseKey !== "grey") chime();
+      }
+
+      if (changedPhase || changedBlock) applyAutoMessage(phaseKey);
+
+      const songOn = $("packupSongOn").checked;
+      if (songOn && phaseKey === "red") startPackupSong();
+      else stopPackupSong();
+    }
+
+    lastPhaseKey = phaseKey;
+    lastBlockName = blockName;
+  }
+
+  // ================= INIT =================
+  function init(){
+    // Show a warning if storage is blocked
+    if (!storageOK()){
+      const h = document.getElementById("saveHint");
+      if (h) h.textContent = "Click the big text to edit • ⚠ Saving is blocked on this device/browser";
+    }
+
+    loadMsg();
+    loadTemplates();
+    setAutoOnUI();
+    loadSoundSettings();
+    applyPanelVisibility();
+    renderTimetable(null);
+
+    if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
+
+    update();
+    setInterval(update, 1000);
+
+    // First user click anywhere can unlock audio on Chrome
+    document.addEventListener("pointerdown", () => {
+      if ($("soundOn").checked || $("packupSongOn").checked) ensureAudio();
+    }, { once:true });
+  }
+
+  init();
+</script>
+</body>
+</html>
