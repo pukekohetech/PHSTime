@@ -26,18 +26,14 @@
       background: var(--bgGrey);
     }
 
-    /* ================= TOP CONTROLS (smaller) ================= */
+    /* ================= OPTIONS BUTTON + DROPDOWN ================= */
     .controls{
       position: fixed;
       top: 10px;
       right: 10px;
-      display:flex;
-      gap: 8px;
-      z-index: 30;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      max-width: calc(100% - 20px);
+      z-index: 40;
     }
+
     button, .pillBtn, input[type="range"]{
       border: 0;
       padding: 7px 9px;
@@ -52,6 +48,78 @@
       white-space: nowrap;
     }
     button:active{ transform: translateY(1px); }
+
+    /* Less conspicuous “options” button */
+    #optionsBtn{
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border-radius: 14px;
+      display:grid;
+      place-items:center;
+      font-size: 18px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.14);
+    }
+
+    /* Dropdown panel */
+    #optionsMenu{
+      position: absolute;
+      top: 52px;
+      right: 0;
+      width: min(340px, calc(100vw - 20px));
+      background: rgba(255,255,255,0.92);
+      border-radius: 18px;
+      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+      transform-origin: top right;
+      animation: pop 120ms ease;
+      touch-action: none; /* helps drag-to-dismiss */
+    }
+    @keyframes pop{
+      from { transform: scale(0.98); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .hidden{ display:none !important; }
+
+    .menuHeader{
+      padding: 12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      cursor: grab;
+      user-select: none;
+    }
+    .menuHeader:active{ cursor: grabbing; }
+    .menuTitle{
+      font-weight: 950;
+      letter-spacing: -0.2px;
+    }
+    .menuHint{
+      opacity: .65;
+      font-weight: 800;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .menuBody{
+      padding: 12px 14px 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .menuRow{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .pillBtn{
       display:flex;
       align-items:center;
@@ -60,6 +128,24 @@
     }
     .pillBtn label{ cursor:pointer; font-weight: 900; }
     .pillBtn input{ transform: scale(1.05); }
+
+    .divider{
+      height: 1px;
+      background: rgba(0,0,0,0.08);
+      margin: 2px 0;
+    }
+
+    details{
+      border-radius: 14px;
+      background: rgba(0,0,0,0.04);
+      padding: 10px 10px;
+    }
+    summary{
+      cursor: pointer;
+      font-weight: 950;
+      list-style: none;
+    }
+    summary::-webkit-details-marker{ display:none; }
 
     /* ================= MAIN MESSAGE (unchanged size) ================= */
     .messageWrap{
@@ -127,7 +213,6 @@
       box-shadow: 0 12px 34px rgba(0,0,0,0.16);
       backdrop-filter: blur(6px);
     }
-    .hidden{ display:none !important; }
 
     #infoCard{ left: 10px; width: min(520px, calc(100% - 20px)); }
     #timetableCard{ right: 10px; width: min(520px, calc(100% - 20px)); }
@@ -216,37 +301,64 @@
     <div class="time" id="packupTimeLeft">5:00</div>
   </div>
 
+  <!-- OPTIONS BUTTON + DROPDOWN -->
   <div class="controls">
-    <button id="fullscreenBtn">Full screen</button>
-    <button id="toggleInfo">Hide info</button>
-    <button id="toggleTable">Hide timetable</button>
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
 
-    <span class="pillBtn" title="Play sounds on transition points">
-      <input id="soundOn" type="checkbox" />
-      <label for="soundOn">Sounds</label>
-    </span>
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+        <div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
+        </div>
+       <button id="closeMenu" type="button" title="Close">✕</button>
+      </div>
 
-    <span class="pillBtn" title="Play a short pack-up tune during red (optional)">
-      <input id="packupSongOn" type="checkbox" />
-      <label for="packupSongOn">Pack-up</label>
-    </span>
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn">Full screen</button>
+          <button id="toggleInfo">Hide info</button>
+          <button id="toggleTable">Hide timetable</button>
+        </div>
 
-    <span class="pillBtn" title="Automatically set the big message by phase">
-      <input id="autoMsgOn" type="checkbox" />
-      <label for="autoMsgOn">Auto msg</label>
-    </span>
+        <div class="divider"></div>
 
-    <span class="pillBtn" title="Volume">
-      🔊 <input id="volume" type="range" min="0" max="100" value="40" />
-    </span>
+        <div class="menuRow">
+          <span class="pillBtn" title="Play sounds on transition points">
+            <input id="soundOn" type="checkbox" />
+            <label for="soundOn">Sounds</label>
+          </span>
 
-    <button id="resetMsg">Reset</button>
+          <span class="pillBtn" title="Play a short pack-up tune during red (optional)">
+            <input id="packupSongOn" type="checkbox" />
+            <label for="packupSongOn">Pack-up</label>
+          </span>
 
-    <!-- TEST SOUND BUTTONS -->
-    <button class="testBtn" id="testChime" title="Green → Orange cue">Test chime</button>
-    <button class="testBtn" id="testDouble" title="Orange → Red cue">Test pack-up cue</button>
-    <button class="testBtn" id="testBell" title="End of block cue">Test end bell</button>
-    <button class="testBtn" id="testSong" title="Plays ~3 seconds">Test song</button>
+          <span class="pillBtn" title="Automatically set the big message by phase">
+            <input id="autoMsgOn" type="checkbox" />
+            <label for="autoMsgOn">Auto msg</label>
+          </span>
+        </div>
+
+        <div class="menuRow">
+          <span class="pillBtn" title="Volume">
+            🔊 <input id="volume" type="range" min="0" max="100" value="40" />
+          </span>
+          <button id="resetMsg">Reset</button>
+        </div>
+
+        <details>
+          <summary>Advanced tests</summary>
+          <div style="height:10px"></div>
+          <div class="menuRow">
+            <button class="testBtn" id="testChime" title="Green → Orange cue">Test chime</button>
+            <button class="testBtn" id="testDouble" title="Orange → Red cue">Test pack-up cue</button>
+            <button class="testBtn" id="testBell" title="End of block cue">Test end bell</button>
+            <button class="testBtn" id="testSong" title="Plays ~3 seconds">Test song</button>
+          </div>
+        </details>
+      </div>
+    </div>
   </div>
 
   <div class="messageWrap" aria-label="Student message">
@@ -297,6 +409,9 @@
   const GREEN_MIN = 5; // Do Now / Mahi Ināianei
   const RED_MIN   = 5; // Pack up
 
+  // Pack-up tune: number of full pattern cycles to play when entering RED
+  const PACKUP_SONG_CYCLES = 3;
+
   // ================= TIMETABLE =================
   const blocks = [
     { name: "PERIOD 1",   start: "09:00", end: "09:55", type: "period" },
@@ -344,6 +459,65 @@
     }
     return null;
   }
+
+  // ================= OPTIONS MENU BEHAVIOUR =================
+  const optionsBtn = $("optionsBtn");
+  const optionsMenu = $("optionsMenu");
+  const closeMenuBtn = $("closeMenu");
+  const menuHeader = $("menuHeader");
+
+  function openMenu(){
+    optionsMenu.classList.remove("hidden");
+    optionsBtn.setAttribute("aria-expanded", "true");
+  }
+  function closeMenu(){
+    optionsMenu.classList.add("hidden");
+    optionsBtn.setAttribute("aria-expanded", "false");
+  }
+  function toggleMenu(){
+    optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu();
+  }
+
+  optionsBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+ ["pointerdown","click"].forEach(evt => {
+  closeMenuBtn.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenu();
+  });
+});
+
+
+  // Click outside to close
+  document.addEventListener("pointerdown", (e) => {
+    if (optionsMenu.classList.contains("hidden")) return;
+    if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+  });
+
+  // Esc to close
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
+
+  // Drag down to dismiss (touch/mouse)
+  let dragStartY = null;
+  menuHeader.addEventListener("pointerdown", (e) => {
+    dragStartY = e.clientY;
+    menuHeader.setPointerCapture(e.pointerId);
+  });
+  menuHeader.addEventListener("pointermove", (e) => {
+    if (dragStartY === null) return;
+    const dy = e.clientY - dragStartY;
+    if (dy > 70) {
+      dragStartY = null;
+      closeMenu();
+    }
+  });
+  menuHeader.addEventListener("pointerup", () => dragStartY = null);
+  menuHeader.addEventListener("pointercancel", () => dragStartY = null);
 
   // ================= PHASE LOGIC =================
   function phaseFor(now, current){
@@ -395,10 +569,7 @@
 
   // ================= STUDENT MESSAGE (manual editable + saved) =================
   const msgEl = $("studentMessage");
-
-  // ✅ stable key (won't change if you rename the file)
   const MSG_KEY = "pukekohe_class_screen_student_message_v1";
-
   const defaultManualMsg = "Do Now:\nOpen your book and begin the starter.";
 
   function loadMsg(){
@@ -413,12 +584,9 @@
   function saveMsg(){
     try{
       localStorage.setItem(MSG_KEY, msgEl.textContent);
-    } catch (e){
-      // storage blocked (private mode/iframe/etc.)
-    }
+    } catch (e){}
   }
 
-  // contenteditable is quirky: save on multiple events
   ["input","keyup","blur","paste"].forEach(ev => msgEl.addEventListener(ev, saveMsg));
 
   // ================= AUTO MESSAGE TEMPLATES =================
@@ -477,7 +645,7 @@
     if (on) applyAutoMessage(currentPhaseKeyNow());
   });
 
-  // ================= RESET (fixed) =================
+  // ================= RESET =================
   $("resetMsg").addEventListener("click", () => {
     localStorage.removeItem(MSG_KEY);
 
@@ -492,6 +660,12 @@
   // ================= PANELS HIDE/SHOW =================
   const INFO_KEY = "infoHidden_v4";
   const TABLE_KEY = "tableHidden_v4";
+
+  // Default to minimized on first run (but don't override existing saved preference)
+  function setMinimizedDefaultsOnce(){
+    if (localStorage.getItem(INFO_KEY) === null) localStorage.setItem(INFO_KEY, "1");
+    if (localStorage.getItem(TABLE_KEY) === null) localStorage.setItem(TABLE_KEY, "1");
+  }
 
   function applyPanelVisibility(){
     const infoHidden = localStorage.getItem(INFO_KEY) === "1";
@@ -548,7 +722,6 @@
     if (audioCtx.state === "suspended") audioCtx.resume();
   }
 
-  // NOTE: if this is too loud/distorted, drop gain values from 5 → 2
   function beep(freq=880, durationMs=180, type="sine", gain=5){
     ensureAudio();
     const t0 = audioCtx.currentTime;
@@ -589,17 +762,22 @@
       packupInterval = null;
     }
   }
-  function startPackupSong(){
+
+  // Plays exactly N cycles (no infinite looping)
+  function startPackupSong(cycles = PACKUP_SONG_CYCLES){
     stopPackupSong();
     const pattern = [
       [784,140],[880,140],[988,160],[880,140],
       [784,140],[659,160],[784,180],[659,160]
     ];
     let i = 0;
+    const maxNotes = Math.max(1, cycles) * pattern.length;
+
     packupInterval = setInterval(()=>{
       const [f, d] = pattern[i % pattern.length];
       beep(f, d, "sine", 5);
       i++;
+      if (i >= maxNotes) stopPackupSong();
     }, 220);
   }
 
@@ -646,7 +824,7 @@
 
   $("testSong").addEventListener("click", () => {
     ensureAudio();
-    startPackupSong();
+    startPackupSong(2); // short test
     stopSongAfter(3000);
   });
 
@@ -711,7 +889,7 @@
       if (changedPhase || changedBlock) applyAutoMessage(phaseKey);
 
       const songOn = $("packupSongOn").checked;
-      if (songOn && phaseKey === "red") startPackupSong();
+      if (songOn && phaseKey === "red") startPackupSong(PACKUP_SONG_CYCLES);
       else stopPackupSong();
     }
 
@@ -721,7 +899,6 @@
 
   // ================= INIT =================
   function init(){
-    // Show a warning if storage is blocked
     if (!storageOK()){
       const h = document.getElementById("saveHint");
       if (h) h.textContent = "Click the big text to edit • ⚠ Saving is blocked on this device/browser";
@@ -731,6 +908,8 @@
     loadTemplates();
     setAutoOnUI();
     loadSoundSettings();
+
+    setMinimizedDefaultsOnce();     // ✅ start minimized on first run
     applyPanelVisibility();
     renderTimetable(null);
 
