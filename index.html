@@ -149,29 +149,29 @@
       background: rgba(255,255,255,0.82);
       box-shadow: 0 14px 40px rgba(0,0,0,0.18);
       backdrop-filter: blur(6px);
+
       position: relative;
       overflow: hidden;
     }
 
-    /* Progress layer (SAFE version - no mask-image) */
+    /* Subtle progress behind text */
     .msgProgress{
       position: absolute;
       inset: 0;
       pointer-events: none;
       z-index: 0;
-
-      display:none;       /* truly gone when off */
       opacity: 0;
+      transition: opacity 240ms ease;
     }
-    .msgProgress.show{
-      display:block;
-      opacity: 1;
-    }
+    .msgProgress.show{ opacity: 1; }
+
     #msgProgressFill{
       height: 100%;
       width: 0%;
-      background: rgba(0,0,0,0.08); /* subtle */
-      transition: width 300ms ease;
+      background: rgba(0,0,0,0.18);
+      mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 92%, rgba(0,0,0,0) 100%);
+      -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 92%, rgba(0,0,0,0) 100%);
+      transition: width 400ms ease;
     }
 
     #studentMessage{
@@ -182,6 +182,7 @@
       font-weight: 900;
       line-height: 1.05;
       letter-spacing: -0.5px;
+
       font-size: clamp(44px, 6vw, 96px);
 
       text-align: center;
@@ -200,11 +201,30 @@
       font-weight: 650;
     }
 
+    /* ================= KARAKIA BAR (TOP LEFT, MAIN SCREEN) ================= */
+    #karakiaBar{
+      position: fixed;
+      left: 10px;
+      top: 10px;
+      z-index: 65;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #karakiaBar button{
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 950;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.16);
+      background: rgba(255,255,255,0.88);
+    }
+
     /* ================= BIG COUNTDOWN (only in RED) ================= */
     #countdownOverlay{
       position: fixed;
       left: 10px;
-      top: 10px;
+      top: 62px; /* sits under karakiaBar */
       z-index: 50;
       padding: 10px 14px;
       border-radius: 16px;
@@ -346,6 +366,13 @@
 </head>
 
 <body>
+  <!-- MAIN SCREEN KARAKIA BUTTONS (contextual) -->
+  <div id="karakiaBar" aria-label="Karakia controls">
+    <button id="mainOpenKarakiaBtn" class="hidden" type="button">Opening karakia</button>
+    <button id="mainCloseKarakiaBtn" class="hidden" type="button">Closing karakia</button>
+    <button id="mainBackBtn" class="hidden" type="button">Back</button>
+  </div>
+
   <div id="countdownOverlay">
     <div class="label">Pack up time left</div>
     <div class="time" id="packupTimeLeft">5:00</div>
@@ -404,12 +431,6 @@
 
         <div class="divider"></div>
 
-        <div class="menuRow">
-          <button id="showOpeningKarakiaBtn" title="Show opening karakia">Opening karakia</button>
-          <button id="showClosingKarakiaBtn" title="Show closing karakia">Closing karakia</button>
-          <button id="exitKarakiaBtn" class="hidden" title="Return to normal messages">Back</button>
-        </div>
-
         <details>
           <summary>Karakia text</summary>
           <div style="height:10px"></div>
@@ -430,7 +451,7 @@
           </div>
 
           <div class="muted" style="font-size:13px;margin-top:8px;">
-            Tip: These save on this device.
+            Tip: These save on this device (same as your other messages).
           </div>
         </details>
 
@@ -564,7 +585,6 @@
   </div>
 
 <script>
-(() => {
   // ================= HELPERS =================
   const $ = (id) => document.getElementById(id);
 
@@ -591,7 +611,7 @@
   }
   function setBg(color){ document.body.style.backgroundColor = color; }
 
-  // ================= OPTIONS MENU =================
+  // ================= OPTIONS MENU BEHAVIOUR =================
   const optionsBtn = $("optionsBtn");
   const optionsMenu = $("optionsMenu");
   const closeMenuBtn = $("closeMenu");
@@ -599,79 +619,78 @@
 
   function openMenu(){
     optionsMenu.classList.remove("hidden");
-    optionsBtn.setAttribute("aria-expanded","true");
+    optionsBtn.setAttribute("aria-expanded", "true");
   }
   function closeMenu(){
     optionsMenu.classList.add("hidden");
-    optionsBtn.setAttribute("aria-expanded","false");
+    optionsBtn.setAttribute("aria-expanded", "false");
   }
-  function toggleMenu(){
-    optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu();
-  }
+  function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
 
-  optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); scheduleFit(); });
-  closeMenuBtn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
+  optionsBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(); });
+  ["pointerdown","click"].forEach(evt => {
+    closeMenuBtn.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); });
+  });
 
   document.addEventListener("pointerdown", (e) => {
     if (optionsMenu.classList.contains("hidden")) return;
     if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
   });
-  document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeMenu(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
 
   let dragStartY = null;
-  menuHeader.addEventListener("pointerdown", (e)=>{ dragStartY = e.clientY; menuHeader.setPointerCapture(e.pointerId); });
-  menuHeader.addEventListener("pointermove", (e)=>{
+  menuHeader.addEventListener("pointerdown", (e) => { dragStartY = e.clientY; menuHeader.setPointerCapture(e.pointerId); });
+  menuHeader.addEventListener("pointermove", (e) => {
     if (dragStartY === null) return;
-    if ((e.clientY - dragStartY) > 70){ dragStartY = null; closeMenu(); }
+    const dy = e.clientY - dragStartY;
+    if (dy > 70) { dragStartY = null; closeMenu(); }
   });
-  menuHeader.addEventListener("pointerup", ()=> dragStartY = null);
-  menuHeader.addEventListener("pointercancel", ()=> dragStartY = null);
+  menuHeader.addEventListener("pointerup", () => dragStartY = null);
+  menuHeader.addEventListener("pointercancel", () => dragStartY = null);
 
   // ================= STORAGE SAFETY =================
   function storageOK(){
     try{
-      const k="__storage_test__";
-      localStorage.setItem(k,"1");
+      const k = "__storage_test__";
+      localStorage.setItem(k, "1");
       localStorage.removeItem(k);
       return true;
-    }catch(e){ return false; }
+    } catch (e){
+      return false;
+    }
   }
 
-  // ================= STUDENT MESSAGE =================
+  // ================= STUDENT MESSAGE (manual editable + saved) =================
   const msgEl = $("studentMessage");
   const MSG_KEY = "pukekohe_class_screen_student_message_v1";
   const defaultManualMsg = "Do Now:\nOpen your book and begin the starter.";
 
-  let karakiaMode = false;
-  let messageBeforeKarakia = "";
-
-  function saveMsg(){
-    try{ localStorage.setItem(MSG_KEY, msgEl.textContent); }catch(e){}
-  }
-
-  function setMessageText(text, {save=true} = {}){
+  // sometimes set text without saving (karakia)
+  function setMessageText(text, { save=true } = {}){
     msgEl.textContent = text ?? "";
-    if (save && !karakiaMode) saveMsg();
+    if (save) saveMsg();
     scheduleFit();
   }
 
   function loadMsg(){
     try{
       const saved = localStorage.getItem(MSG_KEY);
-      setMessageText((saved !== null && saved !== "") ? saved : defaultManualMsg, {save:false});
-    }catch(e){
-      setMessageText(defaultManualMsg, {save:false});
-    }
+      msgEl.textContent = (saved !== null && saved !== "") ? saved : defaultManualMsg;
+    } catch (e){ msgEl.textContent = defaultManualMsg; }
+  }
+  function saveMsg(){
+    try{ localStorage.setItem(MSG_KEY, msgEl.textContent); } catch (e){}
   }
 
-  ["input","keyup","blur","paste"].forEach(ev => msgEl.addEventListener(ev, ()=>{
-    if (!karakiaMode) saveMsg();
+  ["input","keyup","blur","paste"].forEach(ev => msgEl.addEventListener(ev, () => {
+    if (!karakiaMode) saveMsg(); // don't overwrite normal message while showing karakia
     scheduleFit();
   }));
 
   // ================= AUTO MESSAGE TEMPLATES =================
   const AUTO_KEY = "autoMsgOn_v3";
   const TPL_KEY  = "autoMsgTemplates_v3";
+
   const defaultTemplates = {
     green: "Do Now / Mahi Ināianei:\n• Sit down\n• Devices closed\n• Start the task on the board",
     orange:"Work Time:\n• Focus + meet success criteria\n• Ask 3 before me",
@@ -687,6 +706,7 @@
     $("tplRed").value    = t.red;
     $("tplGrey").value   = t.grey;
   }
+
   function readTemplates(){
     const t = {
       green: $("tplGreen").value,
@@ -697,40 +717,41 @@
     localStorage.setItem(TPL_KEY, JSON.stringify(t));
     return t;
   }
-  function setAutoOnUI(){ $("autoMsgOn").checked = localStorage.getItem(AUTO_KEY) === "1"; }
 
   function applyAutoMessage(phaseKey){
     if (!$("autoMsgOn").checked) return;
     if (karakiaMode) return;
+
     const t = readTemplates();
     const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey, break:t.grey, special:t.orange };
-    setMessageText(map[phaseKey] ?? "", {save:true});
+    setMessageText(map[phaseKey] ?? "", { save:true });
   }
 
-  $("autoMsgOn").addEventListener("change", ()=>{
-    const on = $("autoMsgOn").checked;
-    localStorage.setItem(AUTO_KEY, on ? "1" : "0");
-    if (on) applyAutoMessage(currentPhaseKeyNow());
-  });
-
   ["tplGreen","tplOrange","tplRed","tplGrey"].forEach(id=>{
-    $(id).addEventListener("input", ()=>{
+    $(id).addEventListener("input", () => {
       readTemplates();
       if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
       scheduleFit();
     });
   });
 
-  // ================= RESET MESSAGE =================
-  $("resetMsg").addEventListener("click", ()=>{
-    karakiaMode = false;
-    $("exitKarakiaBtn").classList.add("hidden");
-    localStorage.removeItem(MSG_KEY);
-    if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
-    else setMessageText(defaultManualMsg, {save:true});
+  function setAutoOnUI(){ $("autoMsgOn").checked = localStorage.getItem(AUTO_KEY) === "1"; }
+
+  $("autoMsgOn").addEventListener("change", () => {
+    const on = $("autoMsgOn").checked;
+    localStorage.setItem(AUTO_KEY, on ? "1" : "0");
+    if (on) applyAutoMessage(currentPhaseKeyNow());
   });
 
-  // ================= KARAKIA =================
+  // ================= RESET MESSAGE BUTTON =================
+  $("resetMsg").addEventListener("click", () => {
+    karakiaMode = false;
+    localStorage.removeItem(MSG_KEY);
+    if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
+    else setMessageText(defaultManualMsg, { save:true });
+  });
+
+  // ================= KARAKIA (OPEN/CLOSE + EDITABLE) =================
   const KARAKIA_OPEN_KEY  = "pukekohe_karakia_open_v1";
   const KARAKIA_CLOSE_KEY = "pukekohe_karakia_close_v1";
 
@@ -761,27 +782,35 @@ Aaio ki te aorangi.`;
     localStorage.setItem(KARAKIA_CLOSE_KEY, closeText);
   }
 
+  let karakiaMode = false;
+  let messageBeforeKarakia = "";
+
   function showKarakia(which){
     messageBeforeKarakia = msgEl.textContent;
     karakiaMode = true;
-    $("exitKarakiaBtn").classList.remove("hidden");
-    setMessageText(which === "open" ? getKarakiaOpen() : getKarakiaClose(), {save:false});
-  }
-  function exitKarakia(){
-    karakiaMode = false;
-    $("exitKarakiaBtn").classList.add("hidden");
-    if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
-    else setMessageText(messageBeforeKarakia || (localStorage.getItem(MSG_KEY) ?? defaultManualMsg), {save:true});
+
+    const text = (which === "open") ? getKarakiaOpen() : getKarakiaClose();
+    setMessageText(text, { save:false }); // do NOT overwrite normal saved message
+    updateKarakiaBar(lastPhaseKey ?? currentPhaseKeyNow());
   }
 
-  $("showOpeningKarakiaBtn").addEventListener("click", ()=> showKarakia("open"));
-  $("showClosingKarakiaBtn").addEventListener("click", ()=> showKarakia("close"));
-  $("exitKarakiaBtn").addEventListener("click", exitKarakia);
+  function exitKarakia(){
+    karakiaMode = false;
+
+    if ($("autoMsgOn").checked){
+      applyAutoMessage(currentPhaseKeyNow());
+    } else {
+      const fallback = (localStorage.getItem(MSG_KEY) ?? defaultManualMsg);
+      setMessageText(messageBeforeKarakia || fallback, { save:true });
+    }
+    updateKarakiaBar(lastPhaseKey ?? currentPhaseKeyNow());
+  }
 
   $("saveKarakiaBtn").addEventListener("click", ()=>{
     saveKarakia($("karakiaOpenEditor").value, $("karakiaCloseEditor").value);
     alert("Karakia saved ✅");
   });
+
   $("resetKarakiaBtn").addEventListener("click", ()=>{
     localStorage.removeItem(KARAKIA_OPEN_KEY);
     localStorage.removeItem(KARAKIA_CLOSE_KEY);
@@ -789,7 +818,39 @@ Aaio ki te aorangi.`;
     alert("Karakia reset ✅");
   });
 
-  // ================= PANELS SHOW/HIDE =================
+  // MAIN SCREEN KARAKIA BUTTONS (top-left, contextual)
+  const mainOpenBtn = $("mainOpenKarakiaBtn");
+  const mainCloseBtn = $("mainCloseKarakiaBtn");
+  const mainBackBtn = $("mainBackBtn");
+
+  mainOpenBtn.addEventListener("click", ()=> showKarakia("open"));
+  mainCloseBtn.addEventListener("click", ()=> showKarakia("close"));
+  mainBackBtn.addEventListener("click", exitKarakia);
+
+  function updateKarakiaBar(phaseKey){
+    // When showing karakia: show ONLY Back
+    if (karakiaMode){
+      mainBackBtn.classList.remove("hidden");
+      mainOpenBtn.classList.add("hidden");
+      mainCloseBtn.classList.add("hidden");
+      return;
+    }
+
+    mainBackBtn.classList.add("hidden");
+
+    if (phaseKey === "green"){
+      mainOpenBtn.classList.remove("hidden");
+      mainCloseBtn.classList.add("hidden");
+    } else if (phaseKey === "red"){
+      mainCloseBtn.classList.remove("hidden");
+      mainOpenBtn.classList.add("hidden");
+    } else {
+      mainOpenBtn.classList.add("hidden");
+      mainCloseBtn.classList.add("hidden");
+    }
+  }
+
+  // ================= PANELS HIDE/SHOW =================
   const INFO_KEY = "infoHidden_v4";
   const TABLE_KEY = "tableHidden_v4";
 
@@ -822,13 +883,13 @@ Aaio ki te aorangi.`;
     try{
       if (!document.fullscreenElement){
         await document.documentElement.requestFullscreen();
+        $("fullscreenBtn").textContent = "Exit full screen";
       } else {
         await document.exitFullscreen();
+        $("fullscreenBtn").textContent = "Full screen";
       }
       scheduleFit();
-    }catch(e){
-      alert("Fullscreen blocked by the browser. Try pressing F11.");
-    }
+    } catch (e) { alert("Fullscreen blocked by the browser. Try pressing F11."); }
   });
   document.addEventListener("fullscreenchange", ()=>{
     $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
@@ -844,10 +905,12 @@ Aaio ki te aorangi.`;
   const VOL_KEY   = "volume_v3";
 
   function getVolume(){ return Number($("volume").value) / 100; }
+
   function ensureAudio(){
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") audioCtx.resume();
   }
+
   function beep(freq=880, durationMs=180, type="sine", gain=5){
     ensureAudio();
     const t0 = audioCtx.currentTime;
@@ -866,6 +929,7 @@ Aaio ki te aorangi.`;
     osc.start(t0);
     osc.stop(t0 + durationMs/1000 + 0.05);
   }
+
   function chime(){
     beep(660, 140, "sine", 5);
     setTimeout(()=>beep(880, 160, "sine", 5), 120);
@@ -884,6 +948,7 @@ Aaio ki te aorangi.`;
   function stopPackupSong(){
     if (packupInterval) { clearInterval(packupInterval); packupInterval = null; }
   }
+
   const PACKUP_SONG_CYCLES = 3;
   function startPackupSong(cycles = PACKUP_SONG_CYCLES){
     stopPackupSong();
@@ -908,46 +973,32 @@ Aaio ki te aorangi.`;
     const v = localStorage.getItem(VOL_KEY);
     if (v !== null) $("volume").value = v;
   }
+
   $("soundOn").addEventListener("change", ()=>{
     localStorage.setItem(SOUND_KEY, $("soundOn").checked ? "1":"0");
     if ($("soundOn").checked) ensureAudio();
   });
+
   $("packupSongOn").addEventListener("change", ()=>{
     localStorage.setItem(SONG_KEY, $("packupSongOn").checked ? "1":"0");
     if ($("packupSongOn").checked) ensureAudio();
   });
-  $("volume").addEventListener("input", ()=> localStorage.setItem(VOL_KEY, $("volume").value));
 
-  $("testChime").addEventListener("click", ()=>{ ensureAudio(); chime(); });
-  $("testDouble").addEventListener("click", ()=>{ ensureAudio(); doubleTap(); });
-  $("testBell").addEventListener("click", ()=>{ ensureAudio(); endBell(); });
-  $("testSong").addEventListener("click", ()=>{ ensureAudio(); startPackupSong(2); setTimeout(stopPackupSong, 3000); });
+  $("volume").addEventListener("input", ()=>{ localStorage.setItem(VOL_KEY, $("volume").value); });
 
-  // ================= MESSAGE PROGRESS =================
+  $("testChime").addEventListener("click", () => { ensureAudio(); chime(); });
+  $("testDouble").addEventListener("click", () => { ensureAudio(); doubleTap(); });
+  $("testBell").addEventListener("click", () => { ensureAudio(); endBell(); });
+  $("testSong").addEventListener("click", () => { ensureAudio(); startPackupSong(2); setTimeout(stopPackupSong, 3000); });
+
+  // ================= MESSAGE PROGRESS TOGGLE =================
   const MSG_PROGRESS_KEY = "pukekohe_msg_progress_on_v1";
   function loadMsgProgressPref(){ return localStorage.getItem(MSG_PROGRESS_KEY) === "1"; }
   function setMsgProgressPref(on){ localStorage.setItem(MSG_PROGRESS_KEY, on ? "1" : "0"); }
+  function setMsgProgressUI(isOn){ $("msgProgressOn").checked = isOn; }
 
-  function setMessageProgress(percent, visible){
-    const layer = $("msgProgressLayer");
-    const fill = $("msgProgressFill");
-    if (!layer || !fill) return;
-
-    const enabled = $("msgProgressOn").checked;
-    if (!enabled || !visible){
-      layer.classList.remove("show");
-      fill.style.width = "0%";
-      return;
-    }
-
-    layer.classList.add("show");
-    fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-  }
-
-  // ================= GREEN / PACKUP MINUTES =================
+  // ================= GREEN MINUTES (EASY CONTROL) =================
   const GREEN_MIN_KEY = "greenMin_v1";
-  const PACKUP_MIN_KEY = "pukekohe_packup_minutes_v1";
-
   function getGreenMin(){
     const raw = localStorage.getItem(GREEN_MIN_KEY);
     const n = raw === null ? 5 : Number(raw);
@@ -958,7 +1009,14 @@ Aaio ki te aorangi.`;
     localStorage.setItem(GREEN_MIN_KEY, String(v));
     $("greenMinLabel").textContent = String(v);
   }
+  function syncGreenUI(){
+    const val = getGreenMin();
+    $("greenMin").value = String(val);
+    $("greenMinLabel").textContent = String(val);
+  }
 
+  // ================= PACKUP MINUTES (EASY CONTROL) =================
+  const PACKUP_MIN_KEY = "pukekohe_packup_minutes_v1";
   function getPackupMin(){
     const raw = localStorage.getItem(PACKUP_MIN_KEY);
     const n = raw === null ? 5 : Number(raw);
@@ -970,11 +1028,11 @@ Aaio ki te aorangi.`;
     $("packupMinLabel").textContent = String(v);
   }
 
-  // ================= TIMETABLE + ALARMS =================
+  // ================= TIMETABLE + PHASE CONFIG =================
   const DEFAULT_PHASES_BY_TYPE = {
-    period:  { usePhases: true,  bg: "var(--bgGrey)" },
-    break:   { usePhases: false, bg: "var(--bgBreak)" },
-    special: { usePhases: true,  bg: "var(--bgSpecial)" }
+    period:  { greenMin: 5, redMin: 5, usePhases: true,  bg: "var(--bgGrey)" },
+    break:   { greenMin: 0, redMin: 0, usePhases: false, bg: "var(--bgBreak)" },
+    special: { greenMin: 3, redMin: 3, usePhases: true,  bg: "var(--bgSpecial)" }
   };
 
   const DEFAULT_BLOCKS = [
@@ -1075,15 +1133,16 @@ Aaio ki te aorangi.`;
     }
 
     const { s, e } = current;
-    const greenMin = (current.type === "period" || current.type === "special") ? getGreenMin() : 0;
-    const redMin   = (current.type === "period" || current.type === "special") ? getPackupMin() : 0;
+
+    const greenMin = (current.type === "period" || current.type === "special") ? getGreenMin() : (cfg.greenMin ?? 0);
+    const redMin   = (current.type === "period" || current.type === "special") ? getPackupMin() : (cfg.redMin ?? 0);
 
     const greenUntil = new Date(s.getTime() + greenMin * 60 * 1000);
     const redFrom    = new Date(e.getTime() - redMin   * 60 * 1000);
 
-    if (now < greenUntil) return { key:"green",  label:"Do Now / Mahi Ināianei", bg:"var(--bgGreen)",  nextAt: greenUntil };
-    if (now >= redFrom)   return { key:"red",    label:"Pack up",               bg:"var(--bgRed)",    nextAt: e };
-    return                { key:"orange", label:"Work Time",                    bg:"var(--bgOrange)", nextAt: redFrom };
+    if (now < greenUntil) return { key:"green", label:"Do Now / Mahi Ināianei", bg:"var(--bgGreen)", nextAt: greenUntil };
+    if (now >= redFrom)   return { key:"red",   label:"Pack up",               bg:"var(--bgRed)",   nextAt: e };
+    return                { key:"orange",label:"Work Time",                   bg:"var(--bgOrange)",nextAt: redFrom };
   }
 
   function currentPhaseKeyNow(){
@@ -1119,6 +1178,7 @@ Aaio ki te aorangi.`;
     if (name === "song") return startPackupSong(PACKUP_SONG_CYCLES);
     if (name === "beep") return beep(880, 200, "sine", 5);
   }
+
   function alarmAllowedForBlock(alarm, block){
     const t = block?.type;
     if (!t) return false;
@@ -1126,12 +1186,14 @@ Aaio ki te aorangi.`;
     if (Array.isArray(alarm.exceptTypes) && alarm.exceptTypes.includes(t)) return false;
     return true;
   }
+
   function fireAlarm(alarm, contextKey){
     const key = `${alarm.id}::${contextKey}`;
     if (firedKeys.has(key)) return;
     firedKeys.add(key);
     if ($("soundOn").checked) playSoundByName(alarm.sound);
   }
+
   function resetFiredIfNewDay(){
     const k = "alarm_fired_day_v1";
     const today = new Date().toDateString();
@@ -1148,7 +1210,7 @@ Aaio ki te aorangi.`;
     $("alarmEditor").value = JSON.stringify(alarms, null, 2);
   }
 
-  $("saveConfigBtn").addEventListener("click", ()=>{
+  $("saveConfigBtn").addEventListener("click", () => {
     const bParsed = safeParseJSON($("ttEditor").value);
     if (!bParsed.ok) return alert("Timetable JSON error: " + bParsed.error);
     const bErr = validateBlocks(bParsed.value);
@@ -1169,7 +1231,7 @@ Aaio ki te aorangi.`;
     alert("Saved ✅");
   });
 
-  $("resetConfigBtn").addEventListener("click", ()=>{
+  $("resetConfigBtn").addEventListener("click", () => {
     blocks = DEFAULT_BLOCKS.slice();
     alarms = DEFAULT_ALARMS.slice();
     saveBlocks(blocks);
@@ -1181,17 +1243,18 @@ Aaio ki te aorangi.`;
     alert("Reset to defaults ✅");
   });
 
-  // ================= PANEL DRAGGING =================
+  // ================= PANEL DRAGGING (SAVE POSITIONS) =================
   const PANEL_POS_KEY = "pukekohe_panel_positions_v1";
 
   function loadPanelPositions(){
     const raw = localStorage.getItem(PANEL_POS_KEY);
     if (!raw) return null;
-    try{ return JSON.parse(raw); }catch(e){ return null; }
+    try{ return JSON.parse(raw); } catch(e){ return null; }
   }
   function savePanelPositions(pos){
     localStorage.setItem(PANEL_POS_KEY, JSON.stringify(pos));
   }
+
   function applyPanelPos(id, rect){
     const el = $(id);
     if (!el || !rect) return;
@@ -1202,6 +1265,7 @@ Aaio ki te aorangi.`;
     el.style.left = rect.left + "px";
     el.style.top  = rect.top + "px";
   }
+
   function clampToViewport(el, left, top){
     const pad = 8;
     const r = el.getBoundingClientRect();
@@ -1212,6 +1276,7 @@ Aaio ki te aorangi.`;
       top:  Math.max(pad, Math.min(maxTop, top))
     };
   }
+
   function makePanelDraggable(panelId, handleId){
     const panel = $(panelId);
     const handle = $(handleId);
@@ -1247,6 +1312,7 @@ Aaio ki te aorangi.`;
     function endDrag(){
       if (!dragging) return;
       dragging = false;
+
       const pos = loadPanelPositions() || {};
       const r = panel.getBoundingClientRect();
       pos[panelId] = { left: Math.round(r.left), top: Math.round(r.top) };
@@ -1257,6 +1323,7 @@ Aaio ki te aorangi.`;
     handle.addEventListener("pointerup", endDrag);
     handle.addEventListener("pointercancel", endDrag);
   }
+
   function restorePanelPositions(){
     const pos = loadPanelPositions();
     if (!pos) return;
@@ -1285,49 +1352,79 @@ Aaio ki te aorangi.`;
     scheduleFit();
   });
 
-  // ================= AUTO-FIT BIG MESSAGE =================
+  // ================= MESSAGE PROGRESS (behind text) =================
+  function setMessageProgress(percent, visible){
+    const layer = $("msgProgressLayer");
+    const fill = $("msgProgressFill");
+    if (!layer || !fill) return;
+
+    const enabled = $("msgProgressOn").checked;
+    if (!enabled || !visible){
+      layer.classList.remove("show");
+      fill.style.width = "0%";
+      return;
+    }
+
+    layer.classList.add("show");
+    fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  }
+
+  // ================= AUTO-FIT BIG MESSAGE TO SCREEN HEIGHT =================
   const MIN_PX = 26;
   const MAX_PX = 110;
   let fitRaf = null;
 
   function px(n){ return `${Math.round(n)}px`; }
-  function getClampMaxPx(){ return 96; } // from clamp(..., ..., 96px)
+  function getClampMaxPx(){ return 96; }
 
   function fitStudentMessage(){
     const wrap = document.querySelector(".messageWrap");
-    if (!wrap || !msgEl) return;
+    const msg  = $("studentMessage");
+    if (!wrap || !msg) return;
 
-    msgEl.style.fontSize = "";
+    msg.style.fontSize = "";
 
     const paddingSafety = 18;
     const wrapRect = wrap.getBoundingClientRect();
     const available = window.innerHeight - wrapRect.top - paddingSafety;
     if (available < 120) return;
 
-    if (wrap.scrollHeight <= available){
-      msgEl.style.fontSize = "";
+    const needsShrink = wrap.scrollHeight > available;
+    if (!needsShrink){
+      msg.style.fontSize = "";
       return;
     }
 
     const max = Math.min(getClampMaxPx(), MAX_PX);
-    let lo = MIN_PX, hi = max, best = lo;
+    let lo = MIN_PX;
+    let hi = max;
+    let best = lo;
 
-    for (let i=0; i<14; i++){
+    for (let i = 0; i < 14; i++){
       const mid = (lo + hi) / 2;
-      msgEl.style.fontSize = px(mid);
+      msg.style.fontSize = px(mid);
       const h = wrap.scrollHeight;
-      if (h <= available){ best = mid; lo = mid; }
-      else hi = mid;
+
+      if (h <= available){
+        best = mid;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
     }
-    msgEl.style.fontSize = px(best);
+
+    msg.style.fontSize = px(best);
   }
 
   function scheduleFit(){
     if (fitRaf) cancelAnimationFrame(fitRaf);
-    fitRaf = requestAnimationFrame(()=>{ fitRaf=null; fitStudentMessage(); });
+    fitRaf = requestAnimationFrame(() => {
+      fitRaf = null;
+      fitStudentMessage();
+    });
   }
 
-  // ================= UPDATE LOOP =================
+  // ================= STATE + UPDATE LOOP =================
   let lastPhaseKey = null;
   let lastBlockName = null;
 
@@ -1379,9 +1476,12 @@ Aaio ki te aorangi.`;
       }
     }
 
-    // background
+    // Background
     if (current && !typeConfig(current.type).usePhases) setBg(typeConfig(current.type).bg);
     else setBg(ph.bg);
+
+    // MAIN SCREEN KARAKIA BUTTON VISIBILITY (green=open, red=close, back while in karakia)
+    updateKarakiaBar(ph.key);
 
     // before-end alarms
     if (current){
@@ -1426,7 +1526,7 @@ Aaio ki te aorangi.`;
     }
 
     if (changedPhase || changedBlock || blockEnded){
-      if (!karakiaMode) applyAutoMessage(phaseKey);
+      if ((changedPhase || changedBlock) && !karakiaMode) applyAutoMessage(phaseKey);
 
       const songOn = $("packupSongOn").checked;
       if (songOn && phaseKey === "red") startPackupSong(PACKUP_SONG_CYCLES);
@@ -1447,30 +1547,23 @@ Aaio ki te aorangi.`;
     }
 
     // sliders init
-    const g = getGreenMin();
-    $("greenMin").value = String(g);
-    $("greenMinLabel").textContent = String(g);
-    $("greenMin").addEventListener("input", ()=>{
-      setGreenMin($("greenMin").value);
-      update();
-    });
+    syncGreenUI();
+    $("greenMin").addEventListener("input", () => { setGreenMin($("greenMin").value); update(); });
 
-    const p = getPackupMin();
-    $("packupMin").value = String(p);
-    $("packupMinLabel").textContent = String(p);
-    $("packupMin").addEventListener("input", ()=>{
-      setPackupMin($("packupMin").value);
-      update();
-    });
+    const initialPack = getPackupMin();
+    $("packupMin").value = String(initialPack);
+    $("packupMinLabel").textContent = String(initialPack);
+    $("packupMin").addEventListener("input", ()=>{ setPackupMin($("packupMin").value); update(); });
 
     // progress toggle init
-    $("msgProgressOn").checked = loadMsgProgressPref();
+    const msgProgOn = loadMsgProgressPref();
+    setMsgProgressUI(msgProgOn);
     $("msgProgressOn").addEventListener("change", ()=>{
-      setMsgProgressPref($("msgProgressOn").checked);
+      const on = $("msgProgressOn").checked;
+      setMsgProgressPref(on);
       update();
     });
 
-    // Load timetable + alarms
     blocks = loadBlocks();
     alarms = loadAlarms();
 
@@ -1492,12 +1585,14 @@ Aaio ki te aorangi.`;
 
     if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
 
+    // fit triggers
     window.addEventListener("resize", scheduleFit);
+    optionsBtn.addEventListener("click", scheduleFit);
 
     update();
     setInterval(update, 1000);
 
-    document.addEventListener("pointerdown", ()=>{
+    document.addEventListener("pointerdown", () => {
       if ($("soundOn").checked || $("packupSongOn").checked) ensureAudio();
     }, { once:true });
 
@@ -1505,7 +1600,6 @@ Aaio ki te aorangi.`;
   }
 
   init();
-})();
 </script>
 </body>
 </html>
