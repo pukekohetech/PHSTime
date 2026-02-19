@@ -34,7 +34,7 @@
       position: fixed;
       top: 10px;
       right: 10px;
-      z-index: 40;
+      z-index: 60;
     }
 
     button, .pillBtn, input[type="range"]{
@@ -68,7 +68,7 @@
       position: absolute;
       top: 52px;
       right: 0;
-      width: min(340px, calc(100vw - 20px));
+      width: min(360px, calc(100vw - 20px));
       background: rgba(255,255,255,0.92);
       border-radius: 18px;
       box-shadow: 0 18px 44px rgba(0,0,0,0.20);
@@ -95,10 +95,7 @@
       user-select: none;
     }
     .menuHeader:active{ cursor: grabbing; }
-    .menuTitle{
-      font-weight: 950;
-      letter-spacing: -0.2px;
-    }
+    .menuTitle{ font-weight: 950; letter-spacing: -0.2px; }
     .menuHint{
       opacity: .65;
       font-weight: 800;
@@ -130,11 +127,7 @@
     .pillBtn label{ cursor:pointer; font-weight: 900; }
     .pillBtn input{ transform: scale(1.05); }
 
-    .divider{
-      height: 1px;
-      background: rgba(0,0,0,0.08);
-      margin: 2px 0;
-    }
+    .divider{ height: 1px; background: rgba(0,0,0,0.08); margin: 2px 0; }
 
     details{
       border-radius: 14px;
@@ -181,7 +174,7 @@
       position: fixed;
       left: 10px;
       top: 10px;
-      z-index: 25;
+      z-index: 50;
       padding: 10px 14px;
       border-radius: 16px;
       background: rgba(255,255,255,0.88);
@@ -206,8 +199,7 @@
     /* ================= PANELS ================= */
     .panel{
       position: fixed;
-      bottom: 10px;
-      z-index: 20;
+      z-index: 40;
       background: rgba(255,255,255,0.88);
       padding: 14px 16px;
       border-radius: 16px;
@@ -215,15 +207,23 @@
       backdrop-filter: blur(6px);
     }
 
-    #infoCard{ left: 10px; width: min(520px, calc(100% - 20px)); }
-    
-    <div style="height:8px;background:rgba(0,0,0,0.08);border-radius:999px;overflow:hidden;margin:8px 0 10px;">
-  <div id="progressBar" style="height:100%;width:0%;background:rgba(0,0,0,0.35);"></div>
-</div>
-    
-    #timetableCard{ right: 10px; width: min(520px, calc(100% - 20px)); }
+    /* Default positions (will be overridden by saved drag positions) */
+    #infoCard{ left: 10px; bottom: 10px; width: min(540px, calc(100% - 20px)); }
+    #timetableCard{ right: 10px; bottom: 10px; width: min(520px, calc(100% - 20px)); }
 
-    .big { font-size: 16px; font-weight: 950; margin: 0 0 6px; }
+    .panelHeader{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      cursor: grab;
+      user-select: none;
+    }
+    .panelHeader:active{ cursor: grabbing; }
+    .panelTitle{ font-size: 16px; font-weight: 950; margin: 0; }
+    .panelHint{ font-size: 11px; font-weight: 900; opacity: .6; text-transform: uppercase; letter-spacing: .08em; }
+
     .row { margin: 5px 0; font-size: 13px; }
     .muted { opacity: 0.75; }
 
@@ -235,6 +235,20 @@
       font-weight: 900;
       margin-left: 8px;
       font-size: 12px;
+    }
+
+    /* Progress bar */
+    .progressWrap{
+      height: 10px;
+      background: rgba(0,0,0,0.10);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 8px 0 10px;
+    }
+    #progressBar{
+      height: 100%;
+      width: 0%;
+      background: rgba(0,0,0,0.38);
     }
 
     /* ================= TIMETABLE TABLE ================= */
@@ -297,6 +311,21 @@
     }
 
     .testBtn{ padding: 6px 8px; }
+    .miniLabel{
+      font-size: 11px;
+      font-weight: 950;
+      opacity: .75;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .valuePill{
+      display:inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.08);
+      font-weight: 950;
+      font-size: 12px;
+    }
   </style>
 </head>
 
@@ -351,7 +380,20 @@
           <button id="resetMsg">Reset</button>
         </div>
 
-        <!-- Advanced tests (fixed) -->
+        <div class="divider"></div>
+
+        <!-- Pack-up minutes control -->
+        <div>
+          <div class="menuRow" style="align-items:flex-end;">
+            <div>
+              <div class="miniLabel">Pack-up minutes (Periods)</div>
+              <div class="muted" style="font-size:12px;margin-top:2px;">This controls when RED starts.</div>
+            </div>
+            <span class="valuePill"><span id="packupMinLabel">5</span> min</span>
+          </div>
+          <input id="packupMin" type="range" min="0" max="15" value="5" style="width:100%; margin-top:8px;" />
+        </div>
+
         <details>
           <summary>Advanced tests</summary>
           <div style="height:10px"></div>
@@ -363,7 +405,6 @@
           </div>
         </details>
 
-        <!-- Timetable & alarms (separate details — fixed nesting) -->
         <details>
           <summary>Timetable &amp; alarms</summary>
           <div style="height:10px"></div>
@@ -375,21 +416,28 @@
 
           <div style="height:10px"></div>
 
-          <label style="display:block;font-weight:950;font-size:11px;opacity:.75;text-transform:uppercase;letter-spacing:.06em;">
-            Timetable (JSON)
-          </label>
+          <label class="miniLabel">Timetable (JSON)</label>
           <textarea id="ttEditor" spellcheck="false" style="min-height:140px;"></textarea>
 
           <div style="height:10px"></div>
 
-          <label style="display:block;font-weight:950;font-size:11px;opacity:.75;text-transform:uppercase;letter-spacing:.06em;">
-            Alarms (JSON)
-          </label>
+          <label class="miniLabel">Alarms (JSON)</label>
           <textarea id="alarmEditor" spellcheck="false" style="min-height:140px;"></textarea>
 
           <div class="hint" style="text-align:left;margin-top:6px;">
             Tip: times are “HH:MM”. Alarms can trigger on phase-enter, block-start/end, or seconds before end.
           </div>
+        </details>
+
+        <details>
+          <summary>Panel positions</summary>
+          <div style="height:10px"></div>
+          <div class="muted" style="font-size:13px;">
+            Drag the header of the Info or Timetable panel to move it.
+            Positions save automatically on this device.
+          </div>
+          <div style="height:10px"></div>
+          <button class="testBtn" id="resetPanelsBtn">Reset panel positions</button>
         </details>
 
       </div>
@@ -402,7 +450,13 @@
   </div>
 
   <div id="infoCard" class="panel">
-    <p class="big" id="status">Loading…</p>
+    <div class="panelHeader" id="infoDrag">
+      <p class="panelTitle" id="status">Loading…</p>
+      <div class="panelHint">drag</div>
+    </div>
+
+    <div class="progressWrap"><div id="progressBar"></div></div>
+
     <div class="row"><span class="muted">Now:</span> <span id="now"></span></div>
     <div class="row"><span class="muted">Block:</span> <span id="block"></span></div>
     <div class="row"><span class="muted">Time range:</span> <span id="range"></span></div>
@@ -430,7 +484,11 @@
   </div>
 
   <div id="timetableCard" class="panel">
-    <p class="big">Timetable</p>
+    <div class="panelHeader" id="ttDrag">
+      <p class="panelTitle">Timetable</p>
+      <div class="panelHint">drag</div>
+    </div>
+
     <table>
       <thead>
         <tr><th>Period</th><th>Time</th></tr>
@@ -464,9 +522,7 @@
     const s = totalSeconds % 60;
     return `${m}:${String(s).padStart(2,"0")}`;
   }
-  function setBg(color){
-    document.body.style.backgroundColor = color;
-  }
+  function setBg(color){ document.body.style.backgroundColor = color; }
 
   // ================= OPTIONS MENU BEHAVIOUR =================
   const optionsBtn = $("optionsBtn");
@@ -482,43 +538,25 @@
     optionsMenu.classList.add("hidden");
     optionsBtn.setAttribute("aria-expanded", "false");
   }
-  function toggleMenu(){
-    optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu();
-  }
+  function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
 
-  optionsBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleMenu();
-  });
+  optionsBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(); });
   ["pointerdown","click"].forEach(evt => {
-    closeMenuBtn.addEventListener(evt, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      closeMenu();
-    });
+    closeMenuBtn.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); });
   });
 
   document.addEventListener("pointerdown", (e) => {
     if (optionsMenu.classList.contains("hidden")) return;
     if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
   });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMenu();
-  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
 
   let dragStartY = null;
-  menuHeader.addEventListener("pointerdown", (e) => {
-    dragStartY = e.clientY;
-    menuHeader.setPointerCapture(e.pointerId);
-  });
+  menuHeader.addEventListener("pointerdown", (e) => { dragStartY = e.clientY; menuHeader.setPointerCapture(e.pointerId); });
   menuHeader.addEventListener("pointermove", (e) => {
     if (dragStartY === null) return;
     const dy = e.clientY - dragStartY;
-    if (dy > 70) {
-      dragStartY = null;
-      closeMenu();
-    }
+    if (dy > 70) { dragStartY = null; closeMenu(); }
   });
   menuHeader.addEventListener("pointerup", () => dragStartY = null);
   menuHeader.addEventListener("pointercancel", () => dragStartY = null);
@@ -544,11 +582,8 @@
     try{
       const saved = localStorage.getItem(MSG_KEY);
       msgEl.textContent = (saved !== null && saved !== "") ? saved : defaultManualMsg;
-    } catch (e){
-      msgEl.textContent = defaultManualMsg;
-    }
+    } catch (e){ msgEl.textContent = defaultManualMsg; }
   }
-
   function saveMsg(){
     try{ localStorage.setItem(MSG_KEY, msgEl.textContent); } catch (e){}
   }
@@ -588,8 +623,8 @@
   function applyAutoMessage(phaseKey){
     if (!$("autoMsgOn").checked) return;
     const t = readTemplates();
-   const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey, break:t.grey, special:t.orange };
-
+    // Treat break as grey by default (you can change this later)
+    const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey, break:t.grey, special:t.orange };
     msgEl.textContent = map[phaseKey] ?? "";
     saveMsg();
   }
@@ -601,9 +636,7 @@
     });
   });
 
-  function setAutoOnUI(){
-    $("autoMsgOn").checked = localStorage.getItem(AUTO_KEY) === "1";
-  }
+  function setAutoOnUI(){ $("autoMsgOn").checked = localStorage.getItem(AUTO_KEY) === "1"; }
 
   $("autoMsgOn").addEventListener("change", () => {
     const on = $("autoMsgOn").checked;
@@ -615,10 +648,7 @@
   $("resetMsg").addEventListener("click", () => {
     localStorage.removeItem(MSG_KEY);
     if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
-    else {
-      msgEl.textContent = defaultManualMsg;
-      saveMsg();
-    }
+    else { msgEl.textContent = defaultManualMsg; saveMsg(); }
   });
 
   // ================= PANELS HIDE/SHOW =================
@@ -629,7 +659,6 @@
     if (localStorage.getItem(INFO_KEY) === null) localStorage.setItem(INFO_KEY, "1");
     if (localStorage.getItem(TABLE_KEY) === null) localStorage.setItem(TABLE_KEY, "1");
   }
-
   function applyPanelVisibility(){
     const infoHidden = localStorage.getItem(INFO_KEY) === "1";
     const tableHidden = localStorage.getItem(TABLE_KEY) === "1";
@@ -638,13 +667,11 @@
     $("toggleInfo").textContent = infoHidden ? "Show info" : "Hide info";
     $("toggleTable").textContent = tableHidden ? "Show timetable" : "Hide timetable";
   }
-
   $("toggleInfo").addEventListener("click", ()=>{
     const hidden = localStorage.getItem(INFO_KEY) === "1";
     localStorage.setItem(INFO_KEY, hidden ? "0":"1");
     applyPanelVisibility();
   });
-
   $("toggleTable").addEventListener("click", ()=>{
     const hidden = localStorage.getItem(TABLE_KEY) === "1";
     localStorage.setItem(TABLE_KEY, hidden ? "0":"1");
@@ -661,9 +688,7 @@
         await document.exitFullscreen();
         $("fullscreenBtn").textContent = "Full screen";
       }
-    } catch (e) {
-      alert("Fullscreen blocked by the browser. Try pressing F11.");
-    }
+    } catch (e) { alert("Fullscreen blocked by the browser. Try pressing F11."); }
   });
   document.addEventListener("fullscreenchange", ()=>{
     $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
@@ -719,10 +744,7 @@
   }
 
   function stopPackupSong(){
-    if (packupInterval) {
-      clearInterval(packupInterval);
-      packupInterval = null;
-    }
+    if (packupInterval) { clearInterval(packupInterval); packupInterval = null; }
   }
 
   const PACKUP_SONG_CYCLES = 3;
@@ -760,16 +782,28 @@
     if ($("packupSongOn").checked) ensureAudio();
   });
 
-  $("volume").addEventListener("input", ()=>{
-    localStorage.setItem(VOL_KEY, $("volume").value);
-  });
+  $("volume").addEventListener("input", ()=>{ localStorage.setItem(VOL_KEY, $("volume").value); });
 
   $("testChime").addEventListener("click", () => { ensureAudio(); chime(); });
   $("testDouble").addEventListener("click", () => { ensureAudio(); doubleTap(); });
   $("testBell").addEventListener("click", () => { ensureAudio(); endBell(); });
   $("testSong").addEventListener("click", () => { ensureAudio(); startPackupSong(2); setTimeout(stopPackupSong, 3000); });
 
+  // ================= PACKUP MINUTES (EASY CONTROL) =================
+  const PACKUP_MIN_KEY = "pukekohe_packup_minutes_v1";
+  function getPackupMin(){
+    const raw = localStorage.getItem(PACKUP_MIN_KEY);
+    const n = raw === null ? 5 : Number(raw);
+    return Number.isFinite(n) ? Math.max(0, Math.min(15, n)) : 5;
+  }
+  function setPackupMin(n){
+    const v = Math.max(0, Math.min(15, Number(n)));
+    localStorage.setItem(PACKUP_MIN_KEY, String(v));
+    $("packupMinLabel").textContent = String(v);
+  }
+
   // ================= TIMETABLE + PHASE CONFIG =================
+  // NOTE: period.redMin will be overridden by packup slider
   const DEFAULT_PHASES_BY_TYPE = {
     period:  { greenMin: 5, redMin: 5, usePhases: true,  bg: "var(--bgGrey)" },
     break:   { greenMin: 0, redMin: 0, usePhases: false, bg: "var(--bgBreak)" },
@@ -858,8 +892,12 @@
     }
     return null;
   }
+
   function typeConfig(type){
-    return DEFAULT_PHASES_BY_TYPE[type] || DEFAULT_PHASES_BY_TYPE.period;
+    const base = DEFAULT_PHASES_BY_TYPE[type] || DEFAULT_PHASES_BY_TYPE.period;
+    // Override pack-up minutes for periods (easy slider)
+    if (type === "period") return { ...base, redMin: getPackupMin() };
+    return base;
   }
 
   function phaseFor(now, current){
@@ -979,6 +1017,119 @@
     alert("Reset to defaults ✅");
   });
 
+  // ================= PANEL DRAGGING (SAVE POSITIONS) =================
+  const PANEL_POS_KEY = "pukekohe_panel_positions_v1";
+
+  function loadPanelPositions(){
+    const raw = localStorage.getItem(PANEL_POS_KEY);
+    if (!raw) return null;
+    try{ return JSON.parse(raw); } catch(e){ return null; }
+  }
+  function savePanelPositions(pos){
+    localStorage.setItem(PANEL_POS_KEY, JSON.stringify(pos));
+  }
+
+  function applyPanelPos(id, rect){
+    const el = $(id);
+    if (!el || !rect) return;
+
+    // clear conflicting anchors
+    el.style.left = "auto";
+    el.style.right = "auto";
+    el.style.top = "auto";
+    el.style.bottom = "auto";
+
+    el.style.left = rect.left + "px";
+    el.style.top  = rect.top + "px";
+  }
+
+  function clampToViewport(el, left, top){
+    const pad = 8;
+    const r = el.getBoundingClientRect();
+    const maxLeft = window.innerWidth - r.width - pad;
+    const maxTop  = window.innerHeight - r.height - pad;
+    return {
+      left: Math.max(pad, Math.min(maxLeft, left)),
+      top:  Math.max(pad, Math.min(maxTop, top))
+    };
+  }
+
+  function makePanelDraggable(panelId, handleId){
+    const panel = $(panelId);
+    const handle = $(handleId);
+    if (!panel || !handle) return;
+
+    let startX=0, startY=0, baseLeft=0, baseTop=0, dragging=false;
+
+    handle.addEventListener("pointerdown", (e)=>{
+      dragging = true;
+      handle.setPointerCapture(e.pointerId);
+
+      const r = panel.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      baseLeft = r.left;
+      baseTop  = r.top;
+
+      // ensure positioned with left/top
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+      panel.style.left = r.left + "px";
+      panel.style.top  = r.top + "px";
+    });
+
+    handle.addEventListener("pointermove", (e)=>{
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const next = clampToViewport(panel, baseLeft + dx, baseTop + dy);
+      panel.style.left = next.left + "px";
+      panel.style.top  = next.top + "px";
+    });
+
+    function endDrag(){
+      if (!dragging) return;
+      dragging = false;
+
+      const pos = loadPanelPositions() || {};
+      const r = panel.getBoundingClientRect();
+      pos[panelId] = { left: Math.round(r.left), top: Math.round(r.top) };
+      savePanelPositions(pos);
+    }
+
+    handle.addEventListener("pointerup", endDrag);
+    handle.addEventListener("pointercancel", endDrag);
+  }
+
+  function restorePanelPositions(){
+    const pos = loadPanelPositions();
+    if (!pos) return;
+    applyPanelPos("infoCard", pos.infoCard);
+    applyPanelPos("timetableCard", pos.timetableCard);
+  }
+
+  $("resetPanelsBtn").addEventListener("click", ()=>{
+    localStorage.removeItem(PANEL_POS_KEY);
+    // Reload defaults by refreshing
+    location.reload();
+  });
+
+  window.addEventListener("resize", ()=>{
+    // keep panels on-screen after resize
+    const pos = loadPanelPositions();
+    if (!pos) return;
+    for (const id of ["infoCard","timetableCard"]){
+      const el = $(id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const next = clampToViewport(el, r.left, r.top);
+      el.style.left = next.left + "px";
+      el.style.top  = next.top + "px";
+      pos[id] = { left: Math.round(next.left), top: Math.round(next.top) };
+    }
+    savePanelPositions(pos);
+  });
+
   // ================= STATE + UPDATE LOOP =================
   let lastPhaseKey = null;
   let lastBlockName = null;
@@ -994,6 +1145,16 @@
 
     renderTimetable(current ? current.name : null);
 
+    // Progress bar
+    if (current){
+      const total = current.e - current.s;
+      const elapsed = now - current.s;
+      const pct = Math.max(0, Math.min(1, elapsed / total)) * 100;
+      $("progressBar").style.width = pct.toFixed(1) + "%";
+    } else {
+      $("progressBar").style.width = "0%";
+    }
+
     if (!current){
       $("status").textContent = "No active block";
       $("block").textContent = "—";
@@ -1002,7 +1163,9 @@
       $("nextChange").textContent = "—";
       $("countdownOverlay").style.display = "none";
     } else {
-      $("status").textContent = current.name;
+      const typeLabel = current.type === "break" ? "BREAK" : (current.type === "special" ? "SPECIAL" : "PERIOD");
+      $("status").textContent = `${typeLabel}: ${current.name}`;
+
       $("block").textContent = current.name;
       $("range").textContent = `${fmtRange(current.start)} – ${fmtRange(current.end)}`;
       $("phase").innerHTML = `${ph.label} <span class="pill">${ph.key.toUpperCase()}</span>`;
@@ -1083,6 +1246,18 @@
       if (h) h.textContent = "Click the big text to edit • ⚠ Saving is blocked on this device/browser";
     }
 
+    // pack-up minutes slider init
+    const initialPack = getPackupMin();
+    $("packupMin").value = String(initialPack);
+    $("packupMinLabel").textContent = String(initialPack);
+
+    $("packupMin").addEventListener("input", ()=>{
+      setPackupMin($("packupMin").value);
+      // immediately reflect new phase boundaries
+      update();
+    });
+
+    // Load timetable + alarms
     blocks = loadBlocks();
     alarms = loadAlarms();
 
@@ -1093,19 +1268,19 @@
 
     setMinimizedDefaultsOnce();
     applyPanelVisibility();
-    renderTimetable(null);
 
+    // restore panel positions + enable dragging
+    restorePanelPositions();
+    makePanelDraggable("infoCard", "infoDrag");
+    makePanelDraggable("timetableCard", "ttDrag");
+
+    renderTimetable(null);
     loadEditors();
 
     if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
 
     update();
     setInterval(update, 1000);
-    const total = (current.e - current.s);
-const elapsed = (now - current.s);
-const pct = Math.max(0, Math.min(1, elapsed / total)) * 100;
-$("progressBar").style.width = pct.toFixed(1) + "%";
-
 
     document.addEventListener("pointerdown", () => {
       if ($("soundOn").checked || $("packupSongOn").checked) ensureAudio();
@@ -1116,4 +1291,3 @@ $("progressBar").style.width = pct.toFixed(1) + "%";
 </script>
 </body>
 </html>
-
