@@ -734,6 +734,28 @@
   let audioCtx = null;
   let packupInterval = null;
 
+    // ================= GREEN TIME CONTROL (like pack-up) =================
+  const GREEN_MIN_KEY = "greenMin_v1";
+
+  function getGreenMin(){
+    const raw = localStorage.getItem(GREEN_MIN_KEY);
+    const n = raw === null ? 5 : Number(raw);
+    return Number.isFinite(n) ? n : 5;
+  }
+
+  function setGreenMin(n){
+    localStorage.setItem(GREEN_MIN_KEY, String(n));
+  }
+
+  function syncGreenUI(){
+    const val = getGreenMin();
+    const slider = $("greenMin");
+    const label = $("greenMinLabel");
+    if (slider) slider.value = String(val);
+    if (label) label.textContent = String(val);
+  }
+
+  
   const SOUND_KEY = "soundOn_v3";
   const SONG_KEY  = "packupSongOn_v3";
   const VOL_KEY   = "volume_v3";
@@ -958,7 +980,13 @@
     }
 
     const { s, e } = current;
-    const greenUntil = new Date(s.getTime() + (cfg.greenMin ?? 0) * 60 * 1000);
+       // Use slider value for GREEN on teaching blocks (period/special)
+    const greenMin = (current.type === "period" || current.type === "special")
+      ? getGreenMin()
+      : (cfg.greenMin ?? 0);
+
+    const greenUntil = new Date(s.getTime() + greenMin * 60 * 1000);
+
     const redFrom    = new Date(e.getTime() - (cfg.redMin   ?? 0) * 60 * 1000);
 
     if (now < greenUntil) return { key:"green", label:"Do Now / Mahi Ināianei", bg:"var(--bgGreen)", nextAt: greenUntil };
@@ -1383,6 +1411,15 @@
       if (h) h.textContent = "Click the big text to edit • ⚠ Saving is blocked on this device/browser";
     }
 
+        // Green minutes slider
+    syncGreenUI();
+    $("greenMin").addEventListener("input", () => {
+      const v = Number($("greenMin").value);
+      setGreenMin(v);
+      $("greenMinLabel").textContent = String(v);
+      update(); // apply immediately
+    });
+
     // pack-up minutes slider init
     const initialPack = getPackupMin();
     $("packupMin").value = String(initialPack);
@@ -1463,6 +1500,7 @@
 </script>
 </body>
 </html>
+
 
 
 
