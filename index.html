@@ -216,6 +216,11 @@
     }
 
     #infoCard{ left: 10px; width: min(520px, calc(100% - 20px)); }
+    
+    <div style="height:8px;background:rgba(0,0,0,0.08);border-radius:999px;overflow:hidden;margin:8px 0 10px;">
+  <div id="progressBar" style="height:100%;width:0%;background:rgba(0,0,0,0.35);"></div>
+</div>
+    
     #timetableCard{ right: 10px; width: min(520px, calc(100% - 20px)); }
 
     .big { font-size: 16px; font-weight: 950; margin: 0 0 6px; }
@@ -583,7 +588,8 @@
   function applyAutoMessage(phaseKey){
     if (!$("autoMsgOn").checked) return;
     const t = readTemplates();
-    const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey };
+   const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey, break:t.grey, special:t.orange };
+
     msgEl.textContent = map[phaseKey] ?? "";
     saveMsg();
   }
@@ -1095,6 +1101,11 @@
 
     update();
     setInterval(update, 1000);
+    const total = (current.e - current.s);
+const elapsed = (now - current.s);
+const pct = Math.max(0, Math.min(1, elapsed / total)) * 100;
+$("progressBar").style.width = pct.toFixed(1) + "%";
+
 
     document.addEventListener("pointerdown", () => {
       if ($("soundOn").checked || $("packupSongOn").checked) ensureAudio();
@@ -1105,3 +1116,4 @@
 </script>
 </body>
 </html>
+
