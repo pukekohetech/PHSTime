@@ -52,7 +52,6 @@
     }
     button:active{ transform: translateY(1px); }
 
-    /* Less conspicuous “options” button */
     #optionsBtn{
       width: 44px;
       height: 44px;
@@ -65,7 +64,6 @@
       box-shadow: 0 10px 26px rgba(0,0,0,0.14);
     }
 
-    /* Dropdown panel */
     #optionsMenu{
       position: absolute;
       top: 52px;
@@ -78,7 +76,7 @@
       overflow: hidden;
       transform-origin: top right;
       animation: pop 120ms ease;
-      touch-action: none; /* helps drag-to-dismiss */
+      touch-action: none;
     }
     @keyframes pop{
       from { transform: scale(0.98); opacity: 0; }
@@ -150,7 +148,7 @@
     }
     summary::-webkit-details-marker{ display:none; }
 
-    /* ================= MAIN MESSAGE (unchanged size) ================= */
+    /* ================= MAIN MESSAGE ================= */
     .messageWrap{
       width: min(1200px, calc(100% - 40px));
       padding: 22px;
@@ -233,7 +231,6 @@
       margin-left: 8px;
       font-size: 12px;
     }
-    code{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
     /* ================= TIMETABLE TABLE ================= */
     table{
@@ -304,7 +301,6 @@
     <div class="time" id="packupTimeLeft">5:00</div>
   </div>
 
-  <!-- OPTIONS BUTTON + DROPDOWN -->
   <div class="controls">
     <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
 
@@ -314,7 +310,7 @@
           <div class="menuTitle">Options</div>
           <div class="menuHint">Click outside or drag down to close</div>
         </div>
-       <button id="closeMenu" type="button" title="Close">✕</button>
+        <button id="closeMenu" type="button" title="Close">✕</button>
       </div>
 
       <div class="menuBody">
@@ -350,22 +346,26 @@
           <button id="resetMsg">Reset</button>
         </div>
 
+        <!-- Advanced tests (fixed) -->
         <details>
           <summary>Advanced tests</summary>
           <div style="height:10px"></div>
           <div class="menuRow">
-            <button class="testBtn" id="testChime" title="Green → Orange cue">Test chime</button>
-            <button class="testBtn" id="testDouble" title="Orange → Red cue">Test pack-up cue</button>
-            <button class="testBtn" id="testBell" title="End of block cue">Test end bell</button>
-            <button class="testBtn" id="testSong" title="Plays ~3 seconds">Test song</button>
+            <button class="testBtn" id="testChime">Test chime</button>
+            <button class="testBtn" id="testDouble">Test pack-up cue</button>
+            <button class="testBtn" id="testBell">Test end bell</button>
+            <button class="testBtn" id="testSong">Test song</button>
           </div>
+        </details>
 
+        <!-- Timetable & alarms (separate details — fixed nesting) -->
+        <details>
           <summary>Timetable &amp; alarms</summary>
           <div style="height:10px"></div>
 
           <div class="menuRow">
-            <button class="testBtn" id="saveConfigBtn" title="Save timetable + alarms">Save</button>
-            <button class="testBtn" id="resetConfigBtn" title="Reset timetable + alarms to defaults">Reset</button>
+            <button class="testBtn" id="saveConfigBtn">Save</button>
+            <button class="testBtn" id="resetConfigBtn">Reset</button>
           </div>
 
           <div style="height:10px"></div>
@@ -385,9 +385,8 @@
           <div class="hint" style="text-align:left;margin-top:6px;">
             Tip: times are “HH:MM”. Alarms can trigger on phase-enter, block-start/end, or seconds before end.
           </div>
-     
-
         </details>
+
       </div>
     </div>
   </div>
@@ -436,117 +435,6 @@
   </div>
 
 <script>
-  // ================= SETTINGS (minutes) =================
-  // Default phase timings for teaching periods (can be changed per type below)
-  const DEFAULT_PHASES_BY_TYPE = {
-    period:  { greenMin: 5, redMin: 5, usePhases: true,  bg: "var(--bgGrey)" },
-    break:   { greenMin: 0, redMin: 0, usePhases: false, bg: "var(--bgBreak)" },   // breaks behave differently
-    special: { greenMin: 3, redMin: 3, usePhases: true,  bg: "var(--bgSpecial)" }
-  };
-
-  // Pack-up tune cycles when entering RED
-  const PACKUP_SONG_CYCLES = 3;
-
-  // ================= DEFAULT TIMETABLE =================
-  const DEFAULT_BLOCKS = [
-    { name: "PERIOD 1",   start: "09:00", end: "09:55", type: "period" },
-    { name: "PERIOD 2",   start: "10:00", end: "10:55", type: "period" },
-    { name: "TE MAAHURI", start: "10:55", end: "11:25", type: "special" },
-    { name: "BREAK 1",    start: "11:25", end: "12:00", type: "break" },
-    { name: "PERIOD 3",   start: "12:00", end: "12:55", type: "period" },
-    { name: "PERIOD 4",   start: "13:00", end: "13:55", type: "period" },
-    { name: "BREAK 2",    start: "13:55", end: "14:20", type: "break" },
-    { name: "PERIOD 5",   start: "14:20", end: "15:15", type: "period" },
-  ];
-
-  // ================= DEFAULT ALARMS =================
-  // Add as many as you like. These are examples.
-  // Supported:
-  //  - kind: "phase-enter"   { phase:"green|orange|red|grey|break|special" }
-  //  - kind: "block-start"   { }
-  //  - kind: "block-end"     { }
-  //  - kind: "before-end"    { seconds: 60 }  // triggers N seconds before end
-  //
-  // Optional filters:
-  //  - onlyTypes: ["period","break","special"]
-  //  - exceptTypes: ["break"]
-  //
-  // sound: "chime" | "double" | "bell" | "song" | "beep"
-  const DEFAULT_ALARMS = [
-    { id:"start_any",  label:"Start of any block", kind:"block-start", sound:"chime",  exceptTypes:["break"] },
-    { id:"1min_left",  label:"1 min left",         kind:"before-end", seconds:60, sound:"double", onlyTypes:["period","special"] },
-    { id:"end_any",    label:"End of any block",   kind:"block-end",   sound:"bell",  exceptTypes:["break"] },
-    { id:"break_start",label:"Break starts",       kind:"block-start", sound:"chime",  onlyTypes:["break"] }
-  ];
-
-  // ================= STORAGE KEYS =================
-  const BLOCKS_KEY = "pukekohe_class_screen_blocks_v1";
-  const ALARMS_KEY = "pukekohe_class_screen_alarms_v1";
-
-  // ================= TIMETABLE (loaded) =================
-  let blocks = [];
-
-  function safeParseJSON(text){
-    try { return { ok:true, value: JSON.parse(text) }; }
-    catch (e){ return { ok:false, error: e?.message || "Invalid JSON" }; }
-  }
-
-  function isHHMM(s){
-    return typeof s === "string" && /^\d{2}:\d{2}$/.test(s);
-  }
-
-  function validateBlocks(arr){
-    if (!Array.isArray(arr)) return "Timetable JSON must be an array.";
-    for (const b of arr){
-      if (!b || typeof b !== "object") return "Each timetable row must be an object.";
-      if (typeof b.name !== "string" || !b.name.trim()) return "Each row needs a name.";
-      if (!isHHMM(b.start) || !isHHMM(b.end)) return `Times must be "HH:MM" (${b.name}).`;
-      if (!["period","break","special"].includes(b.type)) return `type must be period/break/special (${b.name}).`;
-      const s = todayAt(b.start), e = todayAt(b.end);
-      if (!(e > s)) return `End must be after start (${b.name}).`;
-    }
-    return null;
-  }
-
-  function validateAlarms(arr){
-    if (!Array.isArray(arr)) return "Alarms JSON must be an array.";
-    for (const a of arr){
-      if (!a || typeof a !== "object") return "Each alarm must be an object.";
-      if (typeof a.id !== "string" || !a.id.trim()) return "Each alarm needs an id.";
-      if (!["phase-enter","block-start","block-end","before-end"].includes(a.kind)) return `Unknown kind for alarm ${a.id}.`;
-      if (a.kind === "phase-enter" && !a.phase) return `Alarm ${a.id} needs phase.`;
-      if (a.kind === "before-end" && !(Number(a.seconds) > 0)) return `Alarm ${a.id} needs seconds > 0.`;
-      if (!["chime","double","bell","song","beep"].includes(a.sound)) return `Alarm ${a.id} has unknown sound.`;
-    }
-    return null;
-  }
-
-  function loadBlocks(){
-    const raw = localStorage.getItem(BLOCKS_KEY);
-    if (!raw) return DEFAULT_BLOCKS.slice();
-    const p = safeParseJSON(raw);
-    if (!p.ok) return DEFAULT_BLOCKS.slice();
-    const err = validateBlocks(p.value);
-    return err ? DEFAULT_BLOCKS.slice() : p.value;
-  }
-
-  function loadAlarms(){
-    const raw = localStorage.getItem(ALARMS_KEY);
-    if (!raw) return DEFAULT_ALARMS.slice();
-    const p = safeParseJSON(raw);
-    if (!p.ok) return DEFAULT_ALARMS.slice();
-    const err = validateAlarms(p.value);
-    return err ? DEFAULT_ALARMS.slice() : p.value;
-  }
-
-  function saveBlocks(newBlocks){
-    localStorage.setItem(BLOCKS_KEY, JSON.stringify(newBlocks, null, 2));
-  }
-
-  function saveAlarms(newAlarms){
-    localStorage.setItem(ALARMS_KEY, JSON.stringify(newAlarms, null, 2));
-  }
-
   // ================= HELPERS =================
   const $ = (id) => document.getElementById(id);
 
@@ -574,63 +462,206 @@
   function setBg(color){
     document.body.style.backgroundColor = color;
   }
-  function findCurrentBlock(now){
-    for (const b of blocks){
-      const s = todayAt(b.start);
-      const e = todayAt(b.end);
-      if (now >= s && now < e) return { ...b, s, e };
+
+  // ================= OPTIONS MENU BEHAVIOUR =================
+  const optionsBtn = $("optionsBtn");
+  const optionsMenu = $("optionsMenu");
+  const closeMenuBtn = $("closeMenu");
+  const menuHeader = $("menuHeader");
+
+  function openMenu(){
+    optionsMenu.classList.remove("hidden");
+    optionsBtn.setAttribute("aria-expanded", "true");
+  }
+  function closeMenu(){
+    optionsMenu.classList.add("hidden");
+    optionsBtn.setAttribute("aria-expanded", "false");
+  }
+  function toggleMenu(){
+    optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu();
+  }
+
+  optionsBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+  ["pointerdown","click"].forEach(evt => {
+    closeMenuBtn.addEventListener(evt, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+    });
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if (optionsMenu.classList.contains("hidden")) return;
+    if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
+
+  let dragStartY = null;
+  menuHeader.addEventListener("pointerdown", (e) => {
+    dragStartY = e.clientY;
+    menuHeader.setPointerCapture(e.pointerId);
+  });
+  menuHeader.addEventListener("pointermove", (e) => {
+    if (dragStartY === null) return;
+    const dy = e.clientY - dragStartY;
+    if (dy > 70) {
+      dragStartY = null;
+      closeMenu();
     }
-    return null;
-  }
+  });
+  menuHeader.addEventListener("pointerup", () => dragStartY = null);
+  menuHeader.addEventListener("pointercancel", () => dragStartY = null);
 
-  function typeConfig(type){
-    return DEFAULT_PHASES_BY_TYPE[type] || DEFAULT_PHASES_BY_TYPE.period;
-  }
-
-  // ================= PHASE LOGIC (with breaks different) =================
-  function phaseFor(now, current){
-    if (!current) return { key:"grey", label:"Outside timetable", bg:"var(--bgGrey)" };
-
-    const cfg = typeConfig(current.type);
-
-    // Breaks (and anything with usePhases:false) becomes a single "break" phase
-    if (!cfg.usePhases){
-      const label = current.type === "break" ? "Break time" : "Non-teaching time";
-      return { key: current.type, label, bg: cfg.bg, nextAt: current.e };
-    }
-
-    const { s, e } = current;
-    const greenUntil = new Date(s.getTime() + (cfg.greenMin ?? 0) * 60 * 1000);
-    const redFrom    = new Date(e.getTime() - (cfg.redMin   ?? 0) * 60 * 1000);
-
-    // If mins are 0 it will naturally collapse to orange/red boundaries
-    if (now < greenUntil) return { key:"green", label:"Do Now / Mahi Ināianei", bg:"var(--bgGreen)", nextAt: greenUntil };
-    if (now >= redFrom)   return { key:"red",   label:"Pack up",               bg:"var(--bgRed)",   nextAt: e };
-    return                { key:"orange",label:"Work Time",                   bg:"var(--bgOrange)",nextAt: redFrom };
-  }
-
-  function currentPhaseKeyNow(){
-    const now = new Date();
-    const current = findCurrentBlock(now);
-    return phaseFor(now, current).key;
-  }
-
-  // ================= RENDER TIMETABLE =================
-  const ttBody = $("ttBody");
-  function renderTimetable(activeName){
-    ttBody.innerHTML = "";
-    for (const b of blocks){
-      const tr = document.createElement("tr");
-      tr.className = b.type + (b.name === activeName ? " active" : "");
-      const td1 = document.createElement("td");
-      td1.textContent = b.name;
-      const td2 = document.createElement("td");
-      td2.textContent = `${fmtRange(b.start)} – ${fmtRange(b.end)}`;
-      tr.appendChild(td1);
-      tr.appendChild(td2);
-      ttBody.appendChild(tr);
+  // ================= STORAGE SAFETY =================
+  function storageOK(){
+    try{
+      const k = "__storage_test__";
+      localStorage.setItem(k, "1");
+      localStorage.removeItem(k);
+      return true;
+    } catch (e){
+      return false;
     }
   }
+
+  // ================= STUDENT MESSAGE (manual editable + saved) =================
+  const msgEl = $("studentMessage");
+  const MSG_KEY = "pukekohe_class_screen_student_message_v1";
+  const defaultManualMsg = "Do Now:\nOpen your book and begin the starter.";
+
+  function loadMsg(){
+    try{
+      const saved = localStorage.getItem(MSG_KEY);
+      msgEl.textContent = (saved !== null && saved !== "") ? saved : defaultManualMsg;
+    } catch (e){
+      msgEl.textContent = defaultManualMsg;
+    }
+  }
+
+  function saveMsg(){
+    try{ localStorage.setItem(MSG_KEY, msgEl.textContent); } catch (e){}
+  }
+  ["input","keyup","blur","paste"].forEach(ev => msgEl.addEventListener(ev, saveMsg));
+
+  // ================= AUTO MESSAGE TEMPLATES =================
+  const AUTO_KEY = "autoMsgOn_v3";
+  const TPL_KEY  = "autoMsgTemplates_v3";
+
+  const defaultTemplates = {
+    green: "Do Now / Mahi Ināianei:\n• Sit down\n• Devices closed\n• Start the task on the board",
+    orange:"Work Time:\n• Focus + meet success criteria\n• Ask 3 before me",
+    red:   "Pack up:\n• Save + submit\n• Tidy your area\n• Stand behind your chair",
+    grey:  "Please wait quietly.\n(We start at the next bell time)"
+  };
+
+  function loadTemplates(){
+    const raw = localStorage.getItem(TPL_KEY);
+    const t = raw ? JSON.parse(raw) : defaultTemplates;
+    $("tplGreen").value  = t.green;
+    $("tplOrange").value = t.orange;
+    $("tplRed").value    = t.red;
+    $("tplGrey").value   = t.grey;
+  }
+
+  function readTemplates(){
+    const t = {
+      green: $("tplGreen").value,
+      orange:$("tplOrange").value,
+      red:   $("tplRed").value,
+      grey:  $("tplGrey").value
+    };
+    localStorage.setItem(TPL_KEY, JSON.stringify(t));
+    return t;
+  }
+
+  function applyAutoMessage(phaseKey){
+    if (!$("autoMsgOn").checked) return;
+    const t = readTemplates();
+    const map = { green:t.green, orange:t.orange, red:t.red, grey:t.grey };
+    msgEl.textContent = map[phaseKey] ?? "";
+    saveMsg();
+  }
+
+  ["tplGreen","tplOrange","tplRed","tplGrey"].forEach(id=>{
+    $(id).addEventListener("input", () => {
+      readTemplates();
+      if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
+    });
+  });
+
+  function setAutoOnUI(){
+    $("autoMsgOn").checked = localStorage.getItem(AUTO_KEY) === "1";
+  }
+
+  $("autoMsgOn").addEventListener("change", () => {
+    const on = $("autoMsgOn").checked;
+    localStorage.setItem(AUTO_KEY, on ? "1" : "0");
+    if (on) applyAutoMessage(currentPhaseKeyNow());
+  });
+
+  // ================= RESET MESSAGE BUTTON =================
+  $("resetMsg").addEventListener("click", () => {
+    localStorage.removeItem(MSG_KEY);
+    if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
+    else {
+      msgEl.textContent = defaultManualMsg;
+      saveMsg();
+    }
+  });
+
+  // ================= PANELS HIDE/SHOW =================
+  const INFO_KEY = "infoHidden_v4";
+  const TABLE_KEY = "tableHidden_v4";
+
+  function setMinimizedDefaultsOnce(){
+    if (localStorage.getItem(INFO_KEY) === null) localStorage.setItem(INFO_KEY, "1");
+    if (localStorage.getItem(TABLE_KEY) === null) localStorage.setItem(TABLE_KEY, "1");
+  }
+
+  function applyPanelVisibility(){
+    const infoHidden = localStorage.getItem(INFO_KEY) === "1";
+    const tableHidden = localStorage.getItem(TABLE_KEY) === "1";
+    $("infoCard").classList.toggle("hidden", infoHidden);
+    $("timetableCard").classList.toggle("hidden", tableHidden);
+    $("toggleInfo").textContent = infoHidden ? "Show info" : "Hide info";
+    $("toggleTable").textContent = tableHidden ? "Show timetable" : "Hide timetable";
+  }
+
+  $("toggleInfo").addEventListener("click", ()=>{
+    const hidden = localStorage.getItem(INFO_KEY) === "1";
+    localStorage.setItem(INFO_KEY, hidden ? "0":"1");
+    applyPanelVisibility();
+  });
+
+  $("toggleTable").addEventListener("click", ()=>{
+    const hidden = localStorage.getItem(TABLE_KEY) === "1";
+    localStorage.setItem(TABLE_KEY, hidden ? "0":"1");
+    applyPanelVisibility();
+  });
+
+  // ================= FULLSCREEN =================
+  $("fullscreenBtn").addEventListener("click", async ()=>{
+    try{
+      if (!document.fullscreenElement){
+        await document.documentElement.requestFullscreen();
+        $("fullscreenBtn").textContent = "Exit full screen";
+      } else {
+        await document.exitFullscreen();
+        $("fullscreenBtn").textContent = "Full screen";
+      }
+    } catch (e) {
+      alert("Fullscreen blocked by the browser. Try pressing F11.");
+    }
+  });
+  document.addEventListener("fullscreenchange", ()=>{
+    $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
 
   // ================= SOUNDS (WebAudio) =================
   let audioCtx = null;
@@ -640,9 +671,8 @@
   const SONG_KEY  = "packupSongOn_v3";
   const VOL_KEY   = "volume_v3";
 
-  function getVolume(){
-    return Number($("volume").value) / 100;
-  }
+  function getVolume(){ return Number($("volume").value) / 100; }
+
   function ensureAudio(){
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") audioCtx.resume();
@@ -689,6 +719,7 @@
     }
   }
 
+  const PACKUP_SONG_CYCLES = 3;
   function startPackupSong(cycles = PACKUP_SONG_CYCLES){
     stopPackupSong();
     const pattern = [
@@ -706,6 +737,170 @@
     }, 220);
   }
 
+  function loadSoundSettings(){
+    $("soundOn").checked = localStorage.getItem(SOUND_KEY) === "1";
+    $("packupSongOn").checked = localStorage.getItem(SONG_KEY) === "1";
+    const v = localStorage.getItem(VOL_KEY);
+    if (v !== null) $("volume").value = v;
+  }
+
+  $("soundOn").addEventListener("change", ()=>{
+    localStorage.setItem(SOUND_KEY, $("soundOn").checked ? "1":"0");
+    if ($("soundOn").checked) ensureAudio();
+  });
+
+  $("packupSongOn").addEventListener("change", ()=>{
+    localStorage.setItem(SONG_KEY, $("packupSongOn").checked ? "1":"0");
+    if ($("packupSongOn").checked) ensureAudio();
+  });
+
+  $("volume").addEventListener("input", ()=>{
+    localStorage.setItem(VOL_KEY, $("volume").value);
+  });
+
+  $("testChime").addEventListener("click", () => { ensureAudio(); chime(); });
+  $("testDouble").addEventListener("click", () => { ensureAudio(); doubleTap(); });
+  $("testBell").addEventListener("click", () => { ensureAudio(); endBell(); });
+  $("testSong").addEventListener("click", () => { ensureAudio(); startPackupSong(2); setTimeout(stopPackupSong, 3000); });
+
+  // ================= TIMETABLE + PHASE CONFIG =================
+  const DEFAULT_PHASES_BY_TYPE = {
+    period:  { greenMin: 5, redMin: 5, usePhases: true,  bg: "var(--bgGrey)" },
+    break:   { greenMin: 0, redMin: 0, usePhases: false, bg: "var(--bgBreak)" },
+    special: { greenMin: 3, redMin: 3, usePhases: true,  bg: "var(--bgSpecial)" }
+  };
+
+  const DEFAULT_BLOCKS = [
+    { name: "PERIOD 1",   start: "09:00", end: "09:55", type: "period" },
+    { name: "PERIOD 2",   start: "10:00", end: "10:55", type: "period" },
+    { name: "TE MAAHURI", start: "10:55", end: "11:25", type: "special" },
+    { name: "BREAK 1",    start: "11:25", end: "12:00", type: "break" },
+    { name: "PERIOD 3",   start: "12:00", end: "12:55", type: "period" },
+    { name: "PERIOD 4",   start: "13:00", end: "13:55", type: "period" },
+    { name: "BREAK 2",    start: "13:55", end: "14:20", type: "break" },
+    { name: "PERIOD 5",   start: "14:20", end: "15:15", type: "period" },
+  ];
+
+  const DEFAULT_ALARMS = [
+    { id:"start_any",   label:"Start of any block", kind:"block-start", sound:"chime",  exceptTypes:["break"] },
+    { id:"1min_left",   label:"1 min left",         kind:"before-end", seconds:60, sound:"double", onlyTypes:["period","special"] },
+    { id:"end_any",     label:"End of any block",   kind:"block-end",   sound:"bell",   exceptTypes:["break"] },
+    { id:"break_start", label:"Break starts",       kind:"block-start", sound:"chime",  onlyTypes:["break"] }
+  ];
+
+  const BLOCKS_KEY = "pukekohe_class_screen_blocks_v1";
+  const ALARMS_KEY = "pukekohe_class_screen_alarms_v1";
+
+  let blocks = [];
+  let alarms = [];
+
+  function safeParseJSON(text){
+    try { return { ok:true, value: JSON.parse(text) }; }
+    catch (e){ return { ok:false, error: e?.message || "Invalid JSON" }; }
+  }
+  function isHHMM(s){ return typeof s === "string" && /^\d{2}:\d{2}$/.test(s); }
+
+  function validateBlocks(arr){
+    if (!Array.isArray(arr)) return "Timetable JSON must be an array.";
+    for (const b of arr){
+      if (!b || typeof b !== "object") return "Each timetable row must be an object.";
+      if (typeof b.name !== "string" || !b.name.trim()) return "Each row needs a name.";
+      if (!isHHMM(b.start) || !isHHMM(b.end)) return `Times must be "HH:MM" (${b.name}).`;
+      if (!["period","break","special"].includes(b.type)) return `type must be period/break/special (${b.name}).`;
+      const s = todayAt(b.start), e = todayAt(b.end);
+      if (!(e > s)) return `End must be after start (${b.name}).`;
+    }
+    return null;
+  }
+  function validateAlarms(arr){
+    if (!Array.isArray(arr)) return "Alarms JSON must be an array.";
+    for (const a of arr){
+      if (!a || typeof a !== "object") return "Each alarm must be an object.";
+      if (typeof a.id !== "string" || !a.id.trim()) return "Each alarm needs an id.";
+      if (!["phase-enter","block-start","block-end","before-end"].includes(a.kind)) return `Unknown kind for alarm ${a.id}.`;
+      if (a.kind === "phase-enter" && !a.phase) return `Alarm ${a.id} needs phase.`;
+      if (a.kind === "before-end" && !(Number(a.seconds) > 0)) return `Alarm ${a.id} needs seconds > 0.`;
+      if (!["chime","double","bell","song","beep"].includes(a.sound)) return `Alarm ${a.id} has unknown sound.`;
+    }
+    return null;
+  }
+
+  function loadBlocks(){
+    const raw = localStorage.getItem(BLOCKS_KEY);
+    if (!raw) return DEFAULT_BLOCKS.slice();
+    const p = safeParseJSON(raw);
+    if (!p.ok) return DEFAULT_BLOCKS.slice();
+    const err = validateBlocks(p.value);
+    return err ? DEFAULT_BLOCKS.slice() : p.value;
+  }
+  function loadAlarms(){
+    const raw = localStorage.getItem(ALARMS_KEY);
+    if (!raw) return DEFAULT_ALARMS.slice();
+    const p = safeParseJSON(raw);
+    if (!p.ok) return DEFAULT_ALARMS.slice();
+    const err = validateAlarms(p.value);
+    return err ? DEFAULT_ALARMS.slice() : p.value;
+  }
+  function saveBlocks(newBlocks){ localStorage.setItem(BLOCKS_KEY, JSON.stringify(newBlocks, null, 2)); }
+  function saveAlarms(newAlarms){ localStorage.setItem(ALARMS_KEY, JSON.stringify(newAlarms, null, 2)); }
+
+  function findCurrentBlock(now){
+    for (const b of blocks){
+      const s = todayAt(b.start);
+      const e = todayAt(b.end);
+      if (now >= s && now < e) return { ...b, s, e };
+    }
+    return null;
+  }
+  function typeConfig(type){
+    return DEFAULT_PHASES_BY_TYPE[type] || DEFAULT_PHASES_BY_TYPE.period;
+  }
+
+  function phaseFor(now, current){
+    if (!current) return { key:"grey", label:"Outside timetable", bg:"var(--bgGrey)" };
+
+    const cfg = typeConfig(current.type);
+
+    if (!cfg.usePhases){
+      const label = current.type === "break" ? "Break time" : "Non-teaching time";
+      return { key: current.type, label, bg: cfg.bg, nextAt: current.e };
+    }
+
+    const { s, e } = current;
+    const greenUntil = new Date(s.getTime() + (cfg.greenMin ?? 0) * 60 * 1000);
+    const redFrom    = new Date(e.getTime() - (cfg.redMin   ?? 0) * 60 * 1000);
+
+    if (now < greenUntil) return { key:"green", label:"Do Now / Mahi Ināianei", bg:"var(--bgGreen)", nextAt: greenUntil };
+    if (now >= redFrom)   return { key:"red",   label:"Pack up",               bg:"var(--bgRed)",   nextAt: e };
+    return                { key:"orange",label:"Work Time",                   bg:"var(--bgOrange)",nextAt: redFrom };
+  }
+
+  function currentPhaseKeyNow(){
+    const now = new Date();
+    const current = findCurrentBlock(now);
+    return phaseFor(now, current).key;
+  }
+
+  // ================= RENDER TIMETABLE =================
+  const ttBody = $("ttBody");
+  function renderTimetable(activeName){
+    ttBody.innerHTML = "";
+    for (const b of blocks){
+      const tr = document.createElement("tr");
+      tr.className = b.type + (b.name === activeName ? " active" : "");
+      const td1 = document.createElement("td");
+      td1.textContent = b.name;
+      const td2 = document.createElement("td");
+      td2.textContent = `${fmtRange(b.start)} – ${fmtRange(b.end)}`;
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      ttBody.appendChild(tr);
+    }
+  }
+
+  // ================= ALARMS ENGINE =================
+  let firedKeys = new Set();
+
   function playSoundByName(name){
     if (name === "chime") return chime();
     if (name === "double") return doubleTap();
@@ -713,10 +908,6 @@
     if (name === "song") return startPackupSong(PACKUP_SONG_CYCLES);
     if (name === "beep") return beep(880, 200, "sine", 5);
   }
-
-  // ================= ALARMS ENGINE =================
-  let alarms = [];
-  let firedKeys = new Set(); // prevents repeats within a session/day
 
   function alarmAllowedForBlock(alarm, block){
     const t = block?.type;
@@ -730,11 +921,9 @@
     const key = `${alarm.id}::${contextKey}`;
     if (firedKeys.has(key)) return;
     firedKeys.add(key);
-
     if ($("soundOn").checked) playSoundByName(alarm.sound);
   }
 
-  // Optional: reset alarms daily
   function resetFiredIfNewDay(){
     const k = "alarm_fired_day_v1";
     const today = new Date().toDateString();
@@ -766,8 +955,7 @@
     alarms = aParsed.value;
     saveBlocks(blocks);
     saveAlarms(alarms);
-
-    firedKeys = new Set(); // clear so new config can fire again
+    firedKeys = new Set();
     renderTimetable(null);
     update();
     alert("Saved ✅");
@@ -816,7 +1004,6 @@
       const secs = ph.nextAt ? secondsBetween(now, ph.nextAt) : 0;
       $("nextChange").textContent = secs ? `${mmss(secs)} (${secs}s)` : "—";
 
-      // Only show the big pack-up countdown during RED (teaching phases only)
       if (ph.key === "red"){
         const leftSecs = secondsBetween(now, current.e);
         $("packupTimeLeft").textContent = mmss(leftSecs);
@@ -826,16 +1013,11 @@
       }
     }
 
-    // Background: breaks/specials can override with their own colors
-    if (current && !typeConfig(current.type).usePhases){
-      setBg(typeConfig(current.type).bg);
-    } else {
-      setBg(ph.bg);
-    }
+    if (current && !typeConfig(current.type).usePhases) setBg(typeConfig(current.type).bg);
+    else setBg(ph.bg);
 
-    // ---- Alarm checks ----
+    // before-end alarms
     if (current){
-      // before-end alarms (check every tick)
       const left = secondsBetween(now, current.e);
       for (const a of alarms){
         if (a.kind !== "before-end") continue;
@@ -844,7 +1026,6 @@
       }
     }
 
-    // ---- Transition detection ----
     const blockName = current ? current.name : null;
     const phaseKey = ph.key;
 
@@ -853,7 +1034,6 @@
     const changedPhase = (phaseKey !== lastPhaseKey);
 
     if (changedBlock || blockEnded){
-      // block-start
       if (current && changedBlock){
         for (const a of alarms){
           if (a.kind !== "block-start") continue;
@@ -861,13 +1041,9 @@
           fireAlarm(a, `${current.name}::start::${current.start}`);
         }
       }
-      // block-end (when we drop to no block, use lastBlockName)
       if (blockEnded){
-        // if you want a guaranteed bell at end-of-day blocks even without a next block:
-        // (this uses default "end bell" if soundOn)
         for (const a of alarms){
           if (a.kind !== "block-end") continue;
-          // can't check type reliably once blockEnded unless we look it up; keep it simple:
           fireAlarm(a, `${lastBlockName}::end`);
         }
       }
@@ -882,12 +1058,10 @@
       }
     }
 
-    // ---- Your existing auto-message + packup song behaviour ----
     if (changedPhase || changedBlock || blockEnded){
       if (changedPhase || changedBlock) applyAutoMessage(phaseKey);
 
       const songOn = $("packupSongOn").checked;
-      // only play packup song on RED during teaching phases
       if (songOn && phaseKey === "red") startPackupSong(PACKUP_SONG_CYCLES);
       else stopPackupSong();
     }
@@ -896,14 +1070,13 @@
     lastBlockName = blockName;
   }
 
-  // ================= INIT (update to load blocks/alarms + editors) =================
+  // ================= INIT =================
   function init(){
     if (!storageOK()){
       const h = document.getElementById("saveHint");
       if (h) h.textContent = "Click the big text to edit • ⚠ Saving is blocked on this device/browser";
     }
 
-    // Load timetable + alarms first
     blocks = loadBlocks();
     alarms = loadAlarms();
 
@@ -916,7 +1089,6 @@
     applyPanelVisibility();
     renderTimetable(null);
 
-    // Fill editors with current config
     loadEditors();
 
     if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
@@ -930,8 +1102,6 @@
   }
 
   init();
-
 </script>
 </body>
 </html>
-
