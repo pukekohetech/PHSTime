@@ -176,20 +176,24 @@
       transition: width 400ms ease;
     }
 
-    #studentMessage{
-      position: relative;
-      z-index: 1;
+   #studentMessage{
+  position: relative;
+  z-index: 1;
 
-      outline:none;
-      font-weight: 900;
-      line-height: 1.05;
-      letter-spacing: -0.5px;
-      font-size: clamp(44px, 6vw, 96px);
-      text-align: center;
-      margin: 0;
-      word-break: break-word;
-      white-space: pre-wrap;
-    }
+  outline:none;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.5px;
+
+  /* Max size stays the same; JS will shrink when needed */
+  font-size: clamp(44px, 6vw, 96px);
+
+  text-align: center;
+  margin: 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
     .hint{
       position: relative;
       z-index: 1;
@@ -1288,6 +1292,83 @@
     lastBlockName = blockName;
   }
 
+
+  // ================= AUTO-FIT BIG MESSAGE TO SCREEN HEIGHT =================
+  // Shrinks font-size only if message would run off bottom of the page.
+  // It respects your existing clamp() as the "max" and won't go below MIN_PX.
+  const MIN_PX = 26;   // smallest font size allowed
+  const MAX_PX = 110;  // an upper cap for safety (actual max still effectively your clamp)
+  let fitRaf = null;
+
+  function px(n){ return `${Math.round(n)}px`; }
+
+  function getClampMaxPx(){
+    // Your CSS clamp(44px, 6vw, 96px) -> max is 96px
+    // If you change that clamp max later, update this number too.
+    return 96;
+  }
+
+  function fitStudentMessage(){
+    const wrap = document.querySelector(".messageWrap");
+    const msg  = $("studentMessage");
+    if (!wrap || !msg) return;
+
+    // Reset so we measure at "natural" size first
+    msg.style.fontSize = "";
+
+    // Small padding to prevent touching edges
+    const paddingSafety = 18;
+
+    // Available vertical space: from top of messageWrap to bottom of viewport
+    const wrapRect = wrap.getBoundingClientRect();
+    const available = window.innerHeight - wrapRect.top - paddingSafety;
+
+    // If wrap is already outside viewport somehow, bail
+    if (available < 120) return;
+
+    // Current content height (message + hint) must fit in available space
+    const needsShrink = wrap.scrollHeight > available;
+
+    if (!needsShrink){
+      // If it fits, keep CSS clamp sizing
+      msg.style.fontSize = "";
+      return;
+    }
+
+    // Binary search font size
+    const max = Math.min(getClampMaxPx(), MAX_PX);
+    let lo = MIN_PX;
+    let hi = max;
+    let best = lo;
+
+    // Use direct px sizes while searching
+    for (let i = 0; i < 14; i++){
+      const mid = (lo + hi) / 2;
+      msg.style.fontSize = px(mid);
+
+      // Force layout read
+      const h = wrap.scrollHeight;
+
+      if (h <= available){
+        best = mid;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+
+    msg.style.fontSize = px(best);
+  }
+
+  function scheduleFit(){
+    if (fitRaf) cancelAnimationFrame(fitRaf);
+    fitRaf = requestAnimationFrame(() => {
+      fitRaf = null;
+      fitStudentMessage();
+    });
+  }
+
+  
   // ================= INIT =================
   function init(){
     if (!storageOK()){
@@ -1320,6 +1401,30 @@
     alarms = loadAlarms();
 
     loadMsg();
+
+        // Auto-fit on common triggers
+    window.addEventListener("resize", scheduleFit);
+
+    // When the message text changes (typing/paste/autoset)
+    ["input","keyup","paste"].forEach(ev => msgEl.addEventListener(ev, scheduleFit));
+
+    // When templates change (auto-message updates can change message length)
+    ["tplGreen","tplOrange","tplRed","tplGrey"].forEach(id=>{
+      $(id).addEventListener("input", scheduleFit);
+    });
+
+    // When toggling panels/options can change available space visually
+    $("toggleInfo").addEventListener("click", scheduleFit);
+    $("toggleTable").addEventListener("click", scheduleFit);
+    optionsBtn.addEventListener("click", scheduleFit);
+
+    // Also after we apply auto message
+    const _applyAutoMessage = applyAutoMessage;
+    applyAutoMessage = function(phaseKey){
+      _applyAutoMessage(phaseKey);
+      scheduleFit();
+    };
+
     loadTemplates();
     setAutoOnUI();
     loadSoundSettings();
@@ -1342,11 +1447,15 @@
     document.addEventListener("pointerdown", () => {
       if ($("soundOn").checked || $("packupSongOn").checked) ensureAudio();
     }, { once:true });
+    
+      scheduleFit();
   }
 
   init();
+
 </script>
 </body>
 </html>
+
 
 
