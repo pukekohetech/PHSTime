@@ -1,4 +1,5 @@
 {
+  "id": "/PHSTime/",
   "name": "Classroom Timetable Screen",
   "short_name": "Timetable",
   "description": "Classroom timetable and message screen",
@@ -13,3 +14,4 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
+
