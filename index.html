@@ -15,8 +15,8 @@
       --periodGreen:#d9f3d2;
       --specialPink:#f0cbed;
 
-      --bgBreak:#7fc8e8;      /* background during breaks */
-      --bgSpecial:#d6b3f7;    /* background during specials (optional) */
+      --bgBreak:#7fc8e8;
+      --bgSpecial:#d6b3f7;
     }
 
     body{
@@ -68,7 +68,7 @@
       position: absolute;
       top: 52px;
       right: 0;
-      width: min(340px, calc(100vw - 20px));
+      width: min(380px, calc(100vw - 20px));
       background: rgba(255,255,255,0.92);
       border-radius: 18px;
       box-shadow: 0 18px 44px rgba(0,0,0,0.20);
@@ -95,10 +95,7 @@
       user-select: none;
     }
     .menuHeader:active{ cursor: grabbing; }
-    .menuTitle{
-      font-weight: 950;
-      letter-spacing: -0.2px;
-    }
+    .menuTitle{ font-weight: 950; letter-spacing: -0.2px; }
     .menuHint{
       opacity: .65;
       font-weight: 800;
@@ -292,6 +289,35 @@
     }
 
     .testBtn{ padding: 6px 8px; }
+
+    /* ================= ALARM BUILDER (friendly UI) ================= */
+    .alarmRow{
+      display:grid;
+      grid-template-columns: 1.4fr 1fr 1.2fr 1fr auto;
+      gap: 8px;
+      align-items:center;
+      background: rgba(255,255,255,0.65);
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 12px;
+      padding: 8px;
+    }
+    .alarmRow select, .alarmRow input{
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.15);
+      background: rgba(255,255,255,0.9);
+      font-weight: 800;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+    .alarmRow .miniBtn{
+      padding: 7px 9px;
+      border-radius: 10px;
+    }
+    @media (max-width: 720px){
+      .alarmRow{ grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 
@@ -346,7 +372,6 @@
           <button id="resetMsg">Reset</button>
         </div>
 
-        <!-- Advanced tests (fixed) -->
         <details>
           <summary>Advanced tests</summary>
           <div style="height:10px"></div>
@@ -358,17 +383,23 @@
           </div>
         </details>
 
-        <!-- Timetable & alarms (separate details — fixed nesting) -->
         <details>
           <summary>Timetable &amp; alarms</summary>
           <div style="height:10px"></div>
 
           <div class="menuRow">
-            <button class="testBtn" id="saveConfigBtn">Save</button>
-            <button class="testBtn" id="resetConfigBtn">Reset</button>
+            <button class="testBtn" id="addAlarmRowBtn" type="button">+ Add alarm</button>
+            <button class="testBtn" id="saveConfigBtn" type="button" title="Save timetable + alarms">Save JSON</button>
+            <button class="testBtn" id="resetConfigBtn" type="button" title="Reset timetable + alarms to defaults">Reset</button>
           </div>
 
-          <div style="height:10px"></div>
+          <div id="alarmBuilder" style="display:grid;gap:8px;margin-top:10px;"></div>
+
+          <div class="hint" style="text-align:left;margin-top:6px;">
+            Alarms save automatically. Use JSON below only if you want advanced editing.
+          </div>
+
+          <div class="divider"></div>
 
           <label style="display:block;font-weight:950;font-size:11px;opacity:.75;text-transform:uppercase;letter-spacing:.06em;">
             Timetable (JSON)
@@ -383,10 +414,9 @@
           <textarea id="alarmEditor" spellcheck="false" style="min-height:140px;"></textarea>
 
           <div class="hint" style="text-align:left;margin-top:6px;">
-            Tip: times are “HH:MM”. Alarms can trigger on phase-enter, block-start/end, or seconds before end.
+            Tip: times are “HH:MM”. “Before end” uses seconds.
           </div>
         </details>
-
       </div>
     </div>
   </div>
@@ -543,7 +573,6 @@
       msgEl.textContent = defaultManualMsg;
     }
   }
-
   function saveMsg(){
     try{ localStorage.setItem(MSG_KEY, msgEl.textContent); } catch (e){}
   }
@@ -782,10 +811,10 @@
   ];
 
   const DEFAULT_ALARMS = [
-    { id:"start_any",   label:"Start of any block", kind:"block-start", sound:"chime",  exceptTypes:["break"] },
-    { id:"1min_left",   label:"1 min left",         kind:"before-end", seconds:60, sound:"double", onlyTypes:["period","special"] },
-    { id:"end_any",     label:"End of any block",   kind:"block-end",   sound:"bell",   exceptTypes:["break"] },
-    { id:"break_start", label:"Break starts",       kind:"block-start", sound:"chime",  onlyTypes:["break"] }
+    { id:"start_any",   label:"Start of block", kind:"block-start", sound:"chime",  onlyTypes:["period","special"], enabled:true },
+    { id:"1min_left",   label:"1 min left",     kind:"before-end", seconds:60, sound:"double", onlyTypes:["period","special"], enabled:true },
+    { id:"end_any",     label:"End of block",   kind:"block-end",   sound:"bell",   onlyTypes:["period","special"], enabled:true },
+    { id:"break_start", label:"Break starts",   kind:"block-start", sound:"chime",  onlyTypes:["break"], enabled:true }
   ];
 
   const BLOCKS_KEY = "pukekohe_class_screen_blocks_v1";
@@ -821,6 +850,7 @@
       if (a.kind === "phase-enter" && !a.phase) return `Alarm ${a.id} needs phase.`;
       if (a.kind === "before-end" && !(Number(a.seconds) > 0)) return `Alarm ${a.id} needs seconds > 0.`;
       if (!["chime","double","bell","song","beep"].includes(a.sound)) return `Alarm ${a.id} has unknown sound.`;
+      if (a.enabled !== undefined && typeof a.enabled !== "boolean") return `Alarm ${a.id} enabled must be true/false.`;
     }
     return null;
   }
@@ -918,6 +948,7 @@
   }
 
   function fireAlarm(alarm, contextKey){
+    if (alarm && alarm.enabled === false) return;
     const key = `${alarm.id}::${contextKey}`;
     if (firedKeys.has(key)) return;
     firedKeys.add(key);
@@ -934,7 +965,7 @@
     }
   }
 
-  // ================= CONFIG EDITOR UI =================
+  // ================= CONFIG EDITOR UI (keeps JSON in sync) =================
   function loadEditors(){
     $("ttEditor").value = JSON.stringify(blocks, null, 2);
     $("alarmEditor").value = JSON.stringify(alarms, null, 2);
@@ -955,8 +986,11 @@
     alarms = aParsed.value;
     saveBlocks(blocks);
     saveAlarms(alarms);
+
     firedKeys = new Set();
     renderTimetable(null);
+    loadEditors();
+    renderAlarmBuilder();
     update();
     alert("Saved ✅");
   });
@@ -966,11 +1000,212 @@
     alarms = DEFAULT_ALARMS.slice();
     saveBlocks(blocks);
     saveAlarms(alarms);
-    loadEditors();
     firedKeys = new Set();
     renderTimetable(null);
+    loadEditors();
+    renderAlarmBuilder();
     update();
     alert("Reset to defaults ✅");
+  });
+
+  // ================= FRIENDLY ALARM BUILDER UI =================
+  const alarmBuilder = $("alarmBuilder");
+  const addAlarmRowBtn = $("addAlarmRowBtn");
+
+  function normalizeAlarmForUI(a){
+    return {
+      id: a.id || ("alarm_" + Math.random().toString(16).slice(2)),
+      label: a.label ?? "",
+      kind: a.kind ?? "before-end",
+      seconds: (a.seconds ?? 60),
+      phase: a.phase ?? "red",
+      sound: a.sound ?? "double",
+      onlyTypes: Array.isArray(a.onlyTypes) ? a.onlyTypes : ["period","special"],
+      enabled: (a.enabled ?? true)
+    };
+  }
+
+  function renderAlarmBuilder(){
+    alarmBuilder.innerHTML = "";
+    alarms = alarms.map(normalizeAlarmForUI);
+
+    alarms.forEach((a, idx) => {
+      const row = document.createElement("div");
+      row.className = "alarmRow";
+
+      // Kind
+      const kindSel = document.createElement("select");
+      kindSel.innerHTML = `
+        <option value="block-start">Start of block</option>
+        <option value="block-end">End of block</option>
+        <option value="before-end">Before end</option>
+        <option value="phase-enter">Phase enter</option>
+      `;
+      kindSel.value = a.kind;
+
+      // Detail (seconds or phase)
+      const detailWrap = document.createElement("div");
+      function renderDetail(){
+        detailWrap.innerHTML = "";
+        if (kindSel.value === "before-end"){
+          const inp = document.createElement("input");
+          inp.type = "number";
+          inp.min = "1";
+          inp.step = "1";
+          inp.value = String(a.seconds ?? 60);
+          inp.title = "Seconds before end";
+          inp.addEventListener("input", () => {
+            a.seconds = Math.max(1, Number(inp.value || 1));
+            saveAlarms(alarms);
+            loadEditors();
+          });
+          detailWrap.appendChild(inp);
+        } else if (kindSel.value === "phase-enter"){
+          const phaseSel = document.createElement("select");
+          phaseSel.innerHTML = `
+            <option value="green">Green</option>
+            <option value="orange">Orange</option>
+            <option value="red">Red</option>
+            <option value="grey">Grey</option>
+            <option value="break">Break</option>
+            <option value="special">Special</option>
+          `;
+          phaseSel.value = a.phase ?? "red";
+          phaseSel.addEventListener("change", () => {
+            a.phase = phaseSel.value;
+            saveAlarms(alarms);
+            loadEditors();
+          });
+          detailWrap.appendChild(phaseSel);
+        } else {
+          const dummy = document.createElement("input");
+          dummy.type = "text";
+          dummy.value = "—";
+          dummy.disabled = true;
+          detailWrap.appendChild(dummy);
+        }
+      }
+      renderDetail();
+
+      // Applies-to
+      const applies = document.createElement("div");
+      applies.style.display = "flex";
+      applies.style.gap = "8px";
+      applies.style.flexWrap = "wrap";
+      applies.style.alignItems = "center";
+
+      function mkTypeToggle(label, type){
+        const wrap = document.createElement("label");
+        wrap.style.display = "flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "6px";
+        wrap.style.fontWeight = "900";
+        wrap.style.fontSize = "12px";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = a.onlyTypes.includes(type);
+        cb.addEventListener("change", () => {
+          const toggles = applies.querySelectorAll("input[data-t]");
+          const types = [];
+          toggles.forEach(t => { if (t.checked) types.push(t.dataset.t); });
+          // Keep at least one type selected
+          if (types.length === 0){
+            cb.checked = true;
+            types.push(type);
+          }
+          a.onlyTypes = types;
+          saveAlarms(alarms);
+          loadEditors();
+        });
+        cb.dataset.t = type;
+        wrap.appendChild(cb);
+        wrap.appendChild(document.createTextNode(label));
+        return wrap;
+      }
+      applies.appendChild(mkTypeToggle("Periods","period"));
+      applies.appendChild(mkTypeToggle("Breaks","break"));
+      applies.appendChild(mkTypeToggle("Special","special"));
+
+      // Sound
+      const soundSel = document.createElement("select");
+      soundSel.innerHTML = `
+        <option value="chime">Chime</option>
+        <option value="double">Double tap</option>
+        <option value="bell">End bell</option>
+        <option value="song">Pack-up song</option>
+        <option value="beep">Beep</option>
+      `;
+      soundSel.value = a.sound ?? "double";
+      soundSel.addEventListener("change", () => {
+        a.sound = soundSel.value;
+        saveAlarms(alarms);
+        loadEditors();
+      });
+
+      // Actions
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "8px";
+      actions.style.justifyContent = "flex-end";
+
+      const onOff = document.createElement("button");
+      onOff.type = "button";
+      onOff.className = "miniBtn";
+      onOff.textContent = a.enabled ? "On" : "Off";
+      onOff.addEventListener("click", () => {
+        a.enabled = !a.enabled;
+        onOff.textContent = a.enabled ? "On" : "Off";
+        saveAlarms(alarms);
+        loadEditors();
+      });
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "miniBtn";
+      del.textContent = "🗑";
+      del.title = "Delete alarm";
+      del.addEventListener("click", () => {
+        alarms.splice(idx, 1);
+        saveAlarms(alarms);
+        loadEditors();
+        renderAlarmBuilder();
+      });
+
+      actions.appendChild(onOff);
+      actions.appendChild(del);
+
+      kindSel.addEventListener("change", () => {
+        a.kind = kindSel.value;
+        if (a.kind === "before-end" && !Number(a.seconds)) a.seconds = 60;
+        if (a.kind === "phase-enter" && !a.phase) a.phase = "red";
+        saveAlarms(alarms);
+        loadEditors();
+        renderDetail();
+      });
+
+      row.appendChild(kindSel);
+      row.appendChild(detailWrap);
+      row.appendChild(applies);
+      row.appendChild(soundSel);
+      row.appendChild(actions);
+
+      alarmBuilder.appendChild(row);
+    });
+  }
+
+  addAlarmRowBtn.addEventListener("click", () => {
+    alarms.push({
+      id: "alarm_" + Date.now(),
+      label: "New alarm",
+      kind: "before-end",
+      seconds: 60,
+      sound: "double",
+      onlyTypes: ["period","special"],
+      enabled: true
+    });
+    saveAlarms(alarms);
+    loadEditors();
+    renderAlarmBuilder();
   });
 
   // ================= STATE + UPDATE LOOP =================
@@ -1020,6 +1255,7 @@
     if (current){
       const left = secondsBetween(now, current.e);
       for (const a of alarms){
+        if (a.enabled === false) continue;
         if (a.kind !== "before-end") continue;
         if (!alarmAllowedForBlock(a, current)) continue;
         if (left === Number(a.seconds)) fireAlarm(a, `${current.name}::${current.end}::${a.seconds}`);
@@ -1036,6 +1272,7 @@
     if (changedBlock || blockEnded){
       if (current && changedBlock){
         for (const a of alarms){
+          if (a.enabled === false) continue;
           if (a.kind !== "block-start") continue;
           if (!alarmAllowedForBlock(a, current)) continue;
           fireAlarm(a, `${current.name}::start::${current.start}`);
@@ -1043,6 +1280,7 @@
       }
       if (blockEnded){
         for (const a of alarms){
+          if (a.enabled === false) continue;
           if (a.kind !== "block-end") continue;
           fireAlarm(a, `${lastBlockName}::end`);
         }
@@ -1051,6 +1289,7 @@
 
     if (changedPhase && current){
       for (const a of alarms){
+        if (a.enabled === false) continue;
         if (a.kind !== "phase-enter") continue;
         if (a.phase !== phaseKey) continue;
         if (!alarmAllowedForBlock(a, current)) continue;
@@ -1090,6 +1329,7 @@
     renderTimetable(null);
 
     loadEditors();
+    renderAlarmBuilder();
 
     if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
 
