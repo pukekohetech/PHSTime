@@ -1,12 +1,17 @@
-const CACHE_NAME = "timetable-screen-v3";
+// Basic cache-first PWA service worker for GitHub Pages.
+const CACHE_NAME = "timetable-screen-v2";
 
 const ASSETS = [
-  "/PHSTime/",
-  "/PHSTime/index.html",
-  "/PHSTime/manifest.webmanifest",
-  "/PHSTime/sw.js",
-  "/PHSTime/icon-192x192.png",
-  "/PHSTime/icon-512x512.png"
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./favicon.ico",
+  "./apple-touch-icon.png",
+  "./sw.js",
+  "./icons/icon-192x192.png",
+  "./icons/icon-512x512.png",
+  "./icons/icon-192x192-maskable.png",
+  "./icons/icon-512x512-maskable.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -31,17 +36,19 @@ self.addEventListener("fetch", (event) => {
     caches.match(req).then((cached) => {
       if (cached) return cached;
 
-      return fetch(req).then((res) => {
-        const url = new URL(req.url);
-        if (url.origin === self.location.origin && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-        }
-        return res;
-      }).catch(() => {
-        if (req.mode === "navigate") return caches.match("./index.html");
-        return cached;
-      });
+      return fetch(req)
+        .then((res) => {
+          const url = new URL(req.url);
+          if (url.origin === self.location.origin && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => {
+          if (req.mode === "navigate") return caches.match("./index.html");
+          return cached;
+        });
     })
   );
 });
