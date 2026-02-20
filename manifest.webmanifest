@@ -1,18 +1,16 @@
 {
+  "id": "/PHSTime/",
   "name": "Classroom Timetable Screen",
   "short_name": "Timetable",
   "description": "Classroom timetable and message screen",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/PHSTime/",
+  "scope": "/PHSTime/",
   "display": "standalone",
   "background_color": "#9aa0a6",
   "theme_color": "#9aa0a6",
   "orientation": "landscape",
   "icons": [
-    { "src": "icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512x512.png", "sizes": "512x512", "type": "image/png" },
-
-    { "src": "icons/icon-192x192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/icon-512x512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/PHSTime/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/PHSTime/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
