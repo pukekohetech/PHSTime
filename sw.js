@@ -1,16 +1,12 @@
 const CACHE_NAME = "timetable-screen-v2";
 
 const ASSETS = [
-  "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./sw.js",
-  "./favicon.ico",
-  "./apple-touch-icon.png",
-  "./icons/icon-192x192.png",
-  "./icons/icon-512x512.png",
-  "./icons/icon-192x192-maskable.png",
-  "./icons/icon-512x512-maskable.png"
+  "/PHSTime/",
+  "/PHSTime/index.html",
+  "/PHSTime/manifest.webmanifest",
+  "/PHSTime/sw.js",
+  "/PHSTime/icon-192x192.png",
+  "/PHSTime/icon-512x512.png"
 ];
 
 self.addEventListener("install", (event) => {
