@@ -113,7 +113,8 @@ body{
 /* Active page highlight */
 .page-index .appNav__btn[data-nav="index"],
 .page-wheel .appNav__btn[data-nav="wheel"],
-.page-timer .appNav__btn[data-nav="timer"]{
+.page-timer .appNav__btn[data-nav="timer"]
+.page-noise .appNav__btn[data-nav="noise"]{
   background: rgba(0,0,0,0.10);
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
 }
