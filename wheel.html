@@ -11,10 +11,11 @@
 
 <body class="page-wheel">
   <nav class="appNav" aria-label="PHS Classroom Tools">
-   <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
-  <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Timer</a>
-  <a class="appNav__btn" href="index.html" data-nav="index">⏲ PHS Timer</a>
-</nav>
+    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Timer</a>
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ PHS Timer</a>
+  </nav>
+
   <div class="toast" id="toast">Saved</div>
 
   <!-- OPTIONS MENU -->
@@ -98,6 +99,38 @@
           <div id="setManager" class="u-grid-gap-8"></div>
         </details>
 
+        <!-- NEW: edit current set -->
+        <div class="divider"></div>
+
+        <details>
+          <summary>Edit current set (add/remove entries)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Add entries (one per line)</div>
+          <div class="smallNote u-mt-8">Works for student names OR wheel options.</div>
+
+          <div class="u-h-8"></div>
+          <textarea
+            id="editAddBox"
+            spellcheck="false"
+            placeholder="e.g.
+Jake Jones
+Cleanup Duty
+Mana Award"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="addEntriesBtn" type="button">Add to current set</button>
+            <button id="dedupeSetBtn" type="button" title="Remove duplicates by name">De-dupe</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: Remove an item with the ✕ next to it in the list.
+          </div>
+        </details>
+
+        <div class="divider"></div>
+
         <div class="menuRow">
           <button id="resetOptionsBtn" type="button" title="Reset wheel options (keeps sets)">Reset options</button>
           <button id="clearSetsBtn" class="danger" type="button" title="Delete all saved class sets">Clear all sets</button>
@@ -138,13 +171,13 @@
     </div>
 
     <div class="sidePanel">
-      <div class="miniLabel">Click a name to include/exclude</div>
+      <div class="miniLabel">Click an entry to include/exclude (✕ deletes)</div>
 
       <input
         id="searchBox"
         class="searchBox"
         type="text"
-        placeholder="Search name or form class (e.g. 11HRI)"
+        placeholder="Search name or option (e.g. 11HRI)"
       />
 
       <div class="statRow">
@@ -181,6 +214,8 @@
   <script>
 /* =========================================================
    Class Wheel – robust paste parsing + per-set exclusions
+   + default "Light & Playful" wheel on first run
+   + add/remove entries to any set
    ========================================================= */
 
 const $ = (id) => document.getElementById(id);
@@ -346,6 +381,61 @@ function loadSets(){
 function includedStudents(set){
   const ex=set?.excludedIds || {};
   return (set?.students || []).filter(st=>!ex[st.id]);
+}
+
+/* ================= Default set (first run) ================= */
+const DEFAULT_SET_NAME = "Default (Light & Playful)";
+const DEFAULT_ENTRIES = [
+  "Mana Award",
+  "5 Bonus House Points",
+  "Choose the Music (2 mins)",
+  "Teacher Shout-Out",
+  "Positive Call Home",
+  "Free Choice Activity (5 mins)",
+  "Tech Time (5 mins)",
+  "Early Pack-up Pass",
+  "Lucky Escape",
+  "Spin Again",
+  "Teacher’s Choice",
+  "Class Vote",
+  "Swap With Someone",
+  "Double Spin",
+  "Trivia Question",
+  "Rock, Paper, Scissors",
+  "Cleanup Duty",
+  "Help Tidy Classroom",
+  "Board Cleaning Duty",
+  "Pack-up Supervision",
+  "Seat Change",
+  "Extra Practice Question",
+  "5-Minute Quiet Reflection",
+  "Lunch Time Catch-Up",
+  "After-School Reflection"
+];
+
+function createDefaultSetIfNone(){
+  if (sets.length) return;
+
+  const setId = uid();
+  const students = DEFAULT_ENTRIES.map((name, i) => ({
+    id: `${setId}::DEF:${i}`,
+    sid: "",
+    first: "",
+    last: "",
+    name,
+    form: "",
+    timetableClass: ""
+  }));
+
+  sets = [{
+    id: setId,
+    name: DEFAULT_SET_NAME,
+    students,
+    excludedIds: {}
+  }];
+
+  activeSetId = setId;
+  saveSets();
 }
 
 /* =========================================================
@@ -542,6 +632,79 @@ function parseStudentsFlexible(text, setId){
     diag: headerMode ? `headerMode=true delim=${delim} students=${out.length}` : `headerMode=false delim=${delim} students=${out.length}`
   };
 }
+
+/* ================= Edit current set (add/dedupe/delete) ================= */
+function addEntriesToActiveSet(rawText){
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+
+  const text = (rawText || "").trim();
+  if (!text){ toast("Nothing to add"); return; }
+
+  const res = parseStudentsFlexible(text, set.id);
+  if (!res.ok){
+    alert(`Add entries failed:\n${res.reason}\n\n${res.diag ? ("Details:\n"+res.diag) : ""}`);
+    return;
+  }
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  const toAdd = res.students.filter(s => {
+    const k = (s.name || "").trim().toLowerCase();
+    if (!k) return false;
+    if (existing.has(k)) return false;
+    existing.add(k);
+    return true;
+  });
+
+  set.students.push(...toAdd);
+  saveSets();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast(`Added ${toAdd.length}`);
+}
+
+function dedupeActiveSet(){
+  const set = getActiveSet();
+  if (!set) return;
+
+  const seen = new Set();
+  const next = [];
+
+  for (const st of set.students){
+    const k = (st.name || "").trim().toLowerCase();
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    next.push(st);
+  }
+
+  set.students = next;
+
+  // clean excluded ids that no longer exist
+  const validIds = new Set(set.students.map(s => s.id));
+  const ex = set.excludedIds || {};
+  for (const id of Object.keys(ex)){
+    if (!validIds.has(id)) delete ex[id];
+  }
+
+  saveSets();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("De-duped");
+}
+
+$("addEntriesBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  addEntriesToActiveSet($("editAddBox").value);
+  $("editAddBox").value = "";
+});
+
+$("dedupeSetBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  dedupeActiveSet();
+});
 
 /* ================= UI: sets buttons & manager ================= */
 function renderSetButtons(){
@@ -753,7 +916,7 @@ function drawWheel(rotation=0, pool=null){
   ctx.restore();
 }
 
-/* ================= Exclusion list ================= */
+/* ================= Exclusion list + delete (✕) ================= */
 function renderStudentList(){
   const set=getActiveSet();
   const list=$("studentList");
@@ -814,6 +977,26 @@ function renderStudentList(){
     if (meta.textContent) left.appendChild(meta);
 
     row.appendChild(left);
+
+    // delete button (needs .rowDel in your styles.css)
+    const del=document.createElement("button");
+    del.type="button";
+    del.className="rowDel";
+    del.textContent="✕";
+    del.title="Remove from set";
+    del.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+      set.students = set.students.filter(x => x.id !== st.id);
+      if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
+      saveSets();
+      setStatus();
+      renderStudentList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast("Removed");
+    });
+    row.appendChild(del);
+
     list.appendChild(row);
 
     row.addEventListener("click", ()=>{
@@ -919,7 +1102,7 @@ function startSpin(){
   const pool=getLivePool();
   if (!pool.length){
     $("winnerBox").textContent="Everyone is excluded 🙂";
-    $("hintLine").textContent="Click names to include.";
+    $("hintLine").textContent="Click entries to include.";
     displayPool=null;
     drawWheel(rot,null);
     return;
@@ -989,7 +1172,7 @@ function finishSpin(){
   winChime();
 
   if (!winner){
-    $("winnerBox").textContent="No eligible students 🙂";
+    $("winnerBox").textContent="No eligible entries 🙂";
     $("hintLine").textContent="Include someone.";
     spinPool=null;
     displayPool=null;
@@ -1126,6 +1309,7 @@ function init(){
   savePrefs();
 
   loadSets();
+  createDefaultSetIfNone();         // <-- NEW
   activeSetId = sets[0]?.id || null;
 
   renderSetButtons();
