@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Class Countdown</title>
+  <style>
+    :root{
+      --bgGrey:#9aa0a6;
+      --bgGreen:#2ecc71;
+      --bgOrange:#f39c12;
+      --bgRed:#e74c3c;
+
+      --card: rgba(255,255,255,0.86);
+      --shadow: 0 16px 44px rgba(0,0,0,0.18);
+      --shadow2: 0 12px 34px rgba(0,0,0,0.16);
+    }
+
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bgGrey);
+      transition: background-color 400ms ease;
+    }
+
+    /* ================= OPTIONS BUTTON + DROPDOWN (same vibe as your main page) ================= */
+    .controls{
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 60;
+    }
+
+    button, .pillBtn, input[type="range"]{
+      border: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      cursor:pointer;
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1;
+      background: rgba(255,255,255,0.88);
+      box-shadow: var(--shadow2);
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+    }
+    button:active{ transform: translateY(1px); }
+
+    #optionsBtn{
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      border-radius: 14px;
+      display:grid;
+      place-items:center;
+      font-size: 18px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.14);
+    }
+
+    #optionsMenu{
+      position: absolute;
+      top: 54px;
+      right: 0;
+      width: min(380px, calc(100vw - 20px));
+      background: rgba(255,255,255,0.92);
+      border-radius: 18px;
+      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+      transform-origin: top right;
+      animation: pop 120ms ease;
+      touch-action: none;
+    }
+    @keyframes pop{
+      from { transform: scale(0.98); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .hidden{ display:none !important; }
+
+    .menuHeader{
+      padding: 12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      cursor: grab;
+      user-select: none;
+    }
+    .menuHeader:active{ cursor: grabbing; }
+
+    .menuTitle{ font-weight: 950; letter-spacing: -0.2px; }
+    .menuHint{
+      opacity: .65;
+      font-weight: 800;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .menuBody{
+      padding: 12px 14px 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .menuRow{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pillBtn{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.06);
+      box-shadow: none;
+      font-weight: 900;
+    }
+    .pillBtn label{ cursor:pointer; font-weight: 900; }
+    .pillBtn input{ transform: translateY(1px); }
+
+    .divider{ height: 1px; background: rgba(0,0,0,0.08); margin: 2px 0; }
+
+    details{
+      border-radius: 14px;
+      background: rgba(0,0,0,0.04);
+      padding: 10px 10px;
+    }
+    summary{
+      cursor: pointer;
+      font-weight: 950;
+      list-style: none;
+    }
+    summary::-webkit-details-marker{ display:none; }
+
+    .miniLabel{
+      font-size: 11px;
+      font-weight: 950;
+      opacity: .75;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .valuePill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.08);
+      font-weight: 950;
+      font-size: 12px;
+    }
+
+    /* ================= TIMER CARD ================= */
+    .timerCard{
+      width: min(520px, calc(100% - 28px));
+      background: var(--card);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      padding: 18px 18px 16px;
+      overflow: hidden;
+    }
+
+    .titleRow{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .titleLeft{
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .title{
+      font-weight: 950;
+      letter-spacing: -0.3px;
+      font-size: 18px;
+      margin: 0;
+    }
+    .sub{
+      font-weight: 800;
+      opacity: .65;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 340px;
+    }
+
+    /* State chip (now IN the header row, no overlap) */
+    .stateChip{
+      flex: 0 0 auto;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.08);
+      font-weight: 950;
+      font-size: 12px;
+      opacity: .85;
+      white-space: nowrap;
+    }
+
+    /* Big clickable time */
+    .timeBtn{
+      width: 100%;
+      border: 0;
+      border-radius: 18px;
+      padding: 18px 14px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      user-select: none;
+    }
+    .timeBtn:active{ transform: translateY(1px); }
+
+    .timeDisplay{
+      font-weight: 980;
+      letter-spacing: -1px;
+      line-height: 1;
+      text-align:center;
+      font-size: clamp(56px, 10vw, 90px);
+    }
+    .timeHint{
+      margin-top: 8px;
+      text-align:center;
+      font-size: 13px;
+      font-weight: 750;
+      opacity: .7;
+    }
+
+    /* Progress bar */
+    .progressTrack{
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.12);
+      overflow:hidden;
+      margin: 14px 6px 10px;
+    }
+    .progressFill{
+      height: 100%;
+      width: 0%;
+      background: rgba(0,0,0,0.25);
+      transition: width 160ms linear;
+    }
+
+    /* Controls row */
+    .timerControls{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    /* Slider area */
+    .sliderWrap{
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .sliderRow{
+      display:flex;
+      align-items:baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    #minsRange{
+      width: 100%;
+      box-shadow: none;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    /* Nav button */
+    .navBtn{
+      background: rgba(255,255,255,0.88);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- OPTIONS MENU -->
+  <div class="controls">
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+        <div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
+        </div>
+        <button id="closeMenu" type="button" title="Close">✕</button>
+      </div>
+
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn" type="button">Full screen</button>
+          <button id="goPHSTimerBtn" class="navBtn" type="button">Open PHSTimer →</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="menuRow">
+          <span class="pillBtn" title="Play a short sound when timer finishes">
+            <input id="endSoundOn" type="checkbox" />
+            <label for="endSoundOn">End sound</label>
+          </span>
+
+          <span class="pillBtn" title="Show/hide the progress bar under the timer">
+            <input id="progressOn" type="checkbox" />
+            <label for="progressOn">Progress</label>
+          </span>
+
+          <span class="pillBtn" title="Try to keep the display awake (supported browsers only)">
+            <input id="wakeLockOn" type="checkbox" />
+            <label for="wakeLockOn">Keep awake</label>
+          </span>
+        </div>
+
+        <div class="menuRow" style="align-items:center;">
+          <span class="pillBtn" title="Volume">
+            🔊 <input id="volume" type="range" min="0" max="100" value="40" />
+          </span>
+          <button id="resetAllBtn" type="button" title="Reset timer + options">Reset</button>
+        </div>
+
+        <details>
+          <summary>Keyboard shortcuts</summary>
+          <div style="height:10px"></div>
+          <div style="font-size:13px; font-weight:750; opacity:.85; line-height:1.4;">
+            <div><span class="valuePill">Space</span> Start / Pause</div>
+            <div style="margin-top:6px;"><span class="valuePill">R</span> Reset</div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMER CARD -->
+  <div class="timerCard" aria-label="Mini countdown timer widget">
+    <div class="titleRow">
+      <div class="titleLeft">
+        <p class="title">Class Countdown</p>
+        <div class="sub" id="subLabel">CLICK TIME TO START / PAUSE</div>
+      </div>
+      <div class="stateChip" id="stateChip">READY</div>
+    </div>
+
+    <button class="timeBtn" id="timeBtn" type="button" aria-label="Timer display button">
+      <div class="timeDisplay" id="timeDisplay">5:00</div>
+      <div class="timeHint" id="timeHint">Set minutes below • then click to start</div>
+    </button>
+
+    <div class="progressTrack" id="progressTrack" aria-hidden="true">
+      <div class="progressFill" id="progressFill"></div>
+    </div>
+
+    <div class="timerControls" role="group" aria-label="Timer controls">
+      <button id="startPauseBtn" type="button">Start</button>
+      <button id="resetBtn" type="button">Reset</button>
+    </div>
+
+    <div class="sliderWrap">
+      <div class="sliderRow">
+        <div class="miniLabel">Minutes</div>
+        <span class="valuePill"><span id="minsLabel">5</span> min</span>
+      </div>
+      <input id="minsRange" type="range" min="1" max="15" value="5" />
+    </div>
+  </div>
+
+<script>
+/* ================= HELPERS (same style as your main page) ================= */
+const $ = (id) => document.getElementById(id);
+
+function mmss(totalSeconds){
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+
+function storageOK(){
+  try{
+    const k="__storage_test__";
+    localStorage.setItem(k,"1");
+    localStorage.removeItem(k);
+    return true;
+  } catch(e){
+    return false;
+  }
+}
+
+/* ================= OPTIONS MENU BEHAVIOUR (same as your main page) ================= */
+const optionsBtn = $("optionsBtn");
+const optionsMenu = $("optionsMenu");
+const closeMenuBtn = $("closeMenu");
+const menuHeader = $("menuHeader");
+
+function openMenu(){
+  optionsMenu.classList.remove("hidden");
+  optionsBtn.setAttribute("aria-expanded", "true");
+}
+function closeMenu(){
+  optionsMenu.classList.add("hidden");
+  optionsBtn.setAttribute("aria-expanded", "false");
+}
+function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
+
+optionsBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(); });
+["pointerdown","click"].forEach(evt => {
+  closeMenuBtn.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); });
+});
+
+document.addEventListener("pointerdown", (e) => {
+  if (optionsMenu.classList.contains("hidden")) return;
+  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+
+let dragStartY = null;
+menuHeader.addEventListener("pointerdown", (e) => { dragStartY = e.clientY; menuHeader.setPointerCapture(e.pointerId); });
+menuHeader.addEventListener("pointermove", (e) => {
+  if (dragStartY === null) return;
+  const dy = e.clientY - dragStartY;
+  if (dy > 70) { dragStartY = null; closeMenu(); }
+});
+menuHeader.addEventListener("pointerup", () => dragStartY = null);
+menuHeader.addEventListener("pointercancel", () => dragStartY = null);
+
+/* ================= FULLSCREEN ================= */
+$("fullscreenBtn").addEventListener("click", async ()=>{
+  try{
+    if (!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      $("fullscreenBtn").textContent = "Exit full screen";
+    } else {
+      await document.exitFullscreen();
+      $("fullscreenBtn").textContent = "Full screen";
+    }
+  } catch (e) { alert("Fullscreen blocked by the browser. Try pressing F11."); }
+});
+document.addEventListener("fullscreenchange", ()=>{
+  $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+});
+
+/* ================= NAV BUTTON (PHSTimer) ================= */
+$("goPHSTimerBtn").addEventListener("click", ()=>{
+  // link to your existing PHSTimer page
+  window.location.href = "index.html";
+});
+
+/* ================= AUDIO (tiny WebAudio, like your main page) ================= */
+let audioCtx = null;
+
+const VOL_KEY = "trial_timer_volume_v1";
+function getVolume(){ return Number($("volume").value) / 100; }
+
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function beep(freq=880, durationMs=220, type="sine", gain=0.25){
+  ensureAudio();
+  const t0 = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+
+  const vol = gain * getVolume();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(vol, t0 + 0.02);
+  g.gain.linearRampToValueAtTime(0.0001, t0 + durationMs/1000);
+
+  osc.connect(g);
+  g.connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + durationMs/1000 + 0.05);
+}
+
+function finishChime(){
+  beep(660, 140, "sine", 0.35);
+  setTimeout(()=>beep(880, 160, "sine", 0.35), 120);
+  setTimeout(()=>beep(990, 180, "sine", 0.35), 250);
+}
+
+function loadVolume(){
+  const v = localStorage.getItem(VOL_KEY);
+  if (v !== null) $("volume").value = v;
+}
+$("volume").addEventListener("input", ()=> localStorage.setItem(VOL_KEY, $("volume").value));
+
+/* ================= WAKE LOCK (optional) ================= */
+let wakeLock = null;
+
+async function setWakeLock(on){
+  if (!("wakeLock" in navigator)){
+    if (on) alert("Wake Lock not supported on this browser/device.");
+    $("wakeLockOn").checked = false;
+    return;
+  }
+  try{
+    if (on){
+      wakeLock = await navigator.wakeLock.request("screen");
+    } else {
+      if (wakeLock) await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch (e){
+    $("wakeLockOn").checked = false;
+    alert("Couldn't enable Keep awake (permission/device limitation).");
+  }
+}
+document.addEventListener("visibilitychange", ()=>{
+  // If tab is hidden, wake lock may auto-release; try re-acquire when visible
+  if (document.visibilityState === "visible" && $("wakeLockOn").checked){
+    setWakeLock(true);
+  }
+});
+
+/* ================= TIMER WIDGET (drop-in friendly) ================= */
+const TimerWidget = (() => {
+  const KEY_MINS = "trial_timer_mins_v2";
+  const KEY_ENDSOUND = "trial_timer_end_sound_v2";
+  const KEY_PROGRESS = "trial_timer_progress_v1";
+  const KEY_WAKE = "trial_timer_wake_v1";
+
+  let durationSec = 5 * 60;
+  let remainingSec = durationSec;
+  let running = false;
+  let lastTickMs = 0;
+  let rafId = null;
+
+  function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
+
+  function setBgByState(){
+    if (!running && remainingSec === durationSec){
+      document.body.style.backgroundColor = "var(--bgGrey)";
+      return;
+    }
+    if (!running && remainingSec === 0){
+      document.body.style.backgroundColor = "var(--bgGreen)";
+      return;
+    }
+    const pctLeft = durationSec ? (remainingSec / durationSec) : 0;
+    if (pctLeft <= 0.2) document.body.style.backgroundColor = "var(--bgRed)";
+    else document.body.style.backgroundColor = "var(--bgOrange)";
+  }
+
+  function setProgressVisible(on){
+    $("progressTrack").classList.toggle("hidden", !on);
+  }
+
+  function setUI(){
+    $("timeDisplay").textContent = mmss(remainingSec);
+
+    const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 1;
+    $("progressFill").style.width = `${clamp(pctDone * 100, 0, 100)}%`;
+
+    let chip = "READY";
+    if (running) chip = "RUNNING";
+    else if (remainingSec === 0) chip = "DONE";
+    else if (remainingSec !== durationSec) chip = "PAUSED";
+    $("stateChip").textContent = chip;
+
+    $("startPauseBtn").textContent = running ? "Pause" : (remainingSec === 0 ? "Restart" : "Start");
+
+    if (remainingSec === 0){
+      $("timeHint").textContent = "Finished • Reset or Restart";
+      $("subLabel").textContent = "TIME'S UP";
+    } else if (running){
+      $("timeHint").textContent = "Running… click time to pause";
+      $("subLabel").textContent = "CLICK TIME TO START / PAUSE";
+    } else {
+      $("timeHint").textContent = (remainingSec === durationSec)
+        ? "Set minutes below • then click to start"
+        : "Paused • click time to resume";
+      $("subLabel").textContent = "CLICK TIME TO START / PAUSE";
+    }
+
+    setBgByState();
+  }
+
+  function savePrefs(){
+    if (!storageOK()) return;
+    try{
+      localStorage.setItem(KEY_MINS, String(Math.round(durationSec / 60)));
+      localStorage.setItem(KEY_ENDSOUND, $("endSoundOn").checked ? "1" : "0");
+      localStorage.setItem(KEY_PROGRESS, $("progressOn").checked ? "1" : "0");
+      localStorage.setItem(KEY_WAKE, $("wakeLockOn").checked ? "1" : "0");
+    } catch(e){}
+  }
+
+  function loadPrefs(){
+    if (!storageOK()) return;
+
+    try{
+      const rawM = localStorage.getItem(KEY_MINS);
+      const m = rawM ? Number(rawM) : 5;
+      if (Number.isFinite(m)) setDurationMinutes(m, { reset:true });
+
+      $("endSoundOn").checked = localStorage.getItem(KEY_ENDSOUND) === "1";
+
+      const progOn = localStorage.getItem(KEY_PROGRESS);
+      $("progressOn").checked = (progOn === null) ? true : (progOn === "1");
+
+      $("wakeLockOn").checked = localStorage.getItem(KEY_WAKE) === "1";
+    } catch(e){}
+  }
+
+  function setDurationMinutes(mins, { reset=false } = {}){
+    const m = clamp(Number(mins) || 5, 1, 15);
+    durationSec = m * 60;
+
+    if (reset || (!running && remainingSec === 0) || (!running && remainingSec === durationSec)) {
+      remainingSec = durationSec;
+    } else if (!running) {
+      remainingSec = durationSec;
+    }
+
+    $("minsRange").value = String(m);
+    $("minsLabel").textContent = String(m);
+    savePrefs();
+    setUI();
+  }
+
+  function stopLoop(){
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  function tickLoop(nowMs){
+    if (!running) return;
+
+    if (!lastTickMs) lastTickMs = nowMs;
+    const dt = (nowMs - lastTickMs) / 1000;
+
+    if (dt >= 0.2){
+      const drop = Math.floor(dt);
+      remainingSec = Math.max(0, remainingSec - drop);
+      lastTickMs += drop * 1000;
+      setUI();
+
+      if (remainingSec === 0){
+        running = false;
+        stopLoop();
+        setUI();
+        if ($("endSoundOn").checked) finishChime();
+        return;
+      }
+    }
+
+    rafId = requestAnimationFrame(tickLoop);
+  }
+
+  function start(){
+    if (remainingSec === 0) remainingSec = durationSec;
+    if (running) return;
+    running = true;
+    lastTickMs = 0;
+    setUI();
+    stopLoop();
+    rafId = requestAnimationFrame(tickLoop);
+  }
+
+  function pause(){
+    running = false;
+    stopLoop();
+    setUI();
+  }
+
+  function toggleStartPause(){
+    running ? pause() : start();
+  }
+
+  function reset(){
+    pause();
+    remainingSec = durationSec;
+    setUI();
+  }
+
+  function wire(){
+    $("minsRange").addEventListener("input", () => {
+      setDurationMinutes($("minsRange").value, { reset: true });
+    });
+
+    $("timeBtn").addEventListener("click", () => {
+      if ($("endSoundOn").checked) ensureAudio();
+      toggleStartPause();
+    });
+
+    $("startPauseBtn").addEventListener("click", () => {
+      if ($("endSoundOn").checked) ensureAudio();
+      toggleStartPause();
+    });
+
+    $("resetBtn").addEventListener("click", reset);
+
+    $("endSoundOn").addEventListener("change", () => {
+      savePrefs();
+      if ($("endSoundOn").checked) ensureAudio();
+    });
+
+    $("progressOn").addEventListener("change", ()=>{
+      setProgressVisible($("progressOn").checked);
+      savePrefs();
+      setUI();
+    });
+
+    $("wakeLockOn").addEventListener("change", ()=>{
+      setWakeLock($("wakeLockOn").checked);
+      savePrefs();
+    });
+
+    $("resetAllBtn").addEventListener("click", ()=>{
+      // Reset prefs
+      localStorage.removeItem(KEY_MINS);
+      localStorage.removeItem(KEY_ENDSOUND);
+      localStorage.removeItem(KEY_PROGRESS);
+      localStorage.removeItem(KEY_WAKE);
+      localStorage.removeItem(VOL_KEY);
+
+      // Defaults
+      $("volume").value = "40";
+      $("endSoundOn").checked = false;
+      $("progressOn").checked = true;
+      $("wakeLockOn").checked = false;
+      setWakeLock(false);
+
+      setProgressVisible(true);
+      setDurationMinutes(5, { reset:true });
+      reset();
+      closeMenu();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === " "){ e.preventDefault(); toggleStartPause(); }
+      if (e.key.toLowerCase() === "r"){ reset(); }
+    });
+  }
+
+  function init(){
+    loadPrefs();
+
+    // Ensure some defaults if empty
+    if (!durationSec) durationSec = 300;
+    if (!remainingSec) remainingSec = durationSec;
+
+    // Apply progress pref immediately
+    setProgressVisible($("progressOn").checked);
+
+    // Apply wake lock pref
+    if ($("wakeLockOn").checked) setWakeLock(true);
+
+    wire();
+    setUI();
+
+    // First interaction unlock audio context if end sound on
+    document.addEventListener("pointerdown", () => {
+      if ($("endSoundOn").checked) ensureAudio();
+    }, { once:true });
+  }
+
+  return { init, start, pause, reset, setDurationMinutes };
+})();
+
+/* ================= INIT ================= */
+function init(){
+  loadVolume();
+  TimerWidget.init();
+}
+init();
+</script>
+</body>
+</html>
