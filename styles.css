@@ -1,9 +1,15 @@
 /* =========================================================
-   PHS Classroom Tools — Combined styles.css
+   PHS Classroom Tools — styles.css (FULL)
    Works for: index.html + wheel.html + timer.html
-   How to use:
+   Requires:
      <link rel="stylesheet" href="styles.css">
-     <body class="page-index">  /  <body class="page-wheel">  /  <body class="page-timer">
+     <body class="page-index"> / <body class="page-wheel"> / <body class="page-timer">
+   Includes:
+     - Shared menu + controls styling
+     - Top App Navigation (nice links) for ALL pages
+     - Index page layout styles
+     - Wheel page layout styles
+     - Timer page layout styles
    ========================================================= */
 
 /* ========== Design Tokens ========== */
@@ -29,19 +35,104 @@
 
 /* ========== Base ========== */
 *{ box-sizing:border-box; }
-
 html, body{ height:100%; }
 
 body{
   margin:0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   background: var(--bgGrey);
+  color:#111;
 }
 
 /* Utility */
 .hidden{ display:none !important; }
 
-/* ========== Shared Controls + Menu ========== */
+/* =========================================================
+   Top App Navigation (ALL pages)
+   Add to HTML on each page:
+   <nav class="appNav"> ... </nav>
+   ========================================================= */
+.appNav{
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  padding: 8px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,0.72);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.16);
+  backdrop-filter: blur(10px);
+}
+
+.appNav__btn{
+  appearance: none;
+  -webkit-appearance: none;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  text-decoration: none;
+  color: #111;
+
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  font-weight: 950;
+  font-size: 13px;
+  letter-spacing: -0.1px;
+  line-height: 1;
+
+  background: rgba(255,255,255,0.88);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.12);
+
+  user-select: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.appNav__btn:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.16);
+}
+.appNav__btn:active{ transform: translateY(0); }
+
+.appNav__btn--ghost{
+  background: rgba(0,0,0,0.06);
+  box-shadow: none;
+  border: 1px solid rgba(0,0,0,0.10);
+}
+
+/* Active page highlight */
+.page-index .appNav__btn[data-nav="index"],
+.page-wheel .appNav__btn[data-nav="wheel"],
+.page-timer .appNav__btn[data-nav="timer"]{
+  background: rgba(0,0,0,0.10);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
+}
+
+/* Mobile nav wrap */
+@media (max-width: 620px){
+  .appNav{
+    width: calc(100vw - 16px);
+    left: 8px;
+    transform: none;
+    justify-content: center;
+    flex-wrap: wrap;
+    border-radius: 18px;
+  }
+}
+
+/* =========================================================
+   Shared Controls + Options Menu (ALL pages)
+   ========================================================= */
 .controls{
   position: fixed;
   top: 10px;
@@ -49,7 +140,11 @@ body{
   z-index: 60;
 }
 
-button, .pillBtn, input[type="range"], input[type="text"], textarea{
+button,
+.pillBtn,
+input[type="range"],
+input[type="text"],
+textarea{
   border: 0;
   padding: 10px 12px;
   border-radius: 14px;
@@ -184,7 +279,7 @@ summary::-webkit-details-marker{ display:none; }
   font-size: 12px;
 }
 
-/* Shared text inputs */
+/* Text inputs */
 input[type="text"]{
   width: 100%;
   cursor: text;
@@ -212,472 +307,6 @@ textarea{
 .danger{ background: rgba(231, 76, 60, 0.12) !important; }
 
 /* =========================================================
-   PAGE: WHEEL (wheel.html)
-   ========================================================= */
-.page-wheel{
-  height:100vh;
-  overflow:hidden;
-  display:grid;
-  grid-template-rows: auto auto 1fr;
-  gap:10px;
-  padding:12px;
-  transition: background-color 220ms ease;
-}
-
-.page-wheel #optionsMenu{
-  width: min(620px, calc(100vw - 20px));
-  max-height: min(84vh, 860px);
-  overflow:auto;
-}
-.page-wheel .menuHeader{
-  position: sticky;
-  top: 0;
-  background: rgba(255,255,255,0.92);
-  z-index: 2;
-}
-
-.page-wheel .topBar{
-  display:flex;
-  align-items:flex-end;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-right: 60px;
-}
-.page-wheel .titleWrap{ display:flex; flex-direction: column; gap: 4px; min-width: 0; }
-.page-wheel .title{
-  margin:0;
-  font-weight: 950;
-  letter-spacing: -0.3px;
-  font-size: 20px;
-}
-.page-wheel .sub{
-  font-weight: 800;
-  opacity: .65;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  white-space: nowrap;
-  overflow:hidden;
-  text-overflow: ellipsis;
-  max-width: 1200px;
-}
-.page-wheel .chip{
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.75);
-  box-shadow: var(--shadow2);
-  font-weight: 950;
-  font-size: 12px;
-  opacity: .9;
-  white-space: nowrap;
-}
-
-.page-wheel .setRow{
-  display:flex;
-  gap: 10px;
-  overflow-x:auto;
-  padding: 2px 2px 6px;
-  -webkit-overflow-scrolling: touch;
-}
-.page-wheel .setBtn{
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 10px 12px;
-  box-shadow: none;
-  background: rgba(255,255,255,0.65);
-  font-weight: 950;
-}
-.page-wheel .setBtn.active{
-  background: rgba(255,255,255,0.88);
-  box-shadow: 0 10px 26px rgba(0,0,0,0.12);
-}
-
-.page-wheel .grid{
-  min-height: 0;
-  display:grid;
-  grid-template-columns: 1.35fr 0.65fr;
-  gap: 12px;
-  align-items: stretch;
-}
-
-.page-wheel .wheelPanel{
-  min-height: 0;
-  background: var(--card2);
-  border-radius: 18px;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-  padding: 12px;
-  display:grid;
-  grid-template-rows: auto 1fr auto auto;
-  gap: 10px;
-  position: relative;
-  overflow:hidden;
-}
-
-.page-wheel .wheelStage{
-  min-height: 0;
-  display:grid;
-  place-items:center;
-  position: relative;
-  user-select: none;
-  cursor: pointer;
-}
-
-.page-wheel canvas{
-  width: min(66vh, 760px);
-  max-width: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.6);
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08);
-}
-
-.page-wheel .pointer{
-  position:absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 18px solid transparent;
-  border-right: 18px solid transparent;
-  border-top: 26px solid rgba(0,0,0,0.75);
-  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.25));
-  z-index: 5;
-  pointer-events:none;
-}
-
-.page-wheel .winnerBox{
-  text-align:center;
-  font-weight: 980;
-  letter-spacing: -0.6px;
-  font-size: clamp(20px, 3.2vw, 42px);
-  line-height: 1.08;
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.86);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
-  user-select: none;
-}
-.page-wheel .hintLine{
-  text-align:center;
-  font-size: 13px;
-  font-weight: 800;
-  opacity: .7;
-  margin-top: -4px;
-}
-
-.page-wheel .btnRow{
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items:center;
-}
-.page-wheel .primary{
-  font-size: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
-}
-
-.page-wheel .confetti{
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow:hidden;
-  z-index: 6;
-  display:none;
-}
-.page-wheel .confetti.show{ display:block; }
-.page-wheel .confetti span{
-  position:absolute;
-  top: -20px;
-  width: 10px;
-  height: 14px;
-  border-radius: 3px;
-  opacity: .95;
-  animation: fall linear forwards;
-}
-@keyframes fall{
-  to { transform: translateY(120vh) rotate(720deg); opacity: 1; }
-}
-
-.page-wheel .sidePanel{
-  min-height: 0;
-  background: var(--card2);
-  border-radius: 18px;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-  padding: 12px;
-  display:grid;
-  grid-template-rows: auto auto auto 1fr auto;
-  gap: 8px;
-  overflow:hidden;
-}
-
-.page-wheel .searchBox{
-  padding: 7px 10px !important;
-  border-radius: 12px !important;
-  font-size: 13px !important;
-}
-
-.page-wheel .statRow{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  font-weight: 900;
-  opacity: .92;
-}
-
-.page-wheel .toggleRow{
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items:center;
-  justify-content: space-between;
-}
-.page-wheel .toggleRow .pillBtn{
-  background: rgba(255,255,255,0.65);
-  border: 1px solid rgba(0,0,0,0.08);
-}
-
-.page-wheel .list{
-  min-height: 0;
-  overflow:auto;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: rgba(255,255,255,0.82);
-  padding: 6px;
-}
-
-.page-wheel .row{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  user-select: none;
-  background: transparent;
-}
-.page-wheel .row:hover{ background: rgba(0,0,0,0.04); }
-
-.page-wheel .rowLeft{
-  display:flex;
-  align-items:center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.page-wheel .dot{
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.18);
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.65);
-  flex: 0 0 auto;
-}
-.page-wheel .row:not(.excluded) .dot{ background: rgba(46, 204, 113, 0.75); }
-
-.page-wheel .row.excluded{
-  opacity: .55;
-  text-decoration: line-through;
-}
-
-.page-wheel .nameText{
-  overflow:hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.page-wheel .meta{
-  opacity: .72;
-  font-weight: 900;
-  font-size: 12px;
-  margin-left: 8px;
-  white-space: nowrap;
-}
-
-.page-wheel .footerRow{
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items:center;
-}
-
-.page-wheel .toast{
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 90;
-  background: rgba(255,255,255,0.9);
-  box-shadow: 0 12px 34px rgba(0,0,0,0.18);
-  border-radius: 999px;
-  padding: 10px 12px;
-  font-weight: 950;
-  font-size: 13px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 160ms ease, transform 160ms ease;
-}
-.page-wheel .toast.show{
-  opacity: 1;
-  transform: translateX(-50%) translateY(-2px);
-}
-
-@media (max-width: 980px){
-  .page-wheel{ overflow:auto; height:auto; min-height:100vh; }
-  .page-wheel .grid{ grid-template-columns: 1fr; }
-}
-
-/* =========================================================
-   PAGE: TIMER (timer.html)
-   ========================================================= */
-.page-timer{
-  min-height:100vh;
-  display:grid;
-  place-items:center;
-  background: var(--bgGrey);
-  transition: background-color 400ms ease;
-}
-
-.page-timer #optionsMenu{
-  width: min(380px, calc(100vw - 20px));
-}
-
-.page-timer .timerCard{
-  width: min(520px, calc(100% - 28px));
-  background: var(--card);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-  padding: 18px 18px 16px;
-  overflow: hidden;
-}
-
-.page-timer .titleRow{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.page-timer .titleLeft{
-  display:flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.page-timer .title{
-  font-weight: 950;
-  letter-spacing: -0.3px;
-  font-size: 18px;
-  margin: 0;
-}
-.page-timer .sub{
-  font-weight: 800;
-  opacity: .65;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 340px;
-}
-
-.page-timer .stateChip{
-  flex: 0 0 auto;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.08);
-  font-weight: 950;
-  font-size: 12px;
-  opacity: .85;
-  white-space: nowrap;
-}
-
-.page-timer .timeBtn{
-  width: 100%;
-  border: 0;
-  border-radius: 18px;
-  padding: 18px 14px;
-  cursor: pointer;
-  background: rgba(255,255,255,0.82);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
-  backdrop-filter: blur(6px);
-  user-select: none;
-}
-.page-timer .timeBtn:active{ transform: translateY(1px); }
-
-.page-timer .timeDisplay{
-  font-weight: 980;
-  letter-spacing: -1px;
-  line-height: 1;
-  text-align:center;
-  font-size: clamp(56px, 10vw, 90px);
-}
-.page-timer .timeHint{
-  margin-top: 8px;
-  text-align:center;
-  font-size: 13px;
-  font-weight: 750;
-  opacity: .7;
-}
-
-.page-timer .progressTrack{
-  height: 12px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.12);
-  overflow:hidden;
-  margin: 14px 6px 10px;
-}
-.page-timer .progressFill{
-  height: 100%;
-  width: 0%;
-  background: rgba(0,0,0,0.25);
-  transition: width 160ms linear;
-}
-
-.page-timer .timerControls{
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items:center;
-  justify-content: center;
-  margin-top: 6px;
-}
-
-.page-timer .sliderWrap{
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0,0,0,0.08);
-}
-.page-timer .sliderRow{
-  display:flex;
-  align-items:baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.page-timer #minsRange{
-  width: 100%;
-  box-shadow: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-}
-.page-timer .navBtn{ background: rgba(255,255,255,0.88); }
-
-/* =========================================================
    PAGE: INDEX (index.html)
    ========================================================= */
 .page-index{
@@ -688,12 +317,17 @@ textarea{
   background: var(--bgGrey);
 }
 
+/* Make room for fixed top nav */
+.page-index .messageWrap{ margin-top: 64px; }
+
 .page-index #optionsMenu{
   width: min(360px, calc(100vw - 20px));
 }
 
-.page-index /* smaller controls vibe */
-button, .page-index .pillBtn, .page-index input[type="range"]{
+/* Smaller controls vibe on index */
+.page-index button,
+.page-index .pillBtn,
+.page-index input[type="range"]{
   padding: 7px 9px;
   border-radius: 10px;
   font-weight: 850;
@@ -711,7 +345,6 @@ button, .page-index .pillBtn, .page-index input[type="range"]{
   gap: 6px;
   padding: 6px 9px;
 }
-
 .page-index .pillBtn input{ transform: scale(1.05); }
 
 .page-index .messageWrap{
@@ -902,45 +535,492 @@ button, .page-index .pillBtn, .page-index input[type="range"]{
 }
 .page-index .testBtn{ padding: 6px 8px; }
 
-/* ===== Top Navigation Links ===== */
+/* =========================================================
+   PAGE: WHEEL (wheel.html)
+   ========================================================= */
+.page-wheel{
+  height:100vh;
+  overflow:hidden;
+  display:grid;
+  grid-template-rows: auto auto 1fr;
+  gap:10px;
+  padding:12px;
+  transition: background-color 220ms ease;
+}
 
-.topNav{
-  position: fixed;
-  top: 12px;
+/* Make room for fixed top nav */
+.page-wheel{ padding-top: 70px; }
+
+.page-wheel #optionsMenu{
+  width: min(620px, calc(100vw - 20px));
+  max-height: min(84vh, 860px);
+  overflow:auto;
+}
+.page-wheel .menuHeader{
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,0.92);
+  z-index: 2;
+}
+
+.page-wheel .topBar{
+  display:flex;
+  align-items:flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-right: 60px;
+}
+.page-wheel .titleWrap{ display:flex; flex-direction: column; gap: 4px; min-width: 0; }
+.page-wheel .title{
+  margin:0;
+  font-weight: 950;
+  letter-spacing: -0.3px;
+  font-size: 20px;
+}
+.page-wheel .sub{
+  font-weight: 800;
+  opacity: .65;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow:hidden;
+  text-overflow: ellipsis;
+  max-width: 1200px;
+}
+.page-wheel .chip{
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.75);
+  box-shadow: var(--shadow2);
+  font-weight: 950;
+  font-size: 12px;
+  opacity: .9;
+  white-space: nowrap;
+}
+
+.page-wheel .setRow{
+  display:flex;
+  gap: 10px;
+  overflow-x:auto;
+  padding: 2px 2px 6px;
+  -webkit-overflow-scrolling: touch;
+}
+.page-wheel .setBtn{
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 10px 12px;
+  box-shadow: none;
+  background: rgba(255,255,255,0.65);
+  font-weight: 950;
+}
+.page-wheel .setBtn.active{
+  background: rgba(255,255,255,0.88);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.12);
+}
+
+.page-wheel .grid{
+  min-height: 0;
+  display:grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.page-wheel .wheelPanel{
+  min-height: 0;
+  background: var(--card2);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+  padding: 12px;
+  display:grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 10px;
+  position: relative;
+  overflow:hidden;
+}
+
+.page-wheel .wheelStage{
+  min-height: 0;
+  display:grid;
+  place-items:center;
+  position: relative;
+  user-select: none;
+  cursor: pointer;
+}
+
+.page-wheel canvas{
+  width: min(66vh, 760px);
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.6);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08);
+}
+
+.page-wheel .pointer{
+  position:absolute;
+  top: 4px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  gap: 12px;
-  z-index: 70;
+  width: 0;
+  height: 0;
+  border-left: 18px solid transparent;
+  border-right: 18px solid transparent;
+  border-top: 26px solid rgba(0,0,0,0.75);
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.25));
+  z-index: 5;
+  pointer-events:none;
 }
 
-.navBtn{
-  text-decoration: none;
-  padding: 10px 14px;
-  border-radius: 999px;
-  font-weight: 900;
+.page-wheel .winnerBox{
+  text-align:center;
+  font-weight: 980;
+  letter-spacing: -0.6px;
+  font-size: clamp(20px, 3.2vw, 42px);
+  line-height: 1.08;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.86);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+  user-select: none;
+}
+
+.page-wheel .hintLine{
+  text-align:center;
   font-size: 13px;
+  font-weight: 800;
+  opacity: .7;
+  margin-top: -4px;
+}
+
+.page-wheel .btnRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items:center;
+}
+.page-wheel .primary{
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+}
+
+.page-wheel .confetti{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow:hidden;
+  z-index: 6;
+  display:none;
+}
+.page-wheel .confetti.show{ display:block; }
+.page-wheel .confetti span{
+  position:absolute;
+  top: -20px;
+  width: 10px;
+  height: 14px;
+  border-radius: 3px;
+  opacity: .95;
+  animation: fall linear forwards;
+}
+
+/* Confetti animation shared */
+@keyframes fall{
+  to { transform: translateY(120vh) rotate(720deg); opacity: 1; }
+}
+
+.page-wheel .sidePanel{
+  min-height: 0;
+  background: var(--card2);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+  padding: 12px;
+  display:grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 8px;
+  overflow:hidden;
+}
+
+.page-wheel .searchBox{
+  padding: 7px 10px !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
+}
+
+.page-wheel .statRow{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 900;
+  opacity: .92;
+}
+
+.page-wheel .toggleRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  justify-content: space-between;
+}
+.page-wheel .toggleRow .pillBtn{
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.page-wheel .list{
+  min-height: 0;
+  overflow:auto;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.82);
+  padding: 6px;
+}
+
+.page-wheel .row{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+}
+.page-wheel .row:hover{ background: rgba(0,0,0,0.04); }
+
+.page-wheel .rowLeft{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.page-wheel .dot{
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.18);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.65);
+  flex: 0 0 auto;
+}
+.page-wheel .row:not(.excluded) .dot{ background: rgba(46, 204, 113, 0.75); }
+
+.page-wheel .row.excluded{
+  opacity: .55;
+  text-decoration: line-through;
+}
+
+.page-wheel .nameText{
+  overflow:hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.page-wheel .meta{
+  opacity: .72;
+  font-weight: 900;
+  font-size: 12px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.page-wheel .footerRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items:center;
+}
+
+.page-wheel .toast{
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 90;
   background: rgba(255,255,255,0.9);
-  box-shadow: 0 10px 26px rgba(0,0,0,0.15);
-  color: #111;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.18);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-weight: 950;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.page-wheel .toast.show{
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
 }
 
-.navBtn:hover{
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(0,0,0,0.18);
-}
-
-.navBtn:active{
-  transform: translateY(0);
+@media (max-width: 980px){
+  .page-wheel{ overflow:auto; height:auto; min-height:100vh; }
+  .page-wheel .grid{ grid-template-columns: 1fr; }
 }
 
 /* =========================================================
-   OPTIONAL: Tiny utilities (useful if you remove inline styles)
+   PAGE: TIMER (timer.html)
+   ========================================================= */
+.page-timer{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background: var(--bgGrey);
+  transition: background-color 400ms ease;
+}
+
+/* Make room for fixed top nav */
+.page-timer .timerCard{ margin-top: 70px; }
+
+.page-timer #optionsMenu{
+  width: min(380px, calc(100vw - 20px));
+}
+
+.page-timer .timerCard{
+  width: min(520px, calc(100% - 28px));
+  background: var(--card);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  padding: 18px 18px 16px;
+  overflow: hidden;
+}
+
+.page-timer .titleRow{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.page-timer .titleLeft{
+  display:flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.page-timer .title{
+  font-weight: 950;
+  letter-spacing: -0.3px;
+  font-size: 18px;
+  margin: 0;
+}
+
+.page-timer .sub{
+  font-weight: 800;
+  opacity: .65;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.page-timer .stateChip{
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-weight: 950;
+  font-size: 12px;
+  opacity: .85;
+  white-space: nowrap;
+}
+
+.page-timer .timeBtn{
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 18px 14px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.82);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+.page-timer .timeBtn:active{ transform: translateY(1px); }
+
+.page-timer .timeDisplay{
+  font-weight: 980;
+  letter-spacing: -1px;
+  line-height: 1;
+  text-align:center;
+  font-size: clamp(56px, 10vw, 90px);
+}
+
+.page-timer .timeHint{
+  margin-top: 8px;
+  text-align:center;
+  font-size: 13px;
+  font-weight: 750;
+  opacity: .7;
+}
+
+.page-timer .progressTrack{
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.12);
+  overflow:hidden;
+  margin: 14px 6px 10px;
+}
+
+.page-timer .progressFill{
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.25);
+  transition: width 160ms linear;
+}
+
+.page-timer .timerControls{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.page-timer .sliderWrap{
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.page-timer .sliderRow{
+  display:flex;
+  align-items:baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.page-timer #minsRange{
+  width: 100%;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* =========================================================
+   Optional small utilities (handy if removing inline styles)
    ========================================================= */
 .u-w-100{ width:100% !important; }
 .u-w-80{ width:80% !important; }
-.u-mt-8{ margin-top:8px !important; }
 .u-minh-140{ min-height:140px !important; }
 .u-h-8{ height:8px !important; }
 .u-h-10{ height:10px !important; }
