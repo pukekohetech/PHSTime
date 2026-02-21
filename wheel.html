@@ -11,10 +11,9 @@
 
 <body class="page-wheel">
   <nav class="appNav" aria-label="PHS Classroom Tools">
-     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
     <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
-   
   </nav>
 
   <div class="toast" id="toast">Saved</div>
@@ -100,7 +99,7 @@
           <div id="setManager" class="u-grid-gap-8"></div>
         </details>
 
-        <!-- NEW: edit current set -->
+        <!-- edit current set -->
         <div class="divider"></div>
 
         <details>
@@ -215,8 +214,9 @@ Mana Award"></textarea>
   <script>
 /* =========================================================
    Class Wheel – robust paste parsing + per-set exclusions
-   + default "Light & Playful" wheel on first run
-   + add/remove entries to any set
+   + 3 default wheels: Consequences / Treats / Brain Break
+   + remembers last active set automatically
+   + "automatic saving" (debounced) for set renames, etc.
    ========================================================= */
 
 const $ = (id) => document.getElementById(id);
@@ -231,6 +231,15 @@ function storageOK(){
     localStorage.removeItem(k);
     return true;
   } catch(e){ return false; }
+}
+
+/* ================= Debounce (automatic saving) ================= */
+function debounce(fn, wait=250){
+  let t=null;
+  return (...args)=>{
+    clearTimeout(t);
+    t=setTimeout(()=>fn(...args), wait);
+  };
 }
 
 /* ================= Toast ================= */
@@ -292,6 +301,7 @@ $("goPHSTimerBtn").addEventListener("click", ()=> window.location.href="index.ht
 /* ================= Preferences ================= */
 const PREF_KEY="wheel_prefs_v3";
 const SETS_KEY="wheel_sets_v3";
+const ACTIVE_SET_KEY="wheel_active_set_v3";
 
 function loadPrefs(){
   try{
@@ -312,7 +322,9 @@ function loadPrefs(){
   $("speedLabel").textContent = $("spinSpeed").value;
   $("volLabel").textContent = $("volume").value;
 }
+
 function savePrefs(){
+  if (!storageOK()) return;
   const p={
     tick: $("tickSoundOn").checked,
     conf: $("confettiOn").checked,
@@ -322,17 +334,29 @@ function savePrefs(){
   };
   localStorage.setItem(PREF_KEY, JSON.stringify(p));
 }
+
+const savePrefsDebounced = debounce(()=>{ savePrefs(); toast("Saved"); }, 300);
+
 $("spinSpeed").addEventListener("input", ()=>{
   $("speedLabel").textContent = $("spinSpeed").value;
-  savePrefs();
+  savePrefsDebounced();
 });
 $("volume").addEventListener("input", ()=>{
   $("volLabel").textContent = $("volume").value;
-  savePrefs();
+  savePrefsDebounced();
 });
 ["tickSoundOn","confettiOn","excludeWinnerOn"].forEach(id=>{
-  $(id).addEventListener("change", ()=>{ savePrefs(); toast("Updated"); });
+  $(id).addEventListener("change", ()=>{ savePrefs(); toast("Saved"); });
 });
+
+function saveActiveSet(id){
+  if (!storageOK()) return;
+  localStorage.setItem(ACTIVE_SET_KEY, String(id || ""));
+}
+function loadActiveSet(){
+  if (!storageOK()) return null;
+  return localStorage.getItem(ACTIVE_SET_KEY) || null;
+}
 
 /* ================= Audio ================= */
 let audioCtx=null;
@@ -372,6 +396,8 @@ let activeSetId=null;
 function uid(){ return "set_" + Math.random().toString(16).slice(2) + Date.now().toString(16); }
 function getActiveSet(){ return sets.find(s=>s.id===activeSetId) || null; }
 function saveSets(){ if (storageOK()) localStorage.setItem(SETS_KEY, JSON.stringify(sets)); }
+const saveSetsDebounced = debounce(()=>{ saveSets(); toast("Saved"); }, 350);
+
 function loadSets(){
   if (!storageOK()) { sets=[]; return; }
   try{
@@ -384,25 +410,12 @@ function includedStudents(set){
   return (set?.students || []).filter(st=>!ex[st.id]);
 }
 
-/* ================= Default set (first run) ================= */
-const DEFAULT_SET_NAME = "Default (Light & Playful)";
-const DEFAULT_ENTRIES = [
-  "Mana Award",
-  "5 Bonus House Points",
-  "Choose the Music (2 mins)",
-  "Teacher Shout-Out",
-  "Positive Call Home",
-  "Free Choice Activity (5 mins)",
-  "Tech Time (5 mins)",
-  "Early Pack-up Pass",
-  "Lucky Escape",
-  "Spin Again",
-  "Teacher’s Choice",
-  "Class Vote",
-  "Swap With Someone",
-  "Double Spin",
-  "Trivia Question",
-  "Rock, Paper, Scissors",
+/* ================= Default sets (first run) ================= */
+const DEFAULT_CONSEQUENCES_NAME = "Default • Consequences";
+const DEFAULT_TREATS_NAME       = "Default • Treats";
+const DEFAULT_BRAINBREAK_NAME   = "Default • Brain Break";
+
+const DEFAULT_CONSEQUENCES = [
   "Cleanup Duty",
   "Help Tidy Classroom",
   "Board Cleaning Duty",
@@ -411,32 +424,66 @@ const DEFAULT_ENTRIES = [
   "Extra Practice Question",
   "5-Minute Quiet Reflection",
   "Lunch Time Catch-Up",
-  "After-School Reflection"
+  "After-School Reflection",
+  "Teacher’s Choice"
+];
+
+const DEFAULT_TREATS = [
+  "Mana Award",
+  "5 Bonus House Points",
+  "Teacher Shout-Out",
+  "Positive Call Home",
+  "Early Pack-up Pass",
+  "Lucky Escape",
+  "Choose the Music (2 mins)",
+  "Free Choice Activity (5 mins)",
+  "Tech Time (5 mins)",
+  "Class Vote",
+  "Spin Again",
+  "Double Spin"
+];
+
+const DEFAULT_BRAIN_BREAKS = [
+  "2-min stretch break",
+  "3-min walk + water",
+  "Quick doodle challenge (2 mins)",
+  "Would you rather (1 question)",
+  "Rock, Paper, Scissors",
+  "Trivia Question",
+  "Silent ball (3 mins)",
+  "Breathing reset (60s)",
+  "Desk tidy sprint (90s)"
 ];
 
 function createDefaultSetIfNone(){
   if (sets.length) return;
 
-  const setId = uid();
-  const students = DEFAULT_ENTRIES.map((name, i) => ({
-    id: `${setId}::DEF:${i}`,
-    sid: "",
-    first: "",
-    last: "",
-    name,
-    form: "",
-    timetableClass: ""
-  }));
+  function makeSet(name, entries){
+    const setId = uid();
+    const students = entries.map((label, i) => ({
+      id: `${setId}::DEF:${i}`,
+      sid: "",
+      first: "",
+      last: "",
+      name: label,
+      form: "",
+      timetableClass: ""
+    }));
+    return { id: setId, name, students, excludedIds: {} };
+  }
 
-  sets = [{
-    id: setId,
-    name: DEFAULT_SET_NAME,
-    students,
-    excludedIds: {}
-  }];
+  const a = makeSet(DEFAULT_CONSEQUENCES_NAME, DEFAULT_CONSEQUENCES);
+  const b = makeSet(DEFAULT_TREATS_NAME, DEFAULT_TREATS);
+  const c = makeSet(DEFAULT_BRAINBREAK_NAME, DEFAULT_BRAIN_BREAKS);
 
-  activeSetId = setId;
+  sets = [a, b, c];
+
+  const remembered = loadActiveSet();
+  const validRemembered = sets.some(s => s.id === remembered) ? remembered : null;
+
+  activeSetId = validRemembered || b.id;
   saveSets();
+  saveActiveSet(activeSetId);
 }
 
 /* =========================================================
@@ -708,6 +755,11 @@ $("dedupeSetBtn").addEventListener("click", ()=>{
 });
 
 /* ================= UI: sets buttons & manager ================= */
+function setActiveSet(id){
+  activeSetId = id;
+  saveActiveSet(activeSetId);
+}
+
 function renderSetButtons(){
   const row=$("setRow");
   row.innerHTML="";
@@ -730,7 +782,7 @@ function renderSetButtons(){
     b.title="Click to load this set";
     b.addEventListener("click", ()=>{
       if (spinning) { toast("Finish the spin 🙂"); return; }
-      activeSetId=s.id;
+      setActiveSet(s.id);
       displayPool=null;
       pendingExcludeId=null;
       renderSetButtons();
@@ -762,17 +814,13 @@ function renderSetManager(){
     inp.value=s.name;
     inp.style.boxShadow="none";
     inp.placeholder="Set label";
+
+    // Automatic save while typing (debounced)
     inp.addEventListener("input", ()=>{
       s.name=(inp.value||"Untitled").trim();
       renderSetButtons();
       setStatus();
-    });
-    inp.addEventListener("change", ()=>{
-      s.name=(inp.value||"Untitled").trim();
-      saveSets();
-      renderSetButtons();
-      setStatus();
-      toast("Relabelled");
+      saveSetsDebounced();
     });
 
     const use=document.createElement("button");
@@ -780,7 +828,7 @@ function renderSetManager(){
     use.textContent="Use";
     use.addEventListener("click", ()=>{
       if (spinning) { toast("Finish the spin 🙂"); return; }
-      activeSetId=s.id;
+      setActiveSet(s.id);
       displayPool=null;
       pendingExcludeId=null;
       renderSetButtons();
@@ -792,10 +840,10 @@ function renderSetManager(){
     del.type="button";
     del.textContent="Delete";
     del.addEventListener("click", ()=>{
-      if (spinning) { toast("Finish the spin 🙂"); return; }
+      if (spinning){ toast("Finish the spin 🙂"); return; }
       if (!confirm(`Delete "${s.name}"?`)) return;
       sets=sets.filter(x=>x.id!==s.id);
-      if (activeSetId===s.id) activeSetId = sets[0]?.id || null;
+      if (activeSetId===s.id) setActiveSet(sets[0]?.id || null);
       saveSets();
       renderSetButtons();
       renderSetManager();
@@ -1005,7 +1053,7 @@ function renderStudentList(){
       if (set.excludedIds[st.id]) delete set.excludedIds[st.id];
       else set.excludedIds[st.id]=true;
 
-      saveSets();
+      saveSetsDebounced(); // auto save (debounced)
       setStatus();
       renderStudentList();
 
@@ -1216,7 +1264,7 @@ document.addEventListener("keydown",(e)=>{
 function createSetFromStudents(name, students){
   const newSet={ id:uid(), name:(name||"Untitled").trim(), students, excludedIds:{} };
   sets.unshift(newSet);
-  activeSetId=newSet.id;
+  setActiveSet(newSet.id);
   saveSets();
   displayPool=null;
   pendingExcludeId=null;
@@ -1258,7 +1306,7 @@ $("resetOptionsBtn").addEventListener("click", ()=>{
 $("clearSetsBtn").addEventListener("click", ()=>{
   if (spinning){ toast("Finish the spin 🙂"); return; }
   if (!confirm("Delete ALL saved class sets?")) return;
-  sets=[]; activeSetId=null;
+  sets=[]; setActiveSet(null);
   saveSets();
   displayPool=null;
   pendingExcludeId=null;
@@ -1310,8 +1358,16 @@ function init(){
   savePrefs();
 
   loadSets();
-  createDefaultSetIfNone();         // <-- NEW
-  activeSetId = sets[0]?.id || null;
+  createDefaultSetIfNone();
+
+  // Remember last active set (even after weeks)
+  const remembered = loadActiveSet();
+  if (remembered && sets.some(s => s.id === remembered)) {
+    activeSetId = remembered;
+  } else {
+    activeSetId = sets[0]?.id || null;
+    saveActiveSet(activeSetId);
+  }
 
   renderSetButtons();
   renderSetManager();
