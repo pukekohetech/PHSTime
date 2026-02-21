@@ -1,0 +1,277 @@
+/* =========================================================
+   PHS Classroom Tools UI System
+   Shared across Wheel, Countdown, PHSTimer
+   ========================================================= */
+
+/* ================= ROOT TOKENS ================= */
+:root{
+  /* Background states */
+  --bgGrey:#9aa0a6;
+  --bgGreen:#2ecc71;
+  --bgOrange:#f39c12;
+  --bgRed:#e74c3c;
+
+  /* Glass surfaces */
+  --card: rgba(255,255,255,0.86);
+  --cardSoft: rgba(255,255,255,0.75);
+  --cardStrong: rgba(255,255,255,0.92);
+
+  /* Shadows */
+  --shadow: 0 16px 44px rgba(0,0,0,0.18);
+  --shadow2: 0 12px 34px rgba(0,0,0,0.16);
+  --shadowSoft: 0 10px 28px rgba(0,0,0,0.12);
+
+  /* Radius system */
+  --radius-lg: 22px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-main: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+/* ================= GLOBAL RESET ================= */
+*,
+*::before,
+*::after{
+  box-sizing: border-box;
+}
+
+body{
+  margin:0;
+  min-height:100vh;
+  font-family: var(--font-main);
+  background: var(--bgGrey);
+  transition: background-color 300ms ease;
+}
+
+/* ================= BUTTON SYSTEM ================= */
+button,
+input[type="range"],
+input[type="text"],
+textarea{
+  font-family: inherit;
+}
+
+button{
+  border: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor:pointer;
+  font-weight: 900;
+  font-size: 13px;
+  background: rgba(255,255,255,0.88);
+  box-shadow: var(--shadow2);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+button:active{
+  transform: translateY(1px);
+}
+
+button:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+}
+
+/* Primary button */
+.btn-primary{
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+}
+
+/* Nav button */
+.btn-nav{
+  background: rgba(255,255,255,0.9);
+}
+
+/* ================= GLASS CARD ================= */
+.card{
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+/* Softer variant */
+.card-soft{
+  background: var(--cardSoft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadowSoft);
+}
+
+/* ================= TITLE SYSTEM ================= */
+.title{
+  font-weight: 950;
+  letter-spacing: -0.3px;
+  font-size: 18px;
+  margin: 0;
+}
+
+.sub{
+  font-weight: 800;
+  opacity: .65;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+/* ================= CHIP / PILL ================= */
+.pill{
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(0,0,0,0.08);
+  font-weight: 950;
+  font-size: 12px;
+  opacity: .9;
+}
+
+.value-pill{
+  display:inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0,0,0,0.08);
+  font-weight: 950;
+  font-size: 12px;
+}
+
+/* ================= OPTIONS MENU SYSTEM ================= */
+.controls{
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 60;
+}
+
+.options-btn{
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  display:grid;
+  place-items:center;
+  font-size: 18px;
+  background: rgba(255,255,255,0.78);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.14);
+}
+
+.options-menu{
+  position: absolute;
+  top: 54px;
+  right: 0;
+  width: min(420px, calc(100vw - 20px));
+  background: var(--cardStrong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  transform-origin: top right;
+  animation: pop 120ms ease;
+}
+
+.hidden{ display:none !important; }
+
+@keyframes pop{
+  from { transform: scale(0.98); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.menu-header{
+  padding: 12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  cursor: grab;
+  user-select: none;
+}
+
+.menu-title{
+  font-weight: 950;
+  letter-spacing: -0.2px;
+}
+
+.menu-body{
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.menu-row{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.divider{
+  height: 1px;
+  background: rgba(0,0,0,0.08);
+}
+
+/* ================= FORM ELEMENTS ================= */
+input[type="text"],
+textarea{
+  width:100%;
+  border:1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.8);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-weight: 850;
+}
+
+textarea{
+  resize: vertical;
+}
+
+/* ================= PROGRESS BAR ================= */
+.progress-track{
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(0,0,0,0.12);
+  overflow:hidden;
+}
+
+.progress-fill{
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.25);
+  transition: width 160ms linear;
+}
+
+/* ================= UTILITIES ================= */
+.center-grid{
+  display:grid;
+  place-items:center;
+}
+
+.flex-between{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+}
+
+.flex-center{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+}
+
+.small-note{
+  font-size: 13px;
+  font-weight: 750;
+  opacity:.75;
+}
+
+.mini-label{
+  font-size: 11px;
+  font-weight: 950;
+  opacity:.75;
+  text-transform: uppercase;
+  letter-spacing:.06em;
+}
