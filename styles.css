@@ -1,5 +1,9 @@
 /* =========================================================
-   Class Wheel of Fortune — Single Stylesheet
+   PHS Classroom Tools — Combined styles.css
+   Works for: index.html + wheel.html + timer.html
+   How to use:
+     <link rel="stylesheet" href="styles.css">
+     <body class="page-index">  /  <body class="page-wheel">  /  <body class="page-timer">
    ========================================================= */
 
 /* ========== Design Tokens ========== */
@@ -7,36 +11,44 @@
   --bgGrey:#9aa0a6;
   --bgGreen:#2ecc71;
   --bgOrange:#f39c12;
+  --bgRed:#e74c3c;
 
   --card: rgba(255,255,255,0.86);
   --card2: rgba(255,255,255,0.72);
 
   --shadow: 0 16px 44px rgba(0,0,0,0.18);
   --shadow2: 0 12px 34px rgba(0,0,0,0.16);
+
+  /* index-only tokens */
+  --breakBlue:#bfe7f6;
+  --periodGreen:#d9f3d2;
+  --specialPink:#f0cbed;
+  --bgBreak:#7fc8e8;
+  --bgSpecial:#d6b3f7;
 }
 
-/* ========== Base / Layout ========== */
+/* ========== Base ========== */
 *{ box-sizing:border-box; }
+
+html, body{ height:100%; }
 
 body{
   margin:0;
-  height:100vh;
-  overflow:hidden;
-  display:grid;
-  grid-template-rows: auto auto 1fr;
-  gap:10px;
-  padding:12px;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   background: var(--bgGrey);
-  transition: background-color 220ms ease;
 }
 
-@media (max-width: 980px){
-  body{ overflow:auto; height:auto; min-height:100vh; }
-  .grid{ grid-template-columns: 1fr; }
+/* Utility */
+.hidden{ display:none !important; }
+
+/* ========== Shared Controls + Menu ========== */
+.controls{
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 60;
 }
 
-/* ========== Buttons / Inputs ========== */
 button, .pillBtn, input[type="range"], input[type="text"], textarea{
   border: 0;
   padding: 10px 12px;
@@ -54,37 +66,6 @@ button, .pillBtn, input[type="range"], input[type="text"], textarea{
 button:active{ transform: translateY(1px); }
 button:disabled{ opacity:.6; cursor:not-allowed; transform:none; }
 
-input[type="text"]{
-  width: 100%;
-  cursor: text;
-  box-shadow: none;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: rgba(255,255,255,0.8);
-  font-weight: 850;
-}
-
-textarea{
-  width: 100%;
-  min-height: 160px;
-  resize: vertical;
-  cursor: text;
-  font-weight: 850;
-  font-size: 13px;
-  line-height: 1.25;
-  border: 1px solid rgba(0,0,0,0.12);
-  box-shadow: none;
-  background: rgba(255,255,255,0.8);
-  white-space: pre;
-}
-
-/* ========== Controls / Options Menu ========== */
-.controls{
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 60;
-}
-
 #optionsBtn{
   width: 46px;
   height: 46px;
@@ -101,13 +82,11 @@ textarea{
   position: absolute;
   top: 54px;
   right: 0;
-  width: min(620px, calc(100vw - 20px));
-  max-height: min(84vh, 860px);
-  overflow:auto;
   background: rgba(255,255,255,0.92);
   border-radius: 18px;
   box-shadow: 0 18px 44px rgba(0,0,0,0.20);
   backdrop-filter: blur(10px);
+  overflow: hidden;
   transform-origin: top right;
   animation: pop 120ms ease;
   touch-action: none;
@@ -118,8 +97,6 @@ textarea{
   to   { transform: scale(1);    opacity: 1; }
 }
 
-.hidden{ display:none !important; }
-
 .menuHeader{
   padding: 12px 14px;
   display:flex;
@@ -129,15 +106,10 @@ textarea{
   border-bottom: 1px solid rgba(0,0,0,0.08);
   cursor: grab;
   user-select: none;
-  position: sticky;
-  top: 0;
-  background: rgba(255,255,255,0.92);
-  z-index: 2;
 }
 .menuHeader:active{ cursor: grabbing; }
 
 .menuTitle{ font-weight: 950; letter-spacing: -0.2px; }
-
 .menuHint{
   opacity: .65;
   font-weight: 800;
@@ -160,6 +132,8 @@ textarea{
   flex-wrap: wrap;
 }
 
+.menuRow--end{ align-items:flex-end; }
+
 .divider{ height: 1px; background: rgba(0,0,0,0.08); margin: 2px 0; }
 
 details{
@@ -167,7 +141,6 @@ details{
   background: rgba(0,0,0,0.04);
   padding: 10px 10px;
 }
-
 summary{
   cursor: pointer;
   font-weight: 950;
@@ -182,7 +155,6 @@ summary::-webkit-details-marker{ display:none; }
   text-transform: uppercase;
   letter-spacing: .06em;
 }
-
 .smallNote{
   font-size: 13px;
   font-weight: 850;
@@ -190,7 +162,6 @@ summary::-webkit-details-marker{ display:none; }
   line-height: 1.35;
 }
 
-/* Pill buttons used for toggles */
 .pillBtn{
   display:flex;
   align-items:center;
@@ -202,9 +173,70 @@ summary::-webkit-details-marker{ display:none; }
   font-weight: 900;
 }
 .pillBtn label{ cursor:pointer; font-weight: 900; }
+.pillBtn input{ transform: translateY(1px); }
 
-/* ========== Top Bar / Sets Row ========== */
-.topBar{
+.valuePill{
+  display:inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-weight: 950;
+  font-size: 12px;
+}
+
+/* Shared text inputs */
+input[type="text"]{
+  width: 100%;
+  cursor: text;
+  box-shadow: none;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.8);
+  font-weight: 850;
+}
+textarea{
+  width: 100%;
+  resize: vertical;
+  cursor: text;
+  font-weight: 750;
+  font-size: 13px;
+  line-height: 1.25;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 12px;
+  box-shadow: none;
+  background: rgba(255,255,255,0.8);
+  padding: 10px 12px;
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
+.danger{ background: rgba(231, 76, 60, 0.12) !important; }
+
+/* =========================================================
+   PAGE: WHEEL (wheel.html)
+   ========================================================= */
+.page-wheel{
+  height:100vh;
+  overflow:hidden;
+  display:grid;
+  grid-template-rows: auto auto 1fr;
+  gap:10px;
+  padding:12px;
+  transition: background-color 220ms ease;
+}
+
+.page-wheel #optionsMenu{
+  width: min(620px, calc(100vw - 20px));
+  max-height: min(84vh, 860px);
+  overflow:auto;
+}
+.page-wheel .menuHeader{
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,0.92);
+  z-index: 2;
+}
+
+.page-wheel .topBar{
   display:flex;
   align-items:flex-end;
   justify-content: space-between;
@@ -212,17 +244,14 @@ summary::-webkit-details-marker{ display:none; }
   flex-wrap: wrap;
   padding-right: 60px;
 }
-
-.titleWrap{ display:flex; flex-direction: column; gap: 4px; min-width: 0; }
-
-.title{
+.page-wheel .titleWrap{ display:flex; flex-direction: column; gap: 4px; min-width: 0; }
+.page-wheel .title{
   margin:0;
   font-weight: 950;
   letter-spacing: -0.3px;
   font-size: 20px;
 }
-
-.sub{
+.page-wheel .sub{
   font-weight: 800;
   opacity: .65;
   font-size: 12px;
@@ -233,8 +262,7 @@ summary::-webkit-details-marker{ display:none; }
   text-overflow: ellipsis;
   max-width: 1200px;
 }
-
-.chip{
+.page-wheel .chip{
   padding: 7px 12px;
   border-radius: 999px;
   background: rgba(255,255,255,0.75);
@@ -245,15 +273,14 @@ summary::-webkit-details-marker{ display:none; }
   white-space: nowrap;
 }
 
-.setRow{
+.page-wheel .setRow{
   display:flex;
   gap: 10px;
   overflow-x:auto;
   padding: 2px 2px 6px;
   -webkit-overflow-scrolling: touch;
 }
-
-.setBtn{
+.page-wheel .setBtn{
   flex: 0 0 auto;
   border-radius: 999px;
   padding: 10px 12px;
@@ -261,14 +288,12 @@ summary::-webkit-details-marker{ display:none; }
   background: rgba(255,255,255,0.65);
   font-weight: 950;
 }
-
-.setBtn.active{
+.page-wheel .setBtn.active{
   background: rgba(255,255,255,0.88);
   box-shadow: 0 10px 26px rgba(0,0,0,0.12);
 }
 
-/* ========== Main Grid ========== */
-.grid{
+.page-wheel .grid{
   min-height: 0;
   display:grid;
   grid-template-columns: 1.35fr 0.65fr;
@@ -276,8 +301,7 @@ summary::-webkit-details-marker{ display:none; }
   align-items: stretch;
 }
 
-/* ========== Wheel Panel ========== */
-.wheelPanel{
+.page-wheel .wheelPanel{
   min-height: 0;
   background: var(--card2);
   border-radius: 18px;
@@ -290,7 +314,7 @@ summary::-webkit-details-marker{ display:none; }
   overflow:hidden;
 }
 
-.wheelStage{
+.page-wheel .wheelStage{
   min-height: 0;
   display:grid;
   place-items:center;
@@ -299,7 +323,7 @@ summary::-webkit-details-marker{ display:none; }
   cursor: pointer;
 }
 
-canvas{
+.page-wheel canvas{
   width: min(66vh, 760px);
   max-width: 100%;
   height: auto;
@@ -309,7 +333,7 @@ canvas{
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08);
 }
 
-.pointer{
+.page-wheel .pointer{
   position:absolute;
   top: 4px;
   left: 50%;
@@ -324,7 +348,7 @@ canvas{
   pointer-events:none;
 }
 
-.winnerBox{
+.page-wheel .winnerBox{
   text-align:center;
   font-weight: 980;
   letter-spacing: -0.6px;
@@ -336,8 +360,7 @@ canvas{
   box-shadow: 0 10px 24px rgba(0,0,0,0.12);
   user-select: none;
 }
-
-.hintLine{
+.page-wheel .hintLine{
   text-align:center;
   font-size: 13px;
   font-weight: 800;
@@ -345,22 +368,20 @@ canvas{
   margin-top: -4px;
 }
 
-.btnRow{
+.page-wheel .btnRow{
   display:flex;
   gap: 10px;
   flex-wrap: wrap;
   justify-content: center;
   align-items:center;
 }
-
-.primary{
+.page-wheel .primary{
   font-size: 14px;
   padding: 12px 14px;
   border-radius: 16px;
 }
 
-/* ========== Confetti Layer ========== */
-.confetti{
+.page-wheel .confetti{
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -368,9 +389,8 @@ canvas{
   z-index: 6;
   display:none;
 }
-.confetti.show{ display:block; }
-
-.confetti span{
+.page-wheel .confetti.show{ display:block; }
+.page-wheel .confetti span{
   position:absolute;
   top: -20px;
   width: 10px;
@@ -379,13 +399,11 @@ canvas{
   opacity: .95;
   animation: fall linear forwards;
 }
-
 @keyframes fall{
   to { transform: translateY(120vh) rotate(720deg); opacity: 1; }
 }
 
-/* ========== Side Panel ========== */
-.sidePanel{
+.page-wheel .sidePanel{
   min-height: 0;
   background: var(--card2);
   border-radius: 18px;
@@ -397,13 +415,13 @@ canvas{
   overflow:hidden;
 }
 
-.searchBox{
+.page-wheel .searchBox{
   padding: 7px 10px !important;
   border-radius: 12px !important;
   font-size: 13px !important;
 }
 
-.statRow{
+.page-wheel .statRow{
   display:flex;
   align-items:center;
   justify-content: space-between;
@@ -414,29 +432,19 @@ canvas{
   opacity: .92;
 }
 
-.valuePill{
-  display:inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.75);
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
-  font-weight: 950;
-  font-size: 12px;
-}
-
-.toggleRow{
+.page-wheel .toggleRow{
   display:flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items:center;
   justify-content: space-between;
 }
-.toggleRow .pillBtn{
+.page-wheel .toggleRow .pillBtn{
   background: rgba(255,255,255,0.65);
   border: 1px solid rgba(0,0,0,0.08);
 }
 
-.list{
+.page-wheel .list{
   min-height: 0;
   overflow:auto;
   border-radius: 14px;
@@ -445,7 +453,7 @@ canvas{
   padding: 6px;
 }
 
-.row{
+.page-wheel .row{
   display:flex;
   align-items:center;
   justify-content: space-between;
@@ -457,16 +465,16 @@ canvas{
   user-select: none;
   background: transparent;
 }
-.row:hover{ background: rgba(0,0,0,0.04); }
+.page-wheel .row:hover{ background: rgba(0,0,0,0.04); }
 
-.rowLeft{
+.page-wheel .rowLeft{
   display:flex;
   align-items:center;
   gap: 10px;
   min-width: 0;
 }
 
-.dot{
+.page-wheel .dot{
   width: 14px;
   height: 14px;
   border-radius: 999px;
@@ -474,24 +482,21 @@ canvas{
   box-shadow: inset 0 0 0 2px rgba(255,255,255,0.65);
   flex: 0 0 auto;
 }
+.page-wheel .row:not(.excluded) .dot{ background: rgba(46, 204, 113, 0.75); }
 
-.row:not(.excluded) .dot{
-  background: rgba(46, 204, 113, 0.75);
-}
-
-.row.excluded{
+.page-wheel .row.excluded{
   opacity: .55;
   text-decoration: line-through;
 }
 
-.nameText{
+.page-wheel .nameText{
   overflow:hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
 }
 
-.meta{
+.page-wheel .meta{
   opacity: .72;
   font-weight: 900;
   font-size: 12px;
@@ -499,7 +504,7 @@ canvas{
   white-space: nowrap;
 }
 
-.footerRow{
+.page-wheel .footerRow{
   display:flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -507,8 +512,7 @@ canvas{
   align-items:center;
 }
 
-/* ========== Toast ========== */
-.toast{
+.page-wheel .toast{
   position: fixed;
   left: 50%;
   bottom: 16px;
@@ -524,24 +528,391 @@ canvas{
   pointer-events: none;
   transition: opacity 160ms ease, transform 160ms ease;
 }
-.toast.show{
+.page-wheel .toast.show{
   opacity: 1;
   transform: translateX(-50%) translateY(-2px);
 }
 
-/* ========== Utility / States ========== */
-.danger{
-  background: rgba(231, 76, 60, 0.12) !important;
+@media (max-width: 980px){
+  .page-wheel{ overflow:auto; height:auto; min-height:100vh; }
+  .page-wheel .grid{ grid-template-columns: 1fr; }
 }
 
-/* ---- Helpers to remove inline styles ---- */
+/* =========================================================
+   PAGE: TIMER (timer.html)
+   ========================================================= */
+.page-timer{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background: var(--bgGrey);
+  transition: background-color 400ms ease;
+}
+
+.page-timer #optionsMenu{
+  width: min(380px, calc(100vw - 20px));
+}
+
+.page-timer .timerCard{
+  width: min(520px, calc(100% - 28px));
+  background: var(--card);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  padding: 18px 18px 16px;
+  overflow: hidden;
+}
+
+.page-timer .titleRow{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.page-timer .titleLeft{
+  display:flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.page-timer .title{
+  font-weight: 950;
+  letter-spacing: -0.3px;
+  font-size: 18px;
+  margin: 0;
+}
+.page-timer .sub{
+  font-weight: 800;
+  opacity: .65;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.page-timer .stateChip{
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-weight: 950;
+  font-size: 12px;
+  opacity: .85;
+  white-space: nowrap;
+}
+
+.page-timer .timeBtn{
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 18px 14px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.82);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+.page-timer .timeBtn:active{ transform: translateY(1px); }
+
+.page-timer .timeDisplay{
+  font-weight: 980;
+  letter-spacing: -1px;
+  line-height: 1;
+  text-align:center;
+  font-size: clamp(56px, 10vw, 90px);
+}
+.page-timer .timeHint{
+  margin-top: 8px;
+  text-align:center;
+  font-size: 13px;
+  font-weight: 750;
+  opacity: .7;
+}
+
+.page-timer .progressTrack{
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.12);
+  overflow:hidden;
+  margin: 14px 6px 10px;
+}
+.page-timer .progressFill{
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.25);
+  transition: width 160ms linear;
+}
+
+.page-timer .timerControls{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.page-timer .sliderWrap{
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+.page-timer .sliderRow{
+  display:flex;
+  align-items:baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.page-timer #minsRange{
+  width: 100%;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.page-timer .navBtn{ background: rgba(255,255,255,0.88); }
+
+/* =========================================================
+   PAGE: INDEX (index.html)
+   ========================================================= */
+.page-index{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  transition: background-color 1200ms ease;
+  background: var(--bgGrey);
+}
+
+.page-index #optionsMenu{
+  width: min(360px, calc(100vw - 20px));
+}
+
+.page-index /* smaller controls vibe */
+button, .page-index .pillBtn, .page-index input[type="range"]{
+  padding: 7px 9px;
+  border-radius: 10px;
+  font-weight: 850;
+  font-size: 12px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.13);
+}
+
+.page-index #optionsBtn{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.page-index .pillBtn{
+  gap: 6px;
+  padding: 6px 9px;
+}
+
+.page-index .pillBtn input{ transform: scale(1.05); }
+
+.page-index .messageWrap{
+  width: min(1200px, calc(100% - 40px));
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.82);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.18);
+  backdrop-filter: blur(6px);
+  position: relative;
+  overflow: hidden;
+}
+
+.page-index .msgProgress{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.page-index .msgProgress.show{ opacity: 1; }
+
+.page-index #msgProgressFill{
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.18);
+  mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 92%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 92%, rgba(0,0,0,0) 100%);
+  transition: width 400ms ease;
+}
+
+.page-index #studentMessage{
+  position: relative;
+  z-index: 1;
+  outline:none;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.5px;
+  font-size: clamp(44px, 6vw, 96px);
+  text-align: center;
+  margin: 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.page-index .hint{
+  position: relative;
+  z-index: 1;
+  text-align:center;
+  margin-top: 10px;
+  opacity: 0.75;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* Karakia bar */
+.page-index #karakiaBar{
+  position: fixed;
+  left: 10px;
+  top: 10px;
+  z-index: 65;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.page-index #karakiaBar button{
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 950;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.16);
+  background: rgba(255,255,255,0.88);
+}
+
+/* Countdown overlay */
+.page-index #countdownOverlay{
+  position: fixed;
+  left: 10px;
+  top: 62px;
+  z-index: 50;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.88);
+  box-shadow: 0 12px 34px rgba(0,0,0,0.16);
+  backdrop-filter: blur(6px);
+  display:none;
+  min-width: 180px;
+}
+.page-index #countdownOverlay .label{
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .7;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.page-index #countdownOverlay .time{
+  font-size: 40px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+/* Panels */
+.page-index .panel{
+  position: fixed;
+  z-index: 40;
+  background: rgba(255,255,255,0.88);
+  padding: 14px 16px;
+  border-radius: 16px;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.16);
+  backdrop-filter: blur(6px);
+}
+
+.page-index #infoCard{ left: 10px; bottom: 10px; width: min(540px, calc(100% - 20px)); }
+.page-index #timetableCard{ right: 10px; bottom: 10px; width: min(520px, calc(100% - 20px)); }
+
+.page-index .panelHeader{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  cursor: grab;
+  user-select: none;
+}
+.page-index .panelHeader:active{ cursor: grabbing; }
+.page-index .panelTitle{ font-size: 16px; font-weight: 950; margin: 0; }
+.page-index .panelHint{ font-size: 11px; font-weight: 900; opacity: .6; text-transform: uppercase; letter-spacing: .08em; }
+
+.page-index .row { margin: 5px 0; font-size: 13px; }
+.page-index .muted { opacity: 0.75; }
+
+.page-index .pill{
+  display:inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-weight: 900;
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+/* Timetable table */
+.page-index table{
+  width:100%;
+  border-collapse: collapse;
+  overflow:hidden;
+  border-radius: 12px;
+  font-weight: 850;
+}
+.page-index thead th{
+  background: #111;
+  color: #fff;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.page-index tbody td{
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.page-index tbody tr.period{ background: var(--periodGreen); }
+.page-index tbody tr.break{ background: var(--breakBlue); }
+.page-index tbody tr.special{ background: var(--specialPink); }
+.page-index tbody tr.active{
+  outline: 4px solid rgba(0,0,0,0.35);
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.65);
+}
+
+/* Settings / templates */
+.page-index .settings{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  display: grid;
+  gap: 8px;
+}
+.page-index .settings label{
+  font-size: 11px;
+  font-weight: 950;
+  opacity: .75;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.page-index .testBtn{ padding: 6px 8px; }
+
+/* =========================================================
+   OPTIONAL: Tiny utilities (useful if you remove inline styles)
+   ========================================================= */
 .u-w-100{ width:100% !important; }
+.u-w-80{ width:80% !important; }
 .u-mt-8{ margin-top:8px !important; }
+.u-minh-140{ min-height:140px !important; }
 .u-h-8{ height:8px !important; }
 .u-h-10{ height:10px !important; }
 .u-flex-1{ flex:1 !important; }
 .u-minw-180{ min-width:180px !important; }
-.u-grid-gap-8{ display:grid !important; gap:8px !important; margin-top:8px !important; }
-
-/* For the “align-items:flex-end” menuRow inline style */
-.menuRow--end{ align-items:flex-end; }
+.u-grid{ display:grid !important; }
+.u-gap-8{ gap:8px !important; }
+.u-mt-8{ margin-top:8px !important; }
