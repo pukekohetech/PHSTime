@@ -4,6 +4,7 @@ const CACHE_NAME = "timetable-screen-v2";
 const ASSETS = [
   "./",
   "./index.html",
+  "./timer.html",
   "./manifest.webmanifest",
   "./favicon.ico",
   "./apple-touch-icon.png",
