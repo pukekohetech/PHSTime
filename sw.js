@@ -1,5 +1,5 @@
 // Basic cache-first PWA service worker for GitHub Pages.
-const CACHE_NAME = "timetable-screen-v2";
+const CACHE_NAME = "timetable-screen-v3";
 
 const ASSETS = [
   "./",
