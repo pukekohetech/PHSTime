@@ -307,6 +307,19 @@ textarea{
 
 .danger{ background: rgba(231, 76, 60, 0.12) !important; }
 
+/*=============================================================
+PAGE: NOISE (noise.html) 
+=============================================================== */
+.page-noise{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background: var(--bgGrey);
+  transition: background-color 400ms ease;
+}
+.page-noise #optionsMenu{
+  width: min(460px, calc(100vw - 20px));
+}
 /* =========================================================
    PAGE: INDEX (index.html)
    ========================================================= */
