@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Noise Level</title>
+
+  <!-- Single external stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Tiny page-specific styles (keeps shared styles.css untouched) -->
+  <style>
+    .noiseCard{
+      width: min(620px, calc(100% - 28px));
+      background: var(--card);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      padding: 18px 18px 16px;
+      overflow: hidden;
+      margin-top: 70px; /* room for fixed appNav */
+    }
+
+    .noiseTitleRow{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .noiseTitleLeft{
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .noiseTitle{
+      font-weight: 950;
+      letter-spacing: -0.3px;
+      font-size: 18px;
+      margin: 0;
+    }
+
+    .noiseSub{
+      font-weight: 800;
+      opacity: .65;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 340px;
+    }
+
+    .noiseDisplayBtn{
+      width: 100%;
+      border: 0;
+      border-radius: 18px;
+      padding: 18px 14px 14px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      user-select: none;
+    }
+    .noiseDisplayBtn:active{ transform: translateY(1px); }
+
+    .noiseFace{
+      display:grid;
+      place-items:center;
+      width: 100%;
+      margin: 2px 0 10px;
+    }
+    .noiseEmoji{
+      font-size: clamp(90px, 14vw, 140px);
+      line-height: 1;
+      filter: drop-shadow(0 10px 22px rgba(0,0,0,0.14));
+      transform: translateY(0);
+      transition: transform 140ms ease, filter 140ms ease;
+    }
+    .noiseEmoji.bump{
+      transform: translateY(-2px) scale(1.02);
+      filter: drop-shadow(0 14px 26px rgba(0,0,0,0.18));
+    }
+
+    .noiseBig{
+      font-weight: 980;
+      letter-spacing: -1px;
+      line-height: 1;
+      text-align:center;
+      font-size: clamp(56px, 10vw, 90px);
+    }
+
+    .noiseSmallRow{
+      margin-top: 10px;
+      display:flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+
+    .noiseHint{
+      margin-top: 8px;
+      text-align:center;
+      font-size: 13px;
+      font-weight: 750;
+      opacity: .7;
+      line-height: 1.35;
+    }
+
+    .noiseBarTrack{
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.12);
+      overflow:hidden;
+      margin: 14px 6px 10px;
+    }
+    .noiseBarFill{
+      height: 100%;
+      width: 0%;
+      background: rgba(0,0,0,0.25);
+      transition: width 90ms linear;
+    }
+
+    .noiseControls{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    /* Options menu width tweak */
+    .page-timer #optionsMenu{
+      width: min(460px, calc(100vw - 20px));
+    }
+
+    /* Make the sliders in options look like your timer */
+    .optRange{
+      width: 100%;
+      box-shadow: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body class="page-timer">
+
+  <nav class="appNav" aria-label="PHS Classroom Tools">
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
+    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
+  </nav>
+
+  <!-- OPTIONS MENU -->
+  <div class="controls">
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+        <div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
+        </div>
+        <button id="closeMenu" type="button" title="Close">✕</button>
+      </div>
+
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn" type="button">Full screen</button>
+          <button id="resetAllBtn" type="button" title="Reset meter + options">Reset</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="menuRow">
+          <span class="pillBtn" title="Auto calibration tracks the room’s baseline level">
+            <input id="autoCal" type="checkbox" checked />
+            <label for="autoCal">Auto-cal</label>
+          </span>
+
+          <span class="pillBtn" title="Smoothing reduces flicker">
+            <input id="smoothOn" type="checkbox" checked />
+            <label for="smoothOn">Smoothing</label>
+          </span>
+
+          <span class="pillBtn" title="If enabled, the smiley face reacts to noise">
+            <input id="faceOn" type="checkbox" checked />
+            <label for="faceOn">Smiley</label>
+          </span>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Thresholds in Options -->
+        <div class="sliderWrap">
+          <div class="sliderRow">
+            <div class="miniLabel">Green → Orange</div>
+            <span class="valuePill"><span id="t1Label">60</span> dB</span>
+          </div>
+          <input id="t1" class="optRange" type="range" min="30" max="95" value="60" />
+        </div>
+
+        <div class="sliderWrap">
+          <div class="sliderRow">
+            <div class="miniLabel">Orange → Red</div>
+            <span class="valuePill"><span id="t2Label">70</span> dB</span>
+          </div>
+          <input id="t2" class="optRange" type="range" min="35" max="105" value="70" />
+        </div>
+
+        <div class="sliderWrap">
+          <div class="sliderRow">
+            <div class="miniLabel">Calibration</div>
+            <span class="valuePill"><span id="calLabel">90</span> dB</span>
+          </div>
+          <input id="calOffset" class="optRange" type="range" min="40" max="120" value="90" />
+          <div class="smallNote u-mt-8">
+            Tip: set calibration so quiet room reads ~35–45 dB, normal speaking ~55–65 dB.
+          </div>
+        </div>
+
+        <details>
+          <summary>Keyboard shortcuts</summary>
+          <div class="u-h-10"></div>
+          <div class="timerShortcutText">
+            <div><span class="valuePill">Space</span> Start / Stop</div>
+            <div class="u-mt-8"><span class="valuePill">R</span> Reset</div>
+          </div>
+        </details>
+
+        <details>
+          <summary>What do these numbers mean?</summary>
+          <div class="u-h-10"></div>
+          <div class="smallNote">
+            Browsers can’t measure true SPL dB without calibration. This is an estimate based on your microphone.
+            Use <b>Calibration</b> to match a quiet room (~35–45 dB) and normal speaking (~55–65 dB).
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOISE CARD -->
+  <div class="noiseCard" aria-label="Noise level meter widget">
+    <div class="noiseTitleRow">
+      <div class="noiseTitleLeft">
+        <p class="noiseTitle">Noise Level</p>
+        <div class="noiseSub" id="subLabel">CLICK DISPLAY TO START / STOP</div>
+      </div>
+      <div class="stateChip" id="stateChip">READY</div>
+    </div>
+
+    <button class="noiseDisplayBtn" id="noiseBtn" type="button" aria-label="Noise meter display button">
+      <div class="noiseFace" aria-hidden="true">
+        <div id="noiseEmoji" class="noiseEmoji">🙂</div>
+      </div>
+
+      <div class="noiseBig">
+        <span id="dbNow">--</span><span style="font-size:.45em; opacity:.7;"> dB</span>
+      </div>
+
+      <div class="noiseSmallRow">
+        <span class="valuePill">Avg: <span id="dbAvg">--</span> dB</span>
+        <span class="valuePill">High: <span id="dbHigh">--</span> dB</span>
+        <span class="valuePill" id="statusPill">Ready</span>
+      </div>
+
+      <div class="noiseHint" id="timeHint">Start • allow microphone • use Options (⚙️) to adjust settings</div>
+    </button>
+
+    <div class="noiseBarTrack" id="barTrack" aria-hidden="false">
+      <div class="noiseBarFill" id="barFill"></div>
+    </div>
+
+    <div class="noiseControls" role="group" aria-label="Noise controls">
+      <button id="startStopBtn" type="button">Start</button>
+      <button id="resetBtn" type="button">Reset</button>
+    </div>
+  </div>
+
+  <script>
+/* ================= HELPERS ================= */
+const $ = (id) => document.getElementById(id);
+
+function storageOK(){
+  try{
+    const k="__storage_test__";
+    localStorage.setItem(k,"1");
+    localStorage.removeItem(k);
+    return true;
+  } catch(e){
+    return false;
+  }
+}
+const CAN_STORE = storageOK();
+function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
+
+/* ================= OPTIONS MENU ================= */
+const optionsBtn = $("optionsBtn");
+const optionsMenu = $("optionsMenu");
+const closeMenuBtn = $("closeMenu");
+const menuHeader = $("menuHeader");
+
+function openMenu(){
+  optionsMenu.classList.remove("hidden");
+  optionsBtn.setAttribute("aria-expanded", "true");
+}
+function closeMenu(){
+  optionsMenu.classList.add("hidden");
+  optionsBtn.setAttribute("aria-expanded", "false");
+}
+function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
+
+optionsBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(); });
+["pointerdown","click"].forEach(evt => {
+  closeMenuBtn.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); });
+});
+
+document.addEventListener("pointerdown", (e) => {
+  if (optionsMenu.classList.contains("hidden")) return;
+  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+
+let dragStartY = null;
+menuHeader.addEventListener("pointerdown", (e) => { dragStartY = e.clientY; menuHeader.setPointerCapture(e.pointerId); });
+menuHeader.addEventListener("pointermove", (e) => {
+  if (dragStartY === null) return;
+  const dy = e.clientY - dragStartY;
+  if (dy > 70) { dragStartY = null; closeMenu(); }
+});
+menuHeader.addEventListener("pointerup", () => dragStartY = null);
+menuHeader.addEventListener("pointercancel", () => dragStartY = null);
+
+/* ================= FULLSCREEN ================= */
+$("fullscreenBtn").addEventListener("click", async ()=>{
+  try{
+    if (!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      $("fullscreenBtn").textContent = "Exit full screen";
+    } else {
+      await document.exitFullscreen();
+      $("fullscreenBtn").textContent = "Full screen";
+    }
+  } catch (e) { alert("Fullscreen blocked by the browser. Try pressing F11."); }
+});
+document.addEventListener("fullscreenchange", ()=>{
+  $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+});
+
+/* ================= NOISE METER =================
+   We measure dBFS (negative) internally, then map to an estimated +dB scale via calibration offset.
+================================================= */
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let data = null;
+let rafId = null;
+let running = false;
+
+// dBFS tracking
+let noiseFloorDbFS = -60;
+let lastDbFS = -80;
+
+// Stats on estimated dB scale
+const AVG_WINDOW_MS = 10000; // 10s
+let samples = [];            // {t, v}
+let peakDb = null;
+
+// Emoji
+let lastEmoji = "🙂";
+let lastBumpAt = 0;
+
+const KEY = {
+  T1: "phs_noise_t1_v2",
+  T2: "phs_noise_t2_v2",
+  CAL:"phs_noise_cal_v2",
+  AC: "phs_noise_autocal_v2",
+  SM: "phs_noise_smooth_v2",
+  FO: "phs_noise_face_v1"
+};
+
+function rmsToDbFS(rms){
+  const eps = 1e-8;
+  return 20 * Math.log10(rms + eps);
+}
+
+function computeRMSFromTimeDomain(buffer){
+  let sum = 0;
+  for (let i=0;i<buffer.length;i++){
+    const v = (buffer[i] - 128) / 128;
+    sum += v*v;
+  }
+  return Math.sqrt(sum / buffer.length);
+}
+
+function nowMs(){ return performance.now(); }
+
+function pushSample(v){
+  const t = nowMs();
+  samples.push({t, v});
+  const cutoff = t - AVG_WINDOW_MS;
+  while(samples.length && samples[0].t < cutoff) samples.shift();
+}
+function getAvg(){
+  if(!samples.length) return null;
+  let s = 0;
+  for(const x of samples) s += x.v;
+  return s / samples.length;
+}
+
+function updateLabels(){
+  // enforce t2 > t1
+  const v1 = Number($("t1").value);
+  let v2 = Number($("t2").value);
+  if (v2 <= v1) v2 = v1 + 1;
+  $("t2").value = String(v2);
+
+  $("t1Label").textContent = $("t1").value;
+  $("t2Label").textContent = $("t2").value;
+  $("calLabel").textContent = $("calOffset").value;
+}
+
+function savePrefs(){
+  if (!CAN_STORE) return;
+  try{
+    localStorage.setItem(KEY.T1, $("t1").value);
+    localStorage.setItem(KEY.T2, $("t2").value);
+    localStorage.setItem(KEY.CAL,$("calOffset").value);
+    localStorage.setItem(KEY.AC, $("autoCal").checked ? "1" : "0");
+    localStorage.setItem(KEY.SM, $("smoothOn").checked ? "1" : "0");
+    localStorage.setItem(KEY.FO, $("faceOn").checked ? "1" : "0");
+  } catch(e){}
+}
+
+function loadPrefs(){
+  if (!CAN_STORE) return;
+  try{
+    const t1v = localStorage.getItem(KEY.T1);
+    const t2v = localStorage.getItem(KEY.T2);
+    const calv= localStorage.getItem(KEY.CAL);
+
+    if (t1v) $("t1").value = t1v;
+    if (t2v) $("t2").value = t2v;
+    if (calv) $("calOffset").value = calv;
+
+    const ac = localStorage.getItem(KEY.AC);
+    if (ac !== null) $("autoCal").checked = (ac === "1");
+
+    const sm = localStorage.getItem(KEY.SM);
+    if (sm !== null) $("smoothOn").checked = (sm === "1");
+
+    const fo = localStorage.getItem(KEY.FO);
+    if (fo !== null) $("faceOn").checked = (fo === "1");
+  } catch(e){}
+}
+
+function resetStats(){
+  noiseFloorDbFS = -60;
+  lastDbFS = -80;
+  samples = [];
+  peakDb = null;
+
+  $("dbNow").textContent = "--";
+  $("dbAvg").textContent = "--";
+  $("dbHigh").textContent = "--";
+  $("barFill").style.width = "0%";
+}
+
+function stopLoop(){
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
+async function stopAudio(){
+  stopLoop();
+
+  if (micStream){
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  if (audioCtx){
+    await audioCtx.close();
+    audioCtx = null;
+  }
+  analyser = null;
+  data = null;
+}
+
+function setUIFromState(estDb){
+  const greenAt = Number($("t1").value);
+  const redAt   = Number($("t2").value);
+
+  let chip = "READY";
+  let status = "Ready";
+  if (running){
+    chip = "LISTENING";
+    if (estDb >= redAt) status = "Too loud";
+    else if (estDb >= greenAt) status = "Getting loud";
+    else status = "Quiet";
+  } else {
+    chip = "READY";
+  }
+
+  $("stateChip").textContent = chip;
+  $("statusPill").textContent = status;
+  $("startStopBtn").textContent = running ? "Stop" : "Start";
+
+  $("subLabel").textContent = "CLICK DISPLAY TO START / STOP";
+  $("timeHint").textContent = running
+    ? "Listening… • use Options (⚙️) to adjust thresholds/calibration"
+    : "Start • allow microphone • use Options (⚙️) to adjust settings";
+}
+
+function setBgByNoise(estDb){
+  const greenAt = Number($("t1").value);
+  const redAt   = Number($("t2").value);
+
+  if (!running){
+    document.body.style.backgroundColor = "var(--bgGrey)";
+    return;
+  }
+  if (estDb >= redAt) document.body.style.backgroundColor = "var(--bgRed)";
+  else if (estDb >= greenAt) document.body.style.backgroundColor = "var(--bgOrange)";
+  else document.body.style.backgroundColor = "var(--bgGreen)";
+}
+
+function setEmojiByNoise(estDb){
+  const faceEnabled = $("faceOn").checked;
+  $("noiseEmoji").style.display = faceEnabled ? "block" : "none";
+  if (!faceEnabled) return;
+
+  const greenAt = Number($("t1").value);
+  const redAt   = Number($("t2").value);
+
+  let emoji = "🙂";          // quiet
+  if (!running) emoji = "🙂";
+  else if (estDb >= redAt) emoji = "😡";
+  else if (estDb >= greenAt) emoji = "😬";
+  else emoji = "😊";
+
+  if (emoji !== lastEmoji){
+    lastEmoji = emoji;
+    $("noiseEmoji").textContent = emoji;
+
+    // small bump animation
+    const el = $("noiseEmoji");
+    el.classList.add("bump");
+    const t = nowMs();
+    lastBumpAt = t;
+    setTimeout(()=>{
+      // avoid removing if bumped again quickly
+      if (nowMs() - lastBumpAt > 120) el.classList.remove("bump");
+    }, 140);
+  }
+}
+
+function render(){
+  if (!running || !analyser) return;
+
+  analyser.getByteTimeDomainData(data);
+
+  const rms = computeRMSFromTimeDomain(data);
+  const dbFS = rmsToDbFS(rms);
+
+  const smoothingOn = $("smoothOn").checked;
+  lastDbFS = smoothingOn ? (lastDbFS * 0.85 + dbFS * 0.15) : dbFS;
+
+  // auto-calibration (dBFS floor)
+  if ($("autoCal").checked){
+    if (lastDbFS < noiseFloorDbFS + 6){
+      noiseFloorDbFS = noiseFloorDbFS * 0.98 + lastDbFS * 0.02;
+    }
+    noiseFloorDbFS = clamp(noiseFloorDbFS, -80, -10);
+  }
+
+  // estimated +dB scale
+  const offset = Number($("calOffset").value);
+  const estDb = lastDbFS + offset;
+
+  pushSample(estDb);
+  const avg = getAvg();
+  if (peakDb === null || estDb > peakDb) peakDb = estDb;
+
+  $("dbNow").textContent = String(Math.round(estDb));
+  $("dbAvg").textContent = (avg === null) ? "--" : String(Math.round(avg));
+  $("dbHigh").textContent = (peakDb === null) ? "--" : String(Math.round(peakDb));
+
+  // bar mapping around thresholds
+  const redAt = Number($("t2").value);
+  const minDb = clamp((avg ?? estDb) - 25, 0, 120);
+  const maxDb = clamp(redAt + 15, 30, 140);
+  const pct = clamp(((estDb - minDb) / (maxDb - minDb)) * 100, 0, 100);
+  $("barFill").style.width = `${pct.toFixed(1)}%`;
+
+  setBgByNoise(estDb);
+  setUIFromState(estDb);
+  setEmojiByNoise(estDb);
+
+  rafId = requestAnimationFrame(render);
+}
+
+async function start(){
+  try{
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: false
+      }
+    });
+
+    const src = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.0;
+    src.connect(analyser);
+
+    data = new Uint8Array(analyser.fftSize);
+
+    running = true;
+    resetStats();
+    setUIFromState(0);
+    setEmojiByNoise(0);
+    stopLoop();
+    rafId = requestAnimationFrame(render);
+
+  } catch (e){
+    console.error(e);
+    running = false;
+    await stopAudio();
+    document.body.style.backgroundColor = "var(--bgGrey)";
+    $("stateChip").textContent = "MIC BLOCKED";
+    $("statusPill").textContent = "Mic blocked";
+    alert("Microphone permission was blocked or unavailable.");
+  }
+}
+
+async function stop(){
+  running = false;
+  await stopAudio();
+  document.body.style.backgroundColor = "var(--bgGrey)";
+  $("stateChip").textContent = "STOPPED";
+  $("statusPill").textContent = "Stopped";
+  $("startStopBtn").textContent = "Start";
+  setEmojiByNoise(0);
+}
+
+function toggleStartStop(){
+  running ? stop() : start();
+}
+
+/* ================= WIRING ================= */
+function wire(){
+  $("noiseBtn").addEventListener("click", toggleStartStop);
+  $("startStopBtn").addEventListener("click", toggleStartStop);
+
+  $("resetBtn").addEventListener("click", ()=>{
+    resetStats();
+    savePrefs();
+    if (!running){
+      document.body.style.backgroundColor = "var(--bgGrey)";
+      $("stateChip").textContent = "READY";
+      $("statusPill").textContent = "Ready";
+      $("noiseEmoji").textContent = "🙂";
+    }
+  });
+
+  ["t1","t2","calOffset"].forEach(id=>{
+    $(id).addEventListener("input", ()=>{
+      updateLabels();
+      savePrefs();
+    });
+  });
+
+  $("autoCal").addEventListener("change", ()=> savePrefs());
+  $("smoothOn").addEventListener("change", ()=> savePrefs());
+  $("faceOn").addEventListener("change", ()=>{
+    savePrefs();
+    setEmojiByNoise(Number($("dbNow").textContent) || 0);
+  });
+
+  $("resetAllBtn").addEventListener("click", async ()=>{
+    await stop();
+    if (CAN_STORE){
+      Object.values(KEY).forEach(k => localStorage.removeItem(k));
+    }
+    $("t1").value = "60";
+    $("t2").value = "70";
+    $("calOffset").value = "90";
+    $("autoCal").checked = true;
+    $("smoothOn").checked = true;
+    $("faceOn").checked = true;
+
+    updateLabels();
+    resetStats();
+    $("noiseEmoji").textContent = "🙂";
+    closeMenu();
+    $("stateChip").textContent = "READY";
+    $("statusPill").textContent = "Ready";
+  });
+
+  // keyboard shortcuts
+  document.addEventListener("keydown", (e)=>{
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+    if (e.key === " "){ e.preventDefault(); toggleStartStop(); }
+    if (e.key.toLowerCase() === "r"){ e.preventDefault(); resetStats(); }
+  });
+
+  // keep labels correct after bfcache restore
+  window.addEventListener("pageshow", ()=>{
+    updateLabels();
+    setUIFromState(0);
+    setEmojiByNoise(0);
+  });
+}
+
+/* ================= INIT ================= */
+function init(){
+  loadPrefs();
+  updateLabels();
+  resetStats();
+  $("noiseEmoji").textContent = "🙂";
+  setUIFromState(0);
+  setEmojiByNoise(0);
+  wire();
+}
+init();
+  </script>
+</body>
+</html>
