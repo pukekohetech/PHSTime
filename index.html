@@ -19,6 +19,10 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
   <title>Classroom Timetable Screen</title>
+
+  <!-- If you already moved everything to styles.css, uncomment this and delete the <style> block -->
+  <!-- <link rel="stylesheet" href="styles.css" /> -->
+
   <style>
     :root{
       --bgGrey:#9aa0a6;
@@ -43,6 +47,45 @@
       transition: background-color 1200ms ease;
       background: var(--bgGrey);
     }
+
+    /* ================= QUICK NAV (TOP CENTER) ================= */
+    .topNav{
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 70;
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      justify-content:center;
+      padding: 6px 8px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.40);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.12);
+    }
+    .navLink{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 8px;
+      text-decoration:none;
+      color: inherit;
+      border: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      cursor:pointer;
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1;
+      background: rgba(255,255,255,0.88);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.13);
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+      user-select:none;
+    }
+    .navLink:active{ transform: translateY(1px); }
 
     /* ================= OPTIONS BUTTON + DROPDOWN ================= */
     .controls{
@@ -164,12 +207,10 @@
       background: rgba(255,255,255,0.82);
       box-shadow: 0 14px 40px rgba(0,0,0,0.18);
       backdrop-filter: blur(6px);
-
       position: relative;
       overflow: hidden;
     }
 
-    /* Subtle progress behind text */
     .msgProgress{
       position: absolute;
       inset: 0;
@@ -192,14 +233,11 @@
     #studentMessage{
       position: relative;
       z-index: 1;
-
       outline:none;
       font-weight: 900;
       line-height: 1.05;
       letter-spacing: -0.5px;
-
       font-size: clamp(44px, 6vw, 96px);
-
       text-align: center;
       margin: 0;
       word-break: break-word;
@@ -239,7 +277,7 @@
     #countdownOverlay{
       position: fixed;
       left: 10px;
-      top: 62px; /* sits under karakiaBar */
+      top: 62px;
       z-index: 50;
       padding: 10px 14px;
       border-radius: 16px;
@@ -377,10 +415,25 @@
       font-weight: 950;
       font-size: 12px;
     }
+
+    /* Keep nav clear on small screens (so it doesn't clash with gear) */
+    @media (max-width: 520px){
+      .topNav{
+        top: 62px; /* sits under top-left / top-right buttons */
+        max-width: calc(100vw - 20px);
+        flex-wrap: wrap;
+      }
+    }
   </style>
 </head>
 
 <body>
+  <!-- QUICK NAV (TOP CENTER) -->
+  <div class="topNav" aria-label="Quick navigation">
+    <a class="navLink" href="wheel.html" title="Open Class Wheel">🎡 Wheel</a>
+    <a class="navLink" href="timer.html" title="Open Class Countdown">⏱ Timer</a>
+  </div>
+
   <!-- MAIN SCREEN KARAKIA BUTTONS (contextual) -->
   <div id="karakiaBar" aria-label="Karakia controls">
     <button id="mainOpenKarakiaBtn" class="hidden" type="button">Opening karakia</button>
@@ -680,7 +733,6 @@
   const MSG_KEY = "pukekohe_class_screen_student_message_v1";
   const defaultManualMsg = "Do Now:\nOpen your book and begin the starter.";
 
-  // sometimes set text without saving (karakia)
   function setMessageText(text, { save=true } = {}){
     msgEl.textContent = text ?? "";
     if (save) saveMsg();
@@ -698,7 +750,7 @@
   }
 
   ["input","keyup","blur","paste"].forEach(ev => msgEl.addEventListener(ev, () => {
-    if (!karakiaMode) saveMsg(); // don't overwrite normal message while showing karakia
+    if (!karakiaMode) saveMsg();
     scheduleFit();
   }));
 
@@ -805,7 +857,7 @@ Aaio ki te aorangi.`;
     karakiaMode = true;
 
     const text = (which === "open") ? getKarakiaOpen() : getKarakiaClose();
-    setMessageText(text, { save:false }); // do NOT overwrite normal saved message
+    setMessageText(text, { save:false });
     updateKarakiaBar(lastPhaseKey ?? currentPhaseKeyNow());
   }
 
@@ -833,7 +885,6 @@ Aaio ki te aorangi.`;
     alert("Karakia reset ✅");
   });
 
-  // MAIN SCREEN KARAKIA BUTTONS (top-left, contextual)
   const mainOpenBtn = $("mainOpenKarakiaBtn");
   const mainCloseBtn = $("mainCloseKarakiaBtn");
   const mainBackBtn = $("mainBackBtn");
@@ -843,7 +894,6 @@ Aaio ki te aorangi.`;
   mainBackBtn.addEventListener("click", exitKarakia);
 
   function updateKarakiaBar(phaseKey){
-    // When showing karakia: show ONLY Back
     if (karakiaMode){
       mainBackBtn.classList.remove("hidden");
       mainOpenBtn.classList.add("hidden");
@@ -1012,7 +1062,7 @@ Aaio ki te aorangi.`;
   function setMsgProgressPref(on){ localStorage.setItem(MSG_PROGRESS_KEY, on ? "1" : "0"); }
   function setMsgProgressUI(isOn){ $("msgProgressOn").checked = isOn; }
 
-  // ================= GREEN MINUTES (EASY CONTROL) =================
+  // ================= GREEN MINUTES =================
   const GREEN_MIN_KEY = "greenMin_v1";
   function getGreenMin(){
     const raw = localStorage.getItem(GREEN_MIN_KEY);
@@ -1030,7 +1080,7 @@ Aaio ki te aorangi.`;
     $("greenMinLabel").textContent = String(val);
   }
 
-  // ================= PACKUP MINUTES (EASY CONTROL) =================
+  // ================= PACKUP MINUTES =================
   const PACKUP_MIN_KEY = "pukekohe_packup_minutes_v1";
   function getPackupMin(){
     const raw = localStorage.getItem(PACKUP_MIN_KEY);
@@ -1454,7 +1504,6 @@ Aaio ki te aorangi.`;
 
     renderTimetable(current ? current.name : null);
 
-    // Progress behind message (only during active block)
     if (current){
       const total = current.e - current.s;
       const elapsed = now - current.s;
@@ -1491,14 +1540,11 @@ Aaio ki te aorangi.`;
       }
     }
 
-    // Background
     if (current && !typeConfig(current.type).usePhases) setBg(typeConfig(current.type).bg);
     else setBg(ph.bg);
 
-    // MAIN SCREEN KARAKIA BUTTON VISIBILITY (green=open, red=close, back while in karakia)
     updateKarakiaBar(ph.key);
 
-    // before-end alarms
     if (current){
       const left = secondsBetween(now, current.e);
       for (const a of alarms){
@@ -1561,7 +1607,6 @@ Aaio ki te aorangi.`;
       if (h) h.textContent = "Click the big text to edit • ⚠ Saving is blocked on this device/browser";
     }
 
-    // sliders init
     syncGreenUI();
     $("greenMin").addEventListener("input", () => { setGreenMin($("greenMin").value); update(); });
 
@@ -1570,7 +1615,6 @@ Aaio ki te aorangi.`;
     $("packupMinLabel").textContent = String(initialPack);
     $("packupMin").addEventListener("input", ()=>{ setPackupMin($("packupMin").value); update(); });
 
-    // progress toggle init
     const msgProgOn = loadMsgProgressPref();
     setMsgProgressUI(msgProgOn);
     $("msgProgressOn").addEventListener("change", ()=>{
@@ -1600,7 +1644,6 @@ Aaio ki te aorangi.`;
 
     if ($("autoMsgOn").checked) applyAutoMessage(currentPhaseKeyNow());
 
-    // fit triggers
     window.addEventListener("resize", scheduleFit);
     optionsBtn.addEventListener("click", scheduleFit);
 
@@ -1614,23 +1657,14 @@ Aaio ki te aorangi.`;
     scheduleFit();
   }
 
-
-
   init();
 
-    // ================= PWA: SERVICE WORKER REGISTER =================
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(console.error);
-  });
-}
-
-  
+  // ================= PWA: SERVICE WORKER REGISTER =================
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(console.error);
+    });
+  }
 </script>
 </body>
 </html>
-
-
-
-
-
