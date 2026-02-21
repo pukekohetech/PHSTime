@@ -902,6 +902,39 @@ button, .page-index .pillBtn, .page-index input[type="range"]{
 }
 .page-index .testBtn{ padding: 6px 8px; }
 
+/* ===== Top Navigation Links ===== */
+
+.topNav{
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 70;
+}
+
+.navBtn{
+  text-decoration: none;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 13px;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.15);
+  color: #111;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.navBtn:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.18);
+}
+
+.navBtn:active{
+  transform: translateY(0);
+}
+
 /* =========================================================
    OPTIONAL: Tiny utilities (useful if you remove inline styles)
    ========================================================= */
