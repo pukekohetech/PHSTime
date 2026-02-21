@@ -10,12 +10,11 @@
 </head>
 
 <body class="page-timer">
-  
- <nav class="appNav" aria-label="PHS Classroom Tools">
-     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+
+  <nav class="appNav" aria-label="PHS Classroom Tools">
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
     <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
-   
   </nav>
 
   <!-- OPTIONS MENU -->
@@ -90,7 +89,8 @@
       <div class="timeHint" id="timeHint">Set minutes below • then click to start</div>
     </button>
 
-    <div class="progressTrack" id="progressTrack" aria-hidden="true">
+    <!-- aria-hidden must reflect visibility; default false -->
+    <div class="progressTrack" id="progressTrack" aria-hidden="false">
       <div class="progressFill" id="progressFill"></div>
     </div>
 
@@ -128,6 +128,7 @@ function storageOK(){
     return false;
   }
 }
+const CAN_STORE = storageOK();
 
 /* ================= OPTIONS MENU ================= */
 const optionsBtn = $("optionsBtn");
@@ -224,10 +225,14 @@ function finishChime(){
 }
 
 function loadVolume(){
+  if (!CAN_STORE) return;
   const v = localStorage.getItem(VOL_KEY);
   if (v !== null) $("volume").value = v;
 }
-$("volume").addEventListener("input", ()=> localStorage.setItem(VOL_KEY, $("volume").value));
+$("volume").addEventListener("input", ()=>{
+  if (!CAN_STORE) return;
+  localStorage.setItem(VOL_KEY, $("volume").value);
+});
 
 /* ================= WAKE LOCK ================= */
 let wakeLock = null;
@@ -268,6 +273,7 @@ const TimerWidget = (() => {
   let running = false;
   let lastTickMs = 0;
   let rafId = null;
+  let wired = false;
 
   function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
 
@@ -286,7 +292,9 @@ const TimerWidget = (() => {
   }
 
   function setProgressVisible(on){
-    $("progressTrack").classList.toggle("hidden", !on);
+    const el = $("progressTrack");
+    el.classList.toggle("hidden", !on);
+    el.setAttribute("aria-hidden", on ? "false" : "true");
   }
 
   function setUI(){
@@ -320,7 +328,7 @@ const TimerWidget = (() => {
   }
 
   function savePrefs(){
-    if (!storageOK()) return;
+    if (!CAN_STORE) return;
     try{
       localStorage.setItem(KEY_MINS, String(Math.round(durationSec / 60)));
       localStorage.setItem(KEY_ENDSOUND, $("endSoundOn").checked ? "1" : "0");
@@ -330,7 +338,7 @@ const TimerWidget = (() => {
   }
 
   function loadPrefs(){
-    if (!storageOK()) return;
+    if (!CAN_STORE) return;
 
     try{
       const rawM = localStorage.getItem(KEY_MINS);
@@ -350,11 +358,8 @@ const TimerWidget = (() => {
     const m = clamp(Number(mins) || 5, 1, 15);
     durationSec = m * 60;
 
-    if (reset || (!running && remainingSec === 0) || (!running && remainingSec === durationSec)) {
-      remainingSec = durationSec;
-    } else if (!running) {
-      remainingSec = durationSec;
-    }
+    // simplified: if not running OR explicitly reset, snap remaining to new duration
+    if (reset || !running) remainingSec = durationSec;
 
     $("minsRange").value = String(m);
     $("minsLabel").textContent = String(m);
@@ -417,6 +422,12 @@ const TimerWidget = (() => {
     setUI();
   }
 
+  function syncFromCheckboxes(){
+    // fixes “sometimes” issues after bfcache / PWA resume
+    setProgressVisible($("progressOn").checked);
+    setUI();
+  }
+
   function wire(){
     $("minsRange").addEventListener("input", () => {
       setDurationMinutes($("minsRange").value, { reset: true });
@@ -451,11 +462,13 @@ const TimerWidget = (() => {
     });
 
     $("resetAllBtn").addEventListener("click", ()=>{
-      localStorage.removeItem(KEY_MINS);
-      localStorage.removeItem(KEY_ENDSOUND);
-      localStorage.removeItem(KEY_PROGRESS);
-      localStorage.removeItem(KEY_WAKE);
-      localStorage.removeItem(VOL_KEY);
+      if (CAN_STORE){
+        localStorage.removeItem(KEY_MINS);
+        localStorage.removeItem(KEY_ENDSOUND);
+        localStorage.removeItem(KEY_PROGRESS);
+        localStorage.removeItem(KEY_WAKE);
+        localStorage.removeItem(VOL_KEY);
+      }
 
       $("volume").value = "40";
       $("endSoundOn").checked = false;
@@ -470,9 +483,18 @@ const TimerWidget = (() => {
     });
 
     document.addEventListener("keydown", (e) => {
+      // avoid toggling while typing in a control
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
       if (e.key === " "){ e.preventDefault(); toggleStartPause(); }
       if (e.key.toLowerCase() === "r"){ reset(); }
     });
+
+    // Key fix for “checkbox checked but bar hidden” after restore:
+    window.addEventListener("pageshow", syncFromCheckboxes);
+
+    wired = true;
   }
 
   function init(){
@@ -485,9 +507,10 @@ const TimerWidget = (() => {
 
     if ($("wakeLockOn").checked) setWakeLock(true);
 
-    wire();
+    if (!wired) wire();
     setUI();
 
+    // prime audio on first interaction (if enabled)
     document.addEventListener("pointerdown", () => {
       if ($("endSoundOn").checked) ensureAudio();
     }, { once:true });
