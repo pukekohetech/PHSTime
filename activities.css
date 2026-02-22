@@ -40,6 +40,18 @@
         autoOpen: false,
         cssUrl: ""
       },
+    /* ---------- rando question ---------- */
+    {
+      "id": "Random_Question",
+      "name": "Random Question",
+      "type": "iframe",
+      "url": "https://faculty.washington.edu/ejslager/random-generator/index.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [],
+      "autoOpen": false,
+      "enabled": true
+    },
 
       /* ---------- Wordle Clone ---------- */
       {
