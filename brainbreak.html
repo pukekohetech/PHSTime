@@ -6,12 +6,10 @@
   <title>Brain Breaks</title>
 
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- Global Activities CSS (teacher can reload latest at any time) -->
   <link id="activitiesCssLink" rel="stylesheet" href="activities.css" />
 
   <style>
-    /* ===== Page layout (keeps your current vibe) ===== */
+    /* ===== Page layout ===== */
     .page-brain{
       min-height:100vh;
       display:grid;
@@ -143,78 +141,10 @@
       opacity: .9;
     }
 
-    /* ===== Generic modal ===== */
+    /* ===== Utilities ===== */
     .hidden{ display:none !important; }
-    .modalOverlay{
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.28);
-      backdrop-filter: blur(6px);
-      display: grid;
-      place-items: center;
-      z-index: 200;
-      padding: 14px;
-    }
-    .modalCard{
-      width: min(980px, calc(100vw - 28px));
-      height: min(90vh, 980px);
-      background: rgba(255,255,255,0.92);
-      border-radius: 22px;
-      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
-      overflow: hidden;
-      display:flex;
-      flex-direction: column;
-    }
-    .modalHeader{
-      padding: 12px 14px;
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid rgba(0,0,0,0.08);
-      background: rgba(255,255,255,0.92);
-    }
-    .modalTitle{
-      font-weight: 950;
-      letter-spacing: -0.2px;
-      display:flex;
-      align-items:center;
-      gap: 8px;
-    }
-    .modalBody{
-      padding: 12px;
-      display:flex;
-      flex-direction: column;
-      gap: 10px;
-      height: 100%;
-    }
-    .modalFrameWrap{
-      flex: 1 1 auto;
-      border-radius: 14px;
-      overflow:hidden;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-      background: rgba(255,255,255,0.8);
-    }
-    .modalFrame{
-      width: 100%;
-      height: 100%;
-      border: 0;
-    }
-    .modalHint{
-      font-size: 13px;
-      font-weight: 850;
-      opacity: .78;
-      line-height: 1.35;
-      text-align: center;
-    }
-    .modalActions{
-      display:flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
 
-    /* ===== Options panel ===== */
+    /* ===== Options Panel ===== */
     .controls{
       position: fixed;
       top: 10px;
@@ -234,12 +164,11 @@
       box-shadow: 0 10px 28px rgba(0,0,0,0.12);
       backdrop-filter: blur(6px);
     }
-
     #optionsMenu{
       position: fixed;
       top: 60px;
       right: 10px;
-      width: min(680px, calc(100vw - 20px));
+      width: min(720px, calc(100vw - 20px));
       max-height: min(84vh, 920px);
       overflow:auto;
       background: rgba(255,255,255,0.94);
@@ -336,7 +265,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 460px;
+      max-width: 500px;
     }
     .activityTags{
       margin-top: 6px;
@@ -352,6 +281,90 @@
       border-radius: 999px;
       background: rgba(0,0,0,0.06);
     }
+
+    /* ===== Generic Activity Modal (iframe) ===== */
+    .modalOverlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
+      display: grid;
+      place-items: center;
+      z-index: 200;
+      padding: 14px;
+    }
+    .modalCard{
+      width: min(980px, calc(100vw - 28px));
+      height: min(90vh, 980px);
+      background: rgba(255,255,255,0.92);
+      border-radius: 22px;
+      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+      overflow: hidden;
+      display:flex;
+      flex-direction: column;
+    }
+    .modalHeader{
+      padding: 12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.92);
+    }
+    .modalTitle{
+      font-weight: 950;
+      letter-spacing: -0.2px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+    }
+    .modalBody{
+      padding: 12px;
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+    }
+    .modalFrameWrap{
+      flex: 1 1 auto;
+      border-radius: 14px;
+      overflow:hidden;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.8);
+    }
+    .modalFrame{
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .modalHint{
+      font-size: 13px;
+      font-weight: 850;
+      opacity: .78;
+      line-height: 1.35;
+      text-align: center;
+    }
+    .modalActions{
+      display:flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ===== Hard-coded RPS Modal ===== */
+    .rpsBig{
+      font-size: clamp(90px, 18vw, 140px);
+      line-height: 1;
+      filter: drop-shadow(0 10px 22px rgba(0,0,0,0.14));
+      text-align:center;
+    }
+    .rpsLabel{
+      font-weight: 950;
+      letter-spacing: -0.3px;
+      font-size: 18px;
+      text-align:center;
+    }
   </style>
 </head>
 
@@ -365,16 +378,16 @@
     <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
   </nav>
 
-  <!-- OPTIONS BUTTON + PANEL -->
+  <!-- OPTIONS -->
   <div class="controls">
     <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️ Options</button>
   </div>
 
-  <div id="optionsMenu" class="hidden" role="dialog" aria-label="Options">
-    <div class="menuHeader" id="menuHeader" title="Drag down to close">
+  <div id="optionsMenu" class="hidden" role="dialog" aria-label="Teacher Options">
+    <div class="menuHeader">
       <div>
         <div class="menuTitle">Teacher Options</div>
-        <div class="menuHint">Add activities + reload CSS + export/import</div>
+        <div class="menuHint">Add/edit activities + reload CSS + export/import</div>
       </div>
       <button id="closeMenu" type="button" title="Close">✕</button>
     </div>
@@ -382,23 +395,23 @@
     <div class="menuBody">
       <div class="row2">
         <div>
-          <label class="small">Activities CSS URL (optional)</label>
+          <label class="small">Activities CSS URL</label>
           <input id="cssUrl" type="text" placeholder="activities.css or https://..." />
           <div class="btnRow" style="margin-top:10px;">
             <button id="applyCssBtn" class="btnPrimary" type="button">Use CSS URL</button>
             <button id="reloadCssBtn" type="button">Reload latest CSS</button>
           </div>
           <div class="menuHint" style="margin-top:8px;">
-            Tip: “Reload latest CSS” cache-busts so you can download updates any time.
+            Reload adds a cache-busting query so you always get the newest file.
           </div>
         </div>
 
         <div>
-          <label class="small">Save / Backup</label>
+          <label class="small">Backup</label>
           <div class="btnRow">
             <button id="exportBtn" class="btnPrimary" type="button">Export JSON</button>
             <button id="importBtn" type="button">Import JSON</button>
-            <button id="resetCustomBtn" type="button">Reset custom activities</button>
+            <button id="resetCustomBtn" type="button">Clear ALL activities</button>
           </div>
           <textarea id="jsonBox" placeholder="Export appears here. Paste JSON here to import."></textarea>
           <div class="menuHint">Saved in cookies (and localStorage backup).</div>
@@ -409,6 +422,7 @@
 
       <div>
         <div class="menuTitle" style="font-size:14px;">Add / Edit Activity</div>
+
         <div class="row2" style="margin-top:10px;">
           <div>
             <label class="small">Name</label>
@@ -443,7 +457,7 @@
             <label class="small">Optional per-activity CSS URL</label>
             <input id="actCss" type="text" placeholder="leave blank or https://..." />
             <div class="menuHint" style="margin-top:8px;">
-              Use this if a specific site needs special iframe styling.
+              Only use if one site needs special tweaks.
             </div>
           </div>
         </div>
@@ -458,7 +472,8 @@
       <div class="divider"></div>
 
       <div>
-        <div class="menuTitle" style="font-size:14px;">Custom Activities</div>
+        <div class="menuTitle" style="font-size:14px;">Activities List</div>
+        <div class="menuHint">Rock • Paper • Scissors is built-in and won’t appear here.</div>
         <div class="listCard" id="activityList"></div>
       </div>
     </div>
@@ -469,7 +484,7 @@
     <div class="titleRow">
       <div class="titleLeft">
         <p class="title">Brain Break Assistant</p>
-        <div class="sub" id="subLabel">PICK A BREAK • START • GO BACK TO LEARNING</div>
+        <div class="sub" id="subLabel">PICK A BREAK • AUTO-OPEN ACTIVITIES</div>
       </div>
       <div class="stateChip" id="stateChip">READY</div>
     </div>
@@ -497,14 +512,13 @@
     </div>
   </div>
 
-  <!-- ONE GENERIC ACTIVITY MODAL -->
+  <!-- ACTIVITY MODAL -->
   <div id="activityModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="activityTitle">
     <div class="modalCard">
       <div class="modalHeader">
         <div class="modalTitle" id="activityTitle">🧠 Activity</div>
         <button id="activityClose" type="button" title="Close">✕</button>
       </div>
-
       <div class="modalBody">
         <div class="modalActions">
           <button id="activityNewTab" type="button">Open in new tab</button>
@@ -522,6 +536,25 @@
     </div>
   </div>
 
+  <!-- HARD-CODED RPS MODAL -->
+  <div id="rpsModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="rpsTitle">
+    <div class="modalCard" style="width:min(520px, calc(100vw - 28px)); height:auto;">
+      <div class="modalHeader">
+        <div class="modalTitle" id="rpsTitle">🤜 Rock • Paper • Scissors</div>
+        <button id="rpsClose" type="button" title="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <div class="rpsBig" id="rpsBig">🪨</div>
+        <div class="rpsLabel" id="rpsLabel">Rock</div>
+        <div class="modalActions">
+          <button id="rpsRoll" type="button">Roll</button>
+          <button id="rpsAgain" type="button">Roll again</button>
+        </div>
+        <div class="modalHint">Click roll on “shoot!” at the same time as your partner.</div>
+      </div>
+    </div>
+  </div>
+
   <script>
 /* ================= Helpers ================= */
 const $ = (id) => document.getElementById(id);
@@ -534,7 +567,7 @@ const mmss = (totalSeconds) => {
 const uid = () => "a_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
 
 /* ================= Cookie + Storage ================= */
-const STORE_KEY = "phs_brain_config_v1";
+const STORE_KEY = "phs_brain_config_v2";
 
 function setCookie(name, value, days=365){
   const expires = new Date(Date.now() + days*864e5).toUTCString();
@@ -547,17 +580,12 @@ function getCookie(name){
     return acc;
   }, "");
 }
-
 function saveConfig(cfg){
   const json = JSON.stringify(cfg);
-  // cookies for “teacher settings”
   setCookie(STORE_KEY, json, 365);
-  // backup
   try{ localStorage.setItem(STORE_KEY, json); } catch(e){}
 }
-
 function loadConfig(){
-  // prefer cookie (as requested)
   let raw = getCookie(STORE_KEY);
   if (!raw){
     try{ raw = localStorage.getItem(STORE_KEY) || ""; } catch(e){}
@@ -566,83 +594,24 @@ function loadConfig(){
   try{ return JSON.parse(raw); } catch(e){ return null; }
 }
 
-/* ================= Default Breaks (built-in) ================= */
-const BUILTIN_BREAKS = [
-  { id:"stretch2", name:"2-min stretch break", seconds: 120, steps:[
-    "Stand up.",
-    "Reach arms up for 10s.",
-    "Shoulder rolls x10.",
-    "Neck: look left/right (slow) x5.",
-    "Shake out hands • sit back down."
-  ]},
-  { id:"walk3", name:"3-min walk + water", seconds: 180, steps:[
-    "Stand up and push chair in.",
-    "Walk calmly to the door/window and back.",
-    "Grab a sip of water.",
-    "Return to seat • ready to learn."
-  ]},
-  { id:"doodle2", name:"Quick doodle challenge (2 mins)", seconds: 120, steps:[
-    "Draw: a robot cat / lava lamp / flying toaster (pick 1).",
-    "Add 3 details (buttons, wheels, antenna, patterns).",
-    "Show a neighbour (optional)."
-  ]},
-  { id:"wyr", name:"Would you rather (1 question)", seconds: null, steps:[
-    "Teacher picks a quick question.",
-    "Students vote silently (left/right).",
-    "One student explains why (10 seconds)."
-  ]}
-];
-
-/* ================= Config Model =================
-cfg = {
-  cssUrl: "activities.css" OR "https://...",
-  customActivities: [
-    { id, name, url, mode:"iframe|newtab", tag:"...", steps:[...], cssUrl:"..." }
-  ]
-}
+/* ================= Config =================
+Teacher-managed activities ONLY.
+RPS is hard-coded and not editable.
 */
 const DEFAULT_CONFIG = {
   cssUrl: "activities.css",
-  customActivities: [
-    // examples (teacher can delete)
-    {
-      id: "wordle",
-      name: "Wordle (Daily)",
-      url: "https://powerlanguage-wordle.github.io/",
-      mode: "iframe",
-      tag: "puzzle",
-      steps: ["Play one round quietly.", "Close when done."],
-      cssUrl: ""
-    },
-    {
-      id: "braingle_photo",
-      name: "Braingle Photo Quiz",
-      url: "https://www.braingle.com/trivia/photo.php?last=1",
-      mode: "iframe",
-      tag: "quiz",
-      steps: ["Guess the object.", "Use ‘new tab’ if blocked."],
-      cssUrl: ""
-    },
-    {
-      id: "riddle_gen",
-      name: "Random Riddle Generator",
-      url: "https://randomgenerator.pro/random-riddle-generator/",
-      mode: "iframe",
-      tag: "riddle",
-      steps: ["Generate a riddle.", "Have a quick guess.", "Reveal the answer."],
-      cssUrl: ""
-    }
-  ]
+  activities: [] // teacher adds everything here
 };
 
 let CONFIG = loadConfig() || DEFAULT_CONFIG;
-saveConfig(CONFIG); // ensure cookie exists
+saveConfig(CONFIG);
 
 /* ================= CSS management ================= */
 function applyCssUrl(url){
   const link = $("activitiesCssLink");
-  link.href = url || "activities.css";
-  CONFIG.cssUrl = link.href;
+  const val = (url && url.trim()) ? url.trim() : "activities.css";
+  link.href = val;
+  CONFIG.cssUrl = val;
   $("cssUrl").value = CONFIG.cssUrl;
   saveConfig(CONFIG);
 }
@@ -650,10 +619,9 @@ function reloadCssNow(){
   const link = $("activitiesCssLink");
   const base = (CONFIG.cssUrl && CONFIG.cssUrl.trim()) ? CONFIG.cssUrl.trim() : "activities.css";
   const sep = base.includes("?") ? "&" : "?";
-  link.href = base + sep + "v=" + Date.now(); // cache-bust
+  link.href = base + sep + "v=" + Date.now();
 }
 
-/* Optional per-activity CSS injection */
 let perActivityCssEl = null;
 function setPerActivityCss(cssUrl){
   if (perActivityCssEl){
@@ -668,16 +636,28 @@ function setPerActivityCss(cssUrl){
   document.head.appendChild(perActivityCssEl);
 }
 
-/* ================= Break list composition ================= */
+/* ================= Breaks ================= */
+const RPS_BREAK = {
+  id: "rps",
+  name: "Rock, Paper, Scissors",
+  seconds: null,
+  steps: [
+    "Pair up with someone nearby.",
+    "Best of 3 rounds.",
+    "Open the RPS popup • click roll on “shoot!”."
+  ],
+  rps: true
+};
+
 function getAllBreaks(){
-  const customAsBreaks = (CONFIG.customActivities || []).map(a => ({
+  const customAsBreaks = (CONFIG.activities || []).map(a => ({
     id: a.id,
     name: a.name,
     seconds: null,
     steps: (a.steps && a.steps.length) ? a.steps : ["Open the activity and complete it."],
     activity: { url: a.url, mode: a.mode || "iframe", cssUrl: a.cssUrl || "", name: a.name }
   }));
-  return [...BUILTIN_BREAKS, ...customAsBreaks];
+  return [RPS_BREAK, ...customAsBreaks];
 }
 let BREAKS = getAllBreaks();
 
@@ -688,9 +668,9 @@ function renderActivityList(){
   const wrap = $("activityList");
   wrap.innerHTML = "";
 
-  const list = CONFIG.customActivities || [];
+  const list = CONFIG.activities || [];
   if (!list.length){
-    wrap.innerHTML = `<div class="menuHint">No custom activities yet. Add one above.</div>`;
+    wrap.innerHTML = `<div class="menuHint">No activities yet. Add one above (RPS is built-in).</div>`;
     return;
   }
 
@@ -745,7 +725,7 @@ function renderActivityList(){
 }
 
 function loadIntoForm(id){
-  const a = (CONFIG.customActivities || []).find(x => x.id === id);
+  const a = (CONFIG.activities || []).find(x => x.id === id);
   if (!a) return;
   editingId = id;
   $("actName").value = a.name || "";
@@ -769,7 +749,7 @@ function clearForm(){
 }
 
 function deleteActivity(id){
-  CONFIG.customActivities = (CONFIG.customActivities || []).filter(x => x.id !== id);
+  CONFIG.activities = (CONFIG.activities || []).filter(x => x.id !== id);
   saveConfig(CONFIG);
   BREAKS = getAllBreaks();
   renderActivityList();
@@ -790,16 +770,14 @@ function saveActivityFromForm(){
   }
 
   const id = editingId || uid();
-
   const item = { id, name, url, mode, tag, steps, cssUrl };
 
-  const list = CONFIG.customActivities || [];
+  const list = CONFIG.activities || [];
   const idx = list.findIndex(x => x.id === id);
-
   if (idx >= 0) list[idx] = item;
   else list.unshift(item);
 
-  CONFIG.customActivities = list;
+  CONFIG.activities = list;
   saveConfig(CONFIG);
 
   BREAKS = getAllBreaks();
@@ -808,17 +786,14 @@ function saveActivityFromForm(){
 }
 
 /* Export / Import */
-function exportJson(){
-  $("jsonBox").value = JSON.stringify(CONFIG, null, 2);
-}
+function exportJson(){ $("jsonBox").value = JSON.stringify(CONFIG, null, 2); }
 function importJson(){
   const raw = $("jsonBox").value.trim();
   if (!raw) return alert("Paste config JSON into the box first.");
   try{
     const cfg = JSON.parse(raw);
     if (!cfg || typeof cfg !== "object") throw new Error("Invalid JSON object.");
-    // basic sanity
-    if (!Array.isArray(cfg.customActivities)) cfg.customActivities = [];
+    if (!Array.isArray(cfg.activities)) cfg.activities = [];
     CONFIG = { ...DEFAULT_CONFIG, ...cfg };
     saveConfig(CONFIG);
     BREAKS = getAllBreaks();
@@ -830,10 +805,9 @@ function importJson(){
     alert("Import failed: " + e.message);
   }
 }
-
 function resetCustom(){
-  if (!confirm("Reset custom activities to defaults?")) return;
-  CONFIG.customActivities = DEFAULT_CONFIG.customActivities.slice();
+  if (!confirm("This will delete ALL teacher-added activities. Continue?")) return;
+  CONFIG.activities = [];
   saveConfig(CONFIG);
   BREAKS = getAllBreaks();
   renderActivityList();
@@ -853,9 +827,8 @@ function closeMenu(){
   optionsMenu.classList.add("hidden");
   optionsBtn.setAttribute("aria-expanded", "false");
 }
-function toggleMenu(){
-  optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu();
-}
+function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
+
 optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); });
 closeMenuBtn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
 document.addEventListener("pointerdown", (e)=>{
@@ -864,7 +837,6 @@ document.addEventListener("pointerdown", (e)=>{
 });
 document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeMenu(); });
 
-/* Options controls wiring */
 $("applyCssBtn").addEventListener("click", ()=> applyCssUrl($("cssUrl").value.trim()));
 $("reloadCssBtn").addEventListener("click", reloadCssNow);
 $("exportBtn").addEventListener("click", exportJson);
@@ -874,7 +846,7 @@ $("saveActBtn").addEventListener("click", saveActivityFromForm);
 $("clearActBtn").addEventListener("click", clearForm);
 
 /* ================= Activity Modal ================= */
-const modal = $("activityModal");
+const activityModal = $("activityModal");
 const frame = $("activityFrame");
 let currentActivity = null;
 
@@ -886,57 +858,70 @@ function openActivity(act){
       ? "This activity opens in a new tab."
       : "If a site blocks embedding, use “Open in new tab”.";
 
-  // set per-activity CSS
   setPerActivityCss(act.cssUrl || "");
 
   if (act.mode === "newtab"){
     window.open(act.url, "_blank", "noopener,noreferrer");
-    return; // no modal needed
+    return;
   }
 
-  // iframe mode
   frame.src = act.url;
-  modal.classList.remove("hidden");
+  activityModal.classList.remove("hidden");
 }
-
 function closeActivity(){
-  modal.classList.add("hidden");
+  activityModal.classList.add("hidden");
   frame.src = "about:blank";
   setPerActivityCss("");
   currentActivity = null;
 }
-
 $("activityClose").addEventListener("click", closeActivity);
-modal.addEventListener("pointerdown", (e)=>{ if (e.target === modal) closeActivity(); });
+activityModal.addEventListener("pointerdown", (e)=>{ if (e.target === activityModal) closeActivity(); });
 
 $("activityNewTab").addEventListener("click", ()=>{
   if (!currentActivity) return;
   window.open(currentActivity.url, "_blank", "noopener,noreferrer");
 });
-
 $("activityReloadCss").addEventListener("click", ()=>{
   reloadCssNow();
-  // also refresh per-activity css if present
   if (currentActivity && currentActivity.cssUrl) setPerActivityCss(currentActivity.cssUrl);
 });
-
 document.addEventListener("keydown", (e)=>{
-  if (e.key === "Escape" && !modal.classList.contains("hidden")) closeActivity();
+  if (e.key === "Escape" && !activityModal.classList.contains("hidden")) closeActivity();
 });
 
-/* ================= Timer / Assistant ================= */
+/* ================= Hard-coded RPS ================= */
+const RPS = [
+  { name:"Rock", emoji:"🪨" },
+  { name:"Paper", emoji:"📄" },
+  { name:"Scissors", emoji:"✂️" }
+];
+function rollRps(){
+  const pick = RPS[Math.floor(Math.random() * RPS.length)];
+  $("rpsBig").textContent = pick.emoji;
+  $("rpsLabel").textContent = pick.name;
+}
+function openRps(){
+  rollRps();
+  $("rpsModal").classList.remove("hidden");
+}
+function closeRps(){
+  $("rpsModal").classList.add("hidden");
+}
+$("rpsClose").addEventListener("click", closeRps);
+$("rpsRoll").addEventListener("click", rollRps);
+$("rpsAgain").addEventListener("click", rollRps);
+$("rpsModal").addEventListener("pointerdown", (e)=>{ if (e.target === $("rpsModal")) closeRps(); });
+document.addEventListener("keydown", (e)=>{
+  if (e.key === "Escape" && !$("rpsModal").classList.contains("hidden")) closeRps();
+});
+
+/* ================= Timer / Picker (simple) ================= */
 let current = null;
 let durationSec = 0;
 let remainingSec = 0;
 let running = false;
 let rafId = null;
 let lastTickMs = 0;
-
-function setProgressVisible(on){
-  const el = $("progressTrack");
-  el.classList.toggle("hidden", !on);
-  el.setAttribute("aria-hidden", on ? "false" : "true");
-}
 
 function setBg(){
   if (!current || (!running && remainingSec === durationSec)){
@@ -958,7 +943,6 @@ function setBg(){
 function setUI(){
   $("breakName").textContent = current ? current.name : "Tap to pick a break";
   $("breakAssist").textContent = current ? (current.steps || []).join("\n") : "Click here or press “Next”";
-
   $("timeLeft").textContent = (current && current.seconds) ? mmss(remainingSec) : "--:--";
 
   let chip = "READY";
@@ -970,7 +954,7 @@ function setUI(){
   $("stateChip").textContent = chip;
 
   $("startPauseBtn").disabled = !current || !current.seconds;
-  $("startPauseBtn").textContent = running ? "Pause" : (current && current.seconds && remainingSec === 0 ? "Restart" : "Start");
+  $("startPauseBtn").textContent = running ? "Pause" : "Start";
 
   const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 0;
   $("progressFill").style.width = `${clamp(pctDone * 100, 0, 100)}%`;
@@ -979,7 +963,7 @@ function setUI(){
   $("openActBtn").classList.toggle("hidden", !hasActivity);
 
   $("modeHint").textContent =
-    current ? (current.seconds ? "Timed" : (current.activity ? "Activity" : "Quick")) : "Any";
+    current ? (current.id === "rps" ? "Game" : "Activity") : "Any";
 
   setBg();
 }
@@ -991,7 +975,6 @@ function stopLoop(){
 
 function tickLoop(nowMs){
   if (!running) return;
-
   if (!lastTickMs) lastTickMs = nowMs;
   const dt = (nowMs - lastTickMs) / 1000;
 
@@ -1000,7 +983,6 @@ function tickLoop(nowMs){
     remainingSec = Math.max(0, remainingSec - drop);
     lastTickMs += drop * 1000;
     setUI();
-
     if (remainingSec === 0){
       running = false;
       stopLoop();
@@ -1013,36 +995,25 @@ function tickLoop(nowMs){
 
 function start(){
   if (!current || !current.seconds) return;
-  if (remainingSec === 0) remainingSec = durationSec;
   if (running) return;
   running = true;
   lastTickMs = 0;
-  setUI();
   stopLoop();
   rafId = requestAnimationFrame(tickLoop);
-}
-function pause(){
-  running = false;
-  stopLoop();
   setUI();
 }
+function pause(){ running = false; stopLoop(); setUI(); }
 function toggleStartPause(){ running ? pause() : start(); }
 
 function resetTimer(){
   pause();
-  if (current && current.seconds){
-    remainingSec = durationSec;
-  } else {
-    remainingSec = 0;
-    durationSec = 0;
-  }
+  remainingSec = durationSec;
   setUI();
 }
 
 function pickRandom(){
-  const pool = BREAKS.slice(); // all
-  if (!pool.length) return null;
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (!BREAKS.length) return null;
+  return BREAKS[Math.floor(Math.random() * BREAKS.length)];
 }
 
 function setBreak(b){
@@ -1055,8 +1026,10 @@ function setBreak(b){
 
   setUI();
 
-  // Auto-open activities (your requirement)
-  if (b.activity){
+  // Auto-open behaviour:
+  if (b.id === "rps"){
+    openRps();
+  } else if (b.activity){
     openActivity({ ...b.activity, name: b.name });
   }
 }
@@ -1073,7 +1046,6 @@ $("nextBtn").addEventListener("click", nextBreak);
 $("breakBtn").addEventListener("click", nextBreak);
 $("startPauseBtn").addEventListener("click", toggleStartPause);
 $("resetBtn").addEventListener("click", resetTimer);
-
 $("openActBtn").addEventListener("click", ()=>{
   if (current && current.activity) openActivity({ ...current.activity, name: current.name });
 });
@@ -1084,6 +1056,12 @@ document.addEventListener("keydown", (e)=>{
   if (tag === "input" || tag === "textarea" || tag === "select") return;
 
   if (e.key === " "){
+    // if RPS modal open, space rolls
+    if (!$("rpsModal").classList.contains("hidden")){
+      e.preventDefault();
+      rollRps();
+      return;
+    }
     e.preventDefault();
     toggleStartPause();
   }
@@ -1091,14 +1069,11 @@ document.addEventListener("keydown", (e)=>{
   if (e.key.toLowerCase() === "r"){ e.preventDefault(); resetTimer(); }
 });
 
-/* ================= INIT ================= */
+/* INIT */
 function init(){
-  // load css URL from config
   $("cssUrl").value = CONFIG.cssUrl || "activities.css";
   applyCssUrl(CONFIG.cssUrl || "activities.css");
-
   renderActivityList();
-  setProgressVisible(true);
   setUI();
 }
 init();
