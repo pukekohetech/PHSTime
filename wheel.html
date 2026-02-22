@@ -348,13 +348,13 @@ function loadPrefs(){
     $("tickSoundOn").checked = p.tick ?? true;
     $("confettiOn").checked  = p.conf ?? true;
     $("excludeWinnerOn").checked = p.exw ?? false;
-    $("spinSpeed").value = String(p.speed ?? 7);
+    $("spinSpeed").value = String(p.speed ?? 20);
     $("volume").value = String(p.vol ?? 40);
   }catch(e){
     $("tickSoundOn").checked=true;
     $("confettiOn").checked=true;
     $("excludeWinnerOn").checked=false;
-    $("spinSpeed").value="7";
+    $("spinSpeed").value="20";
     $("volume").value="40";
   }
   $("speedLabel").textContent = $("spinSpeed").value;
@@ -367,7 +367,7 @@ function savePrefs(){
     tick: $("tickSoundOn").checked,
     conf: $("confettiOn").checked,
     exw: $("excludeWinnerOn").checked,
-    speed: Number($("spinSpeed").value)||7,
+    speed: Number($("spinSpeed").value)||20,
     vol: Number($("volume").value)||40
   };
   localStorage.setItem(PREF_KEY, JSON.stringify(p));
@@ -1343,7 +1343,7 @@ function startSpin(){
   const centerOfIndex = winIndex*arc + arc/2;
   const desiredRotation = -Math.PI/2 - centerOfIndex;
 
-  const speed = Number($("spinSpeed").value)||7;
+  const speed = Number($("spinSpeed").value)||20;
   const durationMs = clamp(2400 - speed*160, 900, 2200);
 
   const minTurns = 1;
