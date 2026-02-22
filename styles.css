@@ -1,15 +1,18 @@
 /* =========================================================
-   PHS Classroom Tools — styles.css (FULL)
-   Works for: index.html + wheel.html + timer.html
+   PHS Classroom Tools — styles.css (FULL, UPDATED)
+   Works for:
+     - index.html (page-index)
+     - wheel.html (page-wheel)
+     - timer.html (page-timer)
+     - noise.html (page-noise)
+     - brainbreak.html (page-brain)  ✅ NEW
    Requires:
      <link rel="stylesheet" href="styles.css">
-     <body class="page-index"> / <body class="page-wheel"> / <body class="page-timer">
-   Includes:
-     - Shared menu + controls styling
-     - Top App Navigation (nice links) for ALL pages
-     - Index page layout styles
-     - Wheel page layout styles
-     - Timer page layout styles
+     <body class="page-index"> / <body class="page-wheel"> / <body class="page-timer"> / <body class="page-noise"> / <body class="page-brain">
+
+   Notes:
+     - Brain Breaks page now supports: Teacher Options panel, Activity modal (iframe), RPS modal.
+     - Keep per-site tweaks in activities.css (linked separately) to avoid editing this file often.
    ========================================================= */
 
 /* ========== Design Tokens ========== */
@@ -114,7 +117,8 @@ body{
 .page-index .appNav__btn[data-nav="index"],
 .page-wheel .appNav__btn[data-nav="wheel"],
 .page-timer .appNav__btn[data-nav="timer"],
-.page-noise .appNav__btn[data-nav="noise"]{
+.page-noise .appNav__btn[data-nav="noise"],
+.page-brain .appNav__btn[data-nav="brain"]{
   background: rgba(0,0,0,0.10);
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
 }
@@ -145,7 +149,8 @@ button,
 .pillBtn,
 input[type="range"],
 input[type="text"],
-textarea{
+textarea,
+select{
   border: 0;
   padding: 10px 12px;
   border-radius: 14px;
@@ -157,6 +162,7 @@ textarea{
   box-shadow: var(--shadow2);
   backdrop-filter: blur(6px);
   white-space: nowrap;
+  font-family: inherit;
 }
 
 button:active{ transform: translateY(1px); }
@@ -304,11 +310,19 @@ textarea{
   font-family: inherit;
   white-space: pre-wrap;
 }
+select{
+  width: 100%;
+  cursor: pointer;
+  box-shadow: none;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.85);
+  font-weight: 850;
+}
 
 .danger{ background: rgba(231, 76, 60, 0.12) !important; }
 
 /*=============================================================
-PAGE: NOISE (noise.html) 
+PAGE: NOISE (noise.html)
 =============================================================== */
 .page-noise{
   min-height:100vh;
@@ -320,6 +334,315 @@ PAGE: NOISE (noise.html)
 .page-noise #optionsMenu{
   width: min(460px, calc(100vw - 20px));
 }
+
+/* =========================================================
+   PAGE: BRAIN BREAKS (brainbreak.html)  ✅ NEW
+   ========================================================= */
+.page-brain{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background: var(--bgGrey);
+  transition: background-color 400ms ease;
+}
+.page-brain .brainCard{ margin-top: 70px; }
+
+.page-brain .brainCard{
+  width: min(760px, calc(100% - 28px));
+  background: var(--card);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  padding: 18px 18px 16px;
+  overflow: hidden;
+}
+
+.page-brain .titleRow{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.page-brain .titleLeft{
+  display:flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.page-brain .title{
+  font-weight: 950;
+  letter-spacing: -0.3px;
+  font-size: 18px;
+  margin: 0;
+}
+.page-brain .sub{
+  font-weight: 800;
+  opacity: .65;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 520px;
+}
+
+.page-brain .stateChip{
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-weight: 950;
+  font-size: 12px;
+  opacity: .85;
+  white-space: nowrap;
+}
+
+.page-brain .breakBtn{
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 18px 14px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.82);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+  backdrop-filter: blur(6px);
+  user-select: none;
+  text-align:center;
+}
+.page-brain .breakBtn:active{ transform: translateY(1px); }
+
+.page-brain .breakName{
+  font-weight: 980;
+  letter-spacing: -0.9px;
+  line-height: 1.05;
+  font-size: clamp(28px, 5vw, 52px);
+  margin: 0;
+}
+.page-brain .breakAssist{
+  margin-top: 10px;
+  text-align:center;
+  font-size: 14px;
+  font-weight: 750;
+  opacity: .78;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.page-brain .progressTrack{
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.12);
+  overflow:hidden;
+  margin: 14px 6px 10px;
+}
+.page-brain .progressFill{
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.25);
+  transition: width 160ms linear;
+}
+
+.page-brain .controlRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  justify-content: center;
+  margin-top: 6px;
+}
+.page-brain .miniRow{
+  display:flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-weight: 900;
+  font-size: 13px;
+  opacity: .9;
+}
+
+/* Brain options panel (if you use fixed panel instead of the default absolute menu) */
+.page-brain #optionsMenu{
+  width: min(720px, calc(100vw - 20px));
+  max-height: min(84vh, 920px);
+  overflow:auto;
+}
+.page-brain .menuHeader{
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,0.92);
+  z-index: 2;
+}
+
+/* Brain options: nicer form layout helpers */
+.page-brain .row2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 720px){
+  .page-brain .row2{ grid-template-columns: 1fr; }
+}
+.page-brain label.small{
+  display:block;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .75;
+  margin-bottom: 6px;
+}
+.page-brain .btnRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items:center;
+}
+.page-brain .btnPrimary{
+  background: rgba(0,0,0,0.12) !important;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
+}
+
+/* Activity list card */
+.page-brain .listCard{
+  border-radius: 14px;
+  background: rgba(0,0,0,0.04);
+  padding: 10px;
+  display:grid;
+  gap: 8px;
+}
+.page-brain .activityItem{
+  display:flex;
+  gap: 10px;
+  align-items:flex-start;
+  justify-content: space-between;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.page-brain .activityMeta{ min-width: 0; }
+.page-brain .activityName{ font-weight: 980; }
+.page-brain .activityUrl{
+  font-weight: 850;
+  opacity: .70;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 520px;
+}
+.page-brain .activityTags{
+  margin-top: 6px;
+  display:flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .75;
+}
+.page-brain .pill{
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.06);
+}
+
+/* =========================================================
+   Shared MODAL styles (Brain Breaks)
+   ========================================================= */
+.modalOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  padding: 14px;
+}
+.modalCard{
+  width: min(980px, calc(100vw - 28px));
+  height: min(90vh, 980px);
+  background: rgba(255,255,255,0.92);
+  border-radius: 22px;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+  overflow: hidden;
+  display:flex;
+  flex-direction: column;
+}
+.modalHeader{
+  padding: 12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.92);
+}
+.modalTitle{
+  font-weight: 950;
+  letter-spacing: -0.2px;
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+.modalBody{
+  padding: 12px;
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+.modalActions{
+  display:flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.modalHint{
+  font-size: 13px;
+  font-weight: 850;
+  opacity: .78;
+  line-height: 1.35;
+  text-align: center;
+}
+.modalFrameWrap{
+  flex: 1 1 auto;
+  border-radius: 14px;
+  overflow:hidden;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.8);
+}
+.modalFrame{
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* RPS visuals + animation hooks */
+.rpsBig{
+  font-size: clamp(90px, 18vw, 140px);
+  line-height: 1;
+  filter: drop-shadow(0 10px 22px rgba(0,0,0,0.14));
+  text-align:center;
+}
+.rpsLabel{
+  font-weight: 950;
+  letter-spacing: -0.3px;
+  font-size: 18px;
+  text-align:center;
+}
+.rpsBig.isRolling{
+  animation: rpsPop 220ms ease-in-out infinite;
+}
+@keyframes rpsPop{
+  0%   { transform: translateY(0) rotate(0deg) scale(1); }
+  50%  { transform: translateY(-4px) rotate(-3deg) scale(1.04); }
+  100% { transform: translateY(0) rotate(3deg) scale(1); }
+}
+.rpsLabel.isRolling{ opacity: .55; }
+
 /* =========================================================
    PAGE: INDEX (index.html)
    ========================================================= */
@@ -1031,7 +1354,7 @@ PAGE: NOISE (noise.html)
 }
 
 /* =========================================================
-   Optional small utilities (handy if removing inline styles)
+   Optional small utilities
    ========================================================= */
 .u-w-100{ width:100% !important; }
 .u-w-80{ width:80% !important; }
