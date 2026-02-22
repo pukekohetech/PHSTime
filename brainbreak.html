@@ -3,287 +3,213 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Brain Breaks</title>
+  <title>PHS Brain Breaks</title>
 
   <!-- Base shared styling -->
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
 
-  <!-- Default activities CSS (teacher can override via upload/download + local cache) -->
-  <link rel="stylesheet" href="activities.css" />
-  <script src="activities.js"></script>
-<script src="brainbreak.js"></script>
+  <!-- Activity modal + teacher styling -->
+  <link rel="stylesheet" href="activities.css">
 
   <style>
-    .page-brain{
-      min-height:100vh;
-      display:grid;
-      place-items:center;
+    /* ===============================
+       PAGE LAYOUT
+    =============================== */
+    .page-brain {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
       background: var(--bgGrey);
       transition: background-color 400ms ease;
     }
-    .page-brain .brainCard{ margin-top: 70px; }
 
-    .page-brain .appNav__btn[data-nav="brain"]{
+    .page-brain .brainCard {
+      margin-top: 70px;
+    }
+
+    .page-brain .appNav__btn[data-nav="brain"] {
       background: rgba(0,0,0,0.10);
       box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
     }
 
-    .brainCard{
-      width: min(780px, calc(100% - 28px));
+    .brainCard {
+      width: min(820px, calc(100% - 28px));
       background: var(--card);
       border-radius: 22px;
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
-      padding: 18px 18px 16px;
-      overflow: hidden;
+      padding: 20px;
     }
 
-    .titleRow{
+    .titleRow {
       display:flex;
       align-items:center;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-    .titleLeft{
-      display:flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
-    .title{
-      font-weight: 950;
-      letter-spacing: -0.3px;
-      font-size: 18px;
-      margin: 0;
-    }
-    .sub{
-      font-weight: 800;
-      opacity: .65;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 520px;
+      margin-bottom: 12px;
     }
 
-    .stateChip{
-      flex: 0 0 auto;
-      padding: 7px 12px;
+    .title {
+      font-weight: 950;
+      font-size: 20px;
+      margin: 0;
+    }
+
+    .stateChip {
+      padding: 6px 12px;
       border-radius: 999px;
       background: rgba(0,0,0,0.08);
-      font-weight: 950;
+      font-weight: 900;
       font-size: 12px;
-      opacity: .85;
-      white-space: nowrap;
     }
 
-    .breakBtn{
-      width: 100%;
-      border: 0;
+    .breakBtn {
+      width:100%;
+      padding: 24px;
       border-radius: 18px;
-      padding: 18px 14px;
+      border: 0;
       cursor: pointer;
-      background: rgba(255,255,255,0.82);
+      background: rgba(255,255,255,0.85);
       box-shadow: 0 10px 28px rgba(0,0,0,0.12);
-      backdrop-filter: blur(6px);
-      user-select: none;
       text-align:center;
     }
-    .breakBtn:active{ transform: translateY(1px); }
 
-    .breakName{
-      font-weight: 980;
-      letter-spacing: -0.9px;
-      line-height: 1.05;
-      font-size: clamp(30px, 5vw, 54px);
-      margin: 0;
+    .breakName {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 950;
+      margin:0;
     }
-    .breakAssist{
-      margin-top: 10px;
-      text-align:center;
-      font-size: 14px;
-      font-weight: 750;
-      opacity: .78;
-      line-height: 1.35;
+
+    .breakAssist {
+      margin-top:10px;
+      font-size:14px;
+      font-weight:700;
+      opacity:.75;
       white-space: pre-wrap;
     }
 
-    .progressTrack{
-      height: 12px;
-      border-radius: 999px;
+    .progressTrack {
+      height:12px;
+      border-radius:999px;
       background: rgba(0,0,0,0.12);
       overflow:hidden;
-      margin: 14px 6px 10px;
+      margin: 16px 0;
     }
-    .progressFill{
-      height: 100%;
-      width: 0%;
+
+    .progressFill {
+      height:100%;
+      width:0%;
       background: rgba(0,0,0,0.25);
       transition: width 160ms linear;
     }
 
-    .controlRow{
+    .controlRow {
       display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items:center;
-      justify-content: center;
-      margin-top: 6px;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
     }
 
-    .miniRow{
-      display:flex;
-      justify-content: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-      font-weight: 900;
-      font-size: 13px;
-      opacity: .9;
-    }
-
-    .page-brain #optionsMenu{
-      width: min(720px, calc(100vw - 20px));
-      max-height: min(84vh, 860px);
-      overflow:auto;
-    }
-    .page-brain .menuHeader{
-      position: sticky;
-      top: 0;
-      background: rgba(255,255,255,0.92);
-      z-index: 2;
+    .miniRow {
+      margin-top:12px;
+      text-align:center;
+      font-weight:900;
+      font-size:13px;
     }
   </style>
 </head>
 
 <body class="page-brain">
 
-  <nav class="appNav" aria-label="PHS Classroom Tools">
+  <!-- ===============================
+       TOP NAV
+  =============================== -->
+  <nav class="appNav">
     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
-    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Timer</a>
     <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
     <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
   </nav>
 
-  <!-- OPTIONS MENU -->
+  <!-- ===============================
+       OPTIONS MENU
+  =============================== -->
   <div class="controls">
-    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+    <button id="optionsBtn">⚙️</button>
 
-    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
-      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+    <div id="optionsMenu" class="hidden">
+      <div class="menuHeader">
         <div>
-          <div class="menuTitle">Options</div>
-          <div class="menuHint">Click outside or drag down to close</div>
+          <div class="menuTitle">Brain Break Options</div>
         </div>
-        <button id="closeMenu" type="button" title="Close">✕</button>
+        <button id="closeMenu">✕</button>
       </div>
 
       <div class="menuBody">
-        <div class="menuRow">
-          <button id="fullscreenBtn" type="button">Full screen</button>
-          <button id="resetAllBtn" type="button" class="danger">Reset (local)</button>
-        </div>
-
-        <div class="divider"></div>
 
         <div class="menuRow">
-          <span class="pillBtn" title="Play a short sound when the timer finishes">
-            <input id="endSoundOn" type="checkbox" />
-            <label for="endSoundOn">End sound</label>
-          </span>
-
-          <span class="pillBtn" title="Auto start timed breaks when picked">
-            <input id="autoStartOn" type="checkbox" checked />
-            <label for="autoStartOn">Auto-start</label>
-          </span>
-
-          <span class="pillBtn" title="Show/hide the progress bar">
-            <input id="progressOn" type="checkbox" checked />
-            <label for="progressOn">Progress</label>
-          </span>
+          <button id="fullscreenBtn">Full screen</button>
+          <button id="resetAllBtn" class="danger">Reset</button>
         </div>
 
         <div class="divider"></div>
 
         <details open>
-          <summary>Include items</summary>
-          <div class="u-h-10"></div>
-          <div id="includeList" class="u-grid u-gap-8"></div>
-          <div class="u-h-10"></div>
-          <div class="smallNote">Turn off any items you don’t want in your random picker.</div>
+          <summary>Include Activities</summary>
+          <div id="includeList" style="margin-top:10px;"></div>
         </details>
 
         <details open>
-          <summary>Teacher: Activities + CSS</summary>
-          <div class="u-h-10"></div>
-
-          <div id="teacherPanel"></div>
-
-          <div class="u-h-10"></div>
-          <div class="smallNote">
-            Tip: download a backup JSON before you make big edits.
-          </div>
-        </details>
-
-        <details>
-          <summary>Keyboard shortcuts</summary>
-          <div class="u-h-10"></div>
-          <div class="timerShortcutText">
-            <div><span class="valuePill">Space</span> Start / Pause (timed breaks)</div>
-            <div class="u-mt-8"><span class="valuePill">N</span> Next</div>
-            <div class="u-mt-8"><span class="valuePill">R</span> Reset</div>
-            <div class="u-mt-8"><span class="valuePill">O</span> Open (activities)</div>
-          </div>
+          <summary>Teacher: Activities Editor</summary>
+          <div id="teacherPanel" style="margin-top:10px;"></div>
         </details>
 
       </div>
     </div>
   </div>
 
-  <!-- CARD -->
-  <div class="brainCard" aria-label="Brain break picker">
+  <!-- ===============================
+       MAIN CARD
+  =============================== -->
+  <div class="brainCard">
+
     <div class="titleRow">
-      <div class="titleLeft">
-        <p class="title">Brain Break Assistant</p>
-        <div class="sub" id="subLabel">PICK • START • OPEN • BACK TO LEARNING</div>
-      </div>
-      <div class="stateChip" id="stateChip">READY</div>
+      <p class="title">Brain Break Assistant</p>
+      <div id="stateChip" class="stateChip">READY</div>
     </div>
 
-    <button class="breakBtn" id="breakBtn" type="button" aria-label="Brain break display button">
-      <p class="breakName" id="breakName">Tap to pick a break</p>
-      <div class="breakAssist" id="breakAssist">Click here or press “Next”</div>
+    <button class="breakBtn" id="breakBtn">
+      <p id="breakName" class="breakName">Tap to pick a break</p>
+      <div id="breakAssist" class="breakAssist">
+        Click “Pick random” or press N
+      </div>
     </button>
 
-    <div class="progressTrack" id="progressTrack" aria-hidden="false">
-      <div class="progressFill" id="progressFill"></div>
+    <div class="progressTrack">
+      <div id="progressFill" class="progressFill"></div>
     </div>
 
-    <div class="controlRow" role="group" aria-label="Controls">
-      <button id="pickBtn" type="button">Pick random</button>
-      <button id="startPauseBtn" type="button" disabled>Start</button>
-      <button id="openBtn" type="button" class="hidden">Open</button>
-      <button id="nextBtn" type="button">Next</button>
-      <button id="resetBtn" type="button">Reset</button>
+    <div class="controlRow">
+      <button id="pickBtn">Pick random</button>
+      <button id="startPauseBtn" disabled>Start</button>
+      <button id="openBtn" class="hidden">Open</button>
+      <button id="resetBtn">Reset</button>
     </div>
 
     <div class="miniRow">
-      <span class="valuePill">Time: <span id="timeLeft">--:--</span></span>
-      <span class="valuePill">Mode: <span id="modeHint">Any</span></span>
+      Time left: <span id="timeLeft">--:--</span>
     </div>
+
   </div>
 
-  <!-- Modal host (activities, RPS, riddles) injected by JS -->
+  <!-- Activity modal injected here -->
   <div id="modalHost"></div>
 
-  <!-- Default activities config (teacher can override via local storage) -->
+  <!-- ===============================
+       SCRIPTS (ORDER MATTERS)
+  =============================== -->
   <script src="activities.js"></script>
-
-  <!-- App logic -->
   <script src="brainbreak.js"></script>
+
 </body>
 </html>
