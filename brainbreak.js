@@ -27,10 +27,10 @@
 const $ = (id) => document.getElementById(id);
 
 const STORAGE = {
-  ACTIVITIES: "phs_brain_activities_v3",
-  UI_PREFS: "phs_brain_prefs_v2",
-  TEACHER_CSS_TEXT: "phs_teacher_css_text_v1",
-  TEACHER_CSS_ENABLED: "phs_teacher_css_enabled_v1",
+  ACTIVITIES: "phs_brain_activities_v4",
+  UI_PREFS: "phs_brain_prefs_v4",
+  TEACHER_CSS_TEXT: "phs_teacher_css_text_v4",
+  TEACHER_CSS_ENABLED: "phs_teacher_css_enabled_v4",
 };
 
 function storageOK() {
