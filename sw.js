@@ -8,6 +8,7 @@ const ASSETS = [
   "./noise.html",
   "./activities.css"
   "./activities.js",
+  "./brainbreak.js",
   "./timer.html",
   "./manifest.webmanifest",
   "./favicon.ico",
