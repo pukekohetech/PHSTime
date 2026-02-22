@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Brain Breaks</title>
 
-  
-  <link rel="stylesheet" href="styles.css">
-<script src="activities.js"></script>
+  <!-- Base shared styling -->
+  <link rel="stylesheet" href="styles.css" />
 
-  <link id="activitiesCssLink" rel="stylesheet" href="activities.css" />
+  <!-- Activities styling (teacher-updateable file) -->
+  <link rel="stylesheet" href="activities.css" />
 
   <style>
-    /* ===== Page layout ===== */
+    /* Page base (mirrors timer vibe) */
     .page-brain{
       min-height:100vh;
       display:grid;
@@ -22,13 +22,14 @@
     }
     .page-brain .brainCard{ margin-top: 70px; }
 
+    /* Active nav highlight */
     .page-brain .appNav__btn[data-nav="brain"]{
       background: rgba(0,0,0,0.10);
       box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
     }
 
     .brainCard{
-      width: min(760px, calc(100% - 28px));
+      width: min(720px, calc(100% - 28px));
       background: var(--card);
       border-radius: 22px;
       box-shadow: var(--shadow);
@@ -65,7 +66,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 520px;
+      max-width: 420px;
     }
 
     .stateChip{
@@ -97,7 +98,7 @@
       font-weight: 980;
       letter-spacing: -0.9px;
       line-height: 1.05;
-      font-size: clamp(28px, 5vw, 52px);
+      font-size: clamp(30px, 5vw, 54px);
       margin: 0;
     }
     .breakAssist{
@@ -144,242 +145,29 @@
       opacity: .9;
     }
 
-    /* ===== Utilities ===== */
-    .hidden{ display:none !important; }
-
-    /* ===== Options Panel ===== */
-    .controls{
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 120;
-      display:flex;
-      gap: 10px;
-      align-items:center;
-    }
-    #optionsBtn{
-      border: 0;
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-weight: 950;
-      cursor: pointer;
-      background: rgba(255,255,255,0.88);
-      box-shadow: 0 10px 28px rgba(0,0,0,0.12);
-      backdrop-filter: blur(6px);
-    }
-    #optionsMenu{
-      position: fixed;
-      top: 60px;
-      right: 10px;
-      width: min(720px, calc(100vw - 20px));
-      max-height: min(84vh, 920px);
+    .page-brain #optionsMenu{
+      width: min(560px, calc(100vw - 20px));
+      max-height: min(84vh, 860px);
       overflow:auto;
-      background: rgba(255,255,255,0.94);
-      border-radius: 18px;
-      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
-      z-index: 220;
     }
-    .menuHeader{
+    .page-brain .menuHeader{
       position: sticky;
       top: 0;
-      background: rgba(255,255,255,0.96);
+      background: rgba(255,255,255,0.92);
       z-index: 2;
-      padding: 12px 12px;
-      display:flex;
-      justify-content: space-between;
-      align-items:center;
-      border-bottom: 1px solid rgba(0,0,0,0.08);
-    }
-    .menuTitle{ font-weight: 980; }
-    .menuHint{ font-size: 12px; font-weight: 800; opacity: .70; }
-    .menuBody{ padding: 12px; display:grid; gap: 12px; }
-    .divider{ height:1px; background: rgba(0,0,0,0.08); margin: 4px 0; }
-
-    .row2{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    @media (max-width: 720px){
-      .row2{ grid-template-columns: 1fr; }
     }
 
-    label.small{
-      font-size: 12px;
-      font-weight: 900;
-      opacity: .75;
-      display:block;
-      margin-bottom: 6px;
-    }
-    input[type="text"], textarea, select{
-      width: 100%;
-      border-radius: 12px;
+    /* Small select styling for teacher editor (uses native select) */
+    select{
+      width:100%;
+      border-radius: 14px;
       border: 1px solid rgba(0,0,0,0.12);
-      padding: 10px 10px;
-      font-weight: 800;
-      outline: none;
-      background: rgba(255,255,255,0.9);
-    }
-    textarea{ min-height: 88px; resize: vertical; }
-
-    .btnRow{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      align-items:center;
-    }
-    .btnRow button{
-      border: 0;
-      border-radius: 12px;
       padding: 10px 12px;
-      font-weight: 950;
-      cursor: pointer;
-      background: rgba(0,0,0,0.08);
-    }
-    .btnPrimary{
-      background: rgba(0,0,0,0.12) !important;
-      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
-    }
-
-    .listCard{
-      border-radius: 14px;
-      background: rgba(0,0,0,0.04);
-      padding: 10px;
-      display:grid;
-      gap: 8px;
-    }
-    .activityItem{
-      display:flex;
-      gap: 10px;
-      align-items:flex-start;
-      justify-content: space-between;
-      padding: 10px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.85);
-      border: 1px solid rgba(0,0,0,0.08);
-    }
-    .activityMeta{ min-width: 0; }
-    .activityName{ font-weight: 980; }
-    .activityUrl{
-      font-weight: 850;
-      opacity: .70;
-      font-size: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 500px;
-    }
-    .activityTags{
-      margin-top: 6px;
-      display:flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      font-size: 12px;
       font-weight: 900;
-      opacity: .75;
-    }
-    .pill{
-      padding: 4px 8px;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.06);
-    }
-
-    /* ===== Generic Activity Modal (iframe) ===== */
-    .modalOverlay{
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.28);
-      backdrop-filter: blur(6px);
-      display: grid;
-      place-items: center;
-      z-index: 200;
-      padding: 14px;
-    }
-    .modalCard{
-      width: min(980px, calc(100vw - 28px));
-      height: min(90vh, 980px);
-      background: rgba(255,255,255,0.92);
-      border-radius: 22px;
-      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
-      overflow: hidden;
-      display:flex;
-      flex-direction: column;
-    }
-    .modalHeader{
-      padding: 12px 14px;
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid rgba(0,0,0,0.08);
-      background: rgba(255,255,255,0.92);
-    }
-    .modalTitle{
-      font-weight: 950;
-      letter-spacing: -0.2px;
-      display:flex;
-      align-items:center;
-      gap: 8px;
-    }
-    .modalBody{
-      padding: 12px;
-      display:flex;
-      flex-direction: column;
-      gap: 10px;
-      height: 100%;
-    }
-    .modalFrameWrap{
-      flex: 1 1 auto;
-      border-radius: 14px;
-      overflow:hidden;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.10);
       background: rgba(255,255,255,0.8);
-    }
-    .modalFrame{
-      width: 100%;
-      height: 100%;
-      border: 0;
-    }
-    .modalHint{
-      font-size: 13px;
-      font-weight: 850;
-      opacity: .78;
-      line-height: 1.35;
-      text-align: center;
-    }
-    .modalActions{
-      display:flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    /* ===== Hard-coded RPS Modal ===== */
-    .rpsBig{
-      font-size: clamp(90px, 18vw, 140px);
-      line-height: 1;
-      filter: drop-shadow(0 10px 22px rgba(0,0,0,0.14));
-      text-align:center;
-    }
-    .rpsLabel{
-      font-weight: 950;
-      letter-spacing: -0.3px;
-      font-size: 18px;
-      text-align:center;
-    }
-
-    /* --- RPS animation between rolls --- */
-    .rpsBig.isRolling{
-      animation: rpsPop 220ms ease-in-out infinite;
-    }
-    @keyframes rpsPop{
-      0%   { transform: translateY(0) rotate(0deg) scale(1); }
-      50%  { transform: translateY(-4px) rotate(-3deg) scale(1.04); }
-      100% { transform: translateY(0) rotate(3deg) scale(1); }
-    }
-    .rpsLabel.isRolling{
-      opacity: .55;
+      box-shadow: none;
+      cursor: pointer;
+      font-family: inherit;
     }
   </style>
 </head>
@@ -394,113 +182,76 @@
     <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
   </nav>
 
-  <!-- OPTIONS -->
+  <!-- OPTIONS MENU -->
   <div class="controls">
-    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️ Options</button>
-  </div>
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
 
-  <div id="optionsMenu" class="hidden" role="dialog" aria-label="Teacher Options">
-    <div class="menuHeader">
-      <div>
-        <div class="menuTitle">Teacher Options</div>
-        <div class="menuHint">Add/edit activities + reload CSS + export/import</div>
-      </div>
-      <button id="closeMenu" type="button" title="Close">✕</button>
-    </div>
-
-    <div class="menuBody">
-      <div class="row2">
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
         <div>
-          <label class="small">Activities CSS URL</label>
-          <input id="cssUrl" type="text" placeholder="activities.css or https://..." />
-          <div class="btnRow" style="margin-top:10px;">
-            <button id="applyCssBtn" class="btnPrimary" type="button">Use CSS URL</button>
-            <button id="reloadCssBtn" type="button">Reload latest CSS</button>
-          </div>
-          <div class="menuHint" style="margin-top:8px;">
-            Reload adds a cache-busting query so you always get the newest file.
-          </div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
         </div>
-
-        <div>
-          <label class="small">Backup</label>
-          <div class="btnRow">
-            <button id="exportBtn" class="btnPrimary" type="button">Export JSON</button>
-            <button id="importBtn" type="button">Import JSON</button>
-            <button id="resetCustomBtn" type="button">Clear ALL activities</button>
-          </div>
-          <textarea id="jsonBox" placeholder="Export appears here. Paste JSON here to import."></textarea>
-          <div class="menuHint">Saved in cookies (and localStorage backup).</div>
-        </div>
+        <button id="closeMenu" type="button" title="Close">✕</button>
       </div>
 
-      <div class="divider"></div>
-
-      <div>
-        <div class="menuTitle" style="font-size:14px;">Add / Edit Activity</div>
-
-        <div class="row2" style="margin-top:10px;">
-          <div>
-            <label class="small">Name</label>
-            <input id="actName" type="text" placeholder="e.g., Wordle (Daily)" />
-          </div>
-          <div>
-            <label class="small">URL</label>
-            <input id="actUrl" type="text" placeholder="https://..." />
-          </div>
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn" type="button">Full screen</button>
+          <button id="resetAllBtn" type="button">Reset</button>
         </div>
 
-        <div class="row2" style="margin-top:10px;">
-          <div>
-            <label class="small">Open mode</label>
-            <select id="actMode">
-              <option value="iframe">Popup (iframe)</option>
-              <option value="newtab">New tab</option>
-            </select>
-          </div>
-          <div>
-            <label class="small">Category tag (optional)</label>
-            <input id="actTag" type="text" placeholder="e.g., puzzle / riddle / warmup" />
-          </div>
+        <div class="divider"></div>
+
+        <div class="menuRow">
+          <span class="pillBtn" title="Play a short sound when the timer finishes">
+            <input id="endSoundOn" type="checkbox" />
+            <label for="endSoundOn">End sound</label>
+          </span>
+
+          <span class="pillBtn" title="Auto start timed breaks when picked">
+            <input id="autoStartOn" type="checkbox" checked />
+            <label for="autoStartOn">Auto-start</label>
+          </span>
+
+          <span class="pillBtn" title="Show/hide the progress bar">
+            <input id="progressOn" type="checkbox" checked />
+            <label for="progressOn">Progress</label>
+          </span>
         </div>
 
-        <div class="row2" style="margin-top:10px;">
-          <div>
-            <label class="small">Steps / Instructions (one per line)</label>
-            <textarea id="actSteps" placeholder="Play one round quietly&#10;Close when done"></textarea>
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Include items</summary>
+          <div class="u-h-10"></div>
+          <div id="includeList" class="u-grid u-gap-8"></div>
+          <div class="u-h-10"></div>
+          <div class="smallNote">Turn off any items you don’t want in your random picker.</div>
+        </details>
+
+        <details>
+          <summary>Keyboard shortcuts</summary>
+          <div class="u-h-10"></div>
+          <div class="timerShortcutText">
+            <div><span class="valuePill">Space</span> Start / Pause (timed breaks)</div>
+            <div class="u-mt-8"><span class="valuePill">N</span> Next</div>
+            <div class="u-mt-8"><span class="valuePill">R</span> Reset</div>
+            <div class="u-mt-8"><span class="valuePill">O</span> Open (activities)</div>
           </div>
-          <div>
-            <label class="small">Optional per-activity CSS URL</label>
-            <input id="actCss" type="text" placeholder="leave blank or https://..." />
-            <div class="menuHint" style="margin-top:8px;">
-              Only use if one site needs special tweaks.
-            </div>
-          </div>
-        </div>
+        </details>
 
-        <div class="btnRow" style="margin-top:10px;">
-          <button id="saveActBtn" class="btnPrimary" type="button">Save activity</button>
-          <button id="clearActBtn" type="button">Clear form</button>
-        </div>
-        <div class="menuHint" id="editHint" style="margin-top:8px;"></div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div>
-        <div class="menuTitle" style="font-size:14px;">Activities List</div>
-        <div class="menuHint">Rock • Paper • Scissors is built-in and won’t appear here.</div>
-        <div class="listCard" id="activityList"></div>
+        <!-- Teacher: Activities editor is injected here by brainbreak.js -->
       </div>
     </div>
   </div>
 
-  <!-- MAIN CARD -->
+  <!-- CARD -->
   <div class="brainCard" aria-label="Brain break picker">
     <div class="titleRow">
       <div class="titleLeft">
         <p class="title">Brain Break Assistant</p>
-        <div class="sub" id="subLabel">PICK A BREAK • AUTO-OPEN ACTIVITIES</div>
+        <div class="sub" id="subLabel">PICK • START • OPEN • BACK TO LEARNING</div>
       </div>
       <div class="stateChip" id="stateChip">READY</div>
     </div>
@@ -517,7 +268,7 @@
     <div class="controlRow" role="group" aria-label="Controls">
       <button id="pickBtn" type="button">Pick random</button>
       <button id="startPauseBtn" type="button" disabled>Start</button>
-      <button id="openActBtn" type="button" class="hidden">Open activity</button>
+      <!-- Open button is injected by brainbreak.js (id="openActivityBtn") -->
       <button id="nextBtn" type="button">Next</button>
       <button id="resetBtn" type="button">Reset</button>
     </div>
@@ -528,602 +279,10 @@
     </div>
   </div>
 
-  <!-- ACTIVITY MODAL -->
-  <div id="activityModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="activityTitle">
-    <div class="modalCard">
-      <div class="modalHeader">
-        <div class="modalTitle" id="activityTitle">🧠 Activity</div>
-        <button id="activityClose" type="button" title="Close">✕</button>
-      </div>
-      <div class="modalBody">
-        <div class="modalActions">
-          <button id="activityNewTab" type="button">Open in new tab</button>
-          <button id="activityReloadCss" type="button">Reload latest CSS</button>
-        </div>
-
-        <div class="modalFrameWrap">
-          <iframe id="activityFrame" class="modalFrame" src="about:blank" title="Activity" loading="lazy" referrerpolicy="no-referrer"></iframe>
-        </div>
-
-        <div class="modalHint" id="activityHint">
-          If a site blocks embedding, use “Open in new tab”.
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- HARD-CODED RPS MODAL -->
-  <div id="rpsModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="rpsTitle">
-    <div class="modalCard" style="width:min(520px, calc(100vw - 28px)); height:auto;">
-      <div class="modalHeader">
-        <div class="modalTitle" id="rpsTitle">🤜 Rock • Paper • Scissors</div>
-        <button id="rpsClose" type="button" title="Close">✕</button>
-      </div>
-      <div class="modalBody">
-        <div class="rpsBig" id="rpsBig">🪨</div>
-        <div class="rpsLabel" id="rpsLabel">Rock</div>
-        <div class="modalActions">
-          <button id="rpsRoll" type="button">Roll</button>
-          <button id="rpsAgain" type="button">Roll again</button>
-        </div>
-        <div class="modalHint">Click roll on “shoot!” at the same time as your partner.</div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-/* ================= Helpers ================= */
-const $ = (id) => document.getElementById(id);
-const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-const mmss = (totalSeconds) => {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2,"0")}`;
-};
-const uid = () => "a_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
-
-/* ================= Cookie + Storage ================= */
-const STORE_KEY = "phs_brain_config_v2";
-
-function setCookie(name, value, days=365){
-  const expires = new Date(Date.now() + days*864e5).toUTCString();
-  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
-}
-function getCookie(name){
-  const key = encodeURIComponent(name) + "=";
-  return document.cookie.split("; ").reduce((acc, part) => {
-    if (part.startsWith(key)) return decodeURIComponent(part.slice(key.length));
-    return acc;
-  }, "");
-}
-function saveConfig(cfg){
-  const json = JSON.stringify(cfg);
-  setCookie(STORE_KEY, json, 365);
-  try{ localStorage.setItem(STORE_KEY, json); } catch(e){}
-}
-function loadConfig(){
-  let raw = getCookie(STORE_KEY);
-  if (!raw){
-    try{ raw = localStorage.getItem(STORE_KEY) || ""; } catch(e){}
-  }
-  if (!raw) return null;
-  try{ return JSON.parse(raw); } catch(e){ return null; }
-}
-
-/* ================= Config ================= */
-const DEFAULT_CONFIG = {
-  cssUrl: "activities.css",
-  activities: []
-};
-
-let CONFIG = loadConfig() || DEFAULT_CONFIG;
-saveConfig(CONFIG);
-
-/* ================= CSS management ================= */
-function applyCssUrl(url){
-  const link = $("activitiesCssLink");
-  const val = (url && url.trim()) ? url.trim() : "activities.css";
-  link.href = val;
-  CONFIG.cssUrl = val;
-  $("cssUrl").value = CONFIG.cssUrl;
-  saveConfig(CONFIG);
-}
-function reloadCssNow(){
-  const link = $("activitiesCssLink");
-  const base = (CONFIG.cssUrl && CONFIG.cssUrl.trim()) ? CONFIG.cssUrl.trim() : "activities.css";
-  const sep = base.includes("?") ? "&" : "?";
-  link.href = base + sep + "v=" + Date.now();
-}
-
-let perActivityCssEl = null;
-function setPerActivityCss(cssUrl){
-  if (perActivityCssEl){
-    perActivityCssEl.remove();
-    perActivityCssEl = null;
-  }
-  if (!cssUrl) return;
-  perActivityCssEl = document.createElement("link");
-  perActivityCssEl.rel = "stylesheet";
-  const sep = cssUrl.includes("?") ? "&" : "?";
-  perActivityCssEl.href = cssUrl + sep + "v=" + Date.now();
-  document.head.appendChild(perActivityCssEl);
-}
-
-/* ================= Breaks ================= */
-const RPS_BREAK = {
-  id: "rps",
-  name: "Rock, Paper, Scissors",
-  seconds: null,
-  steps: [
-    "Pair up with someone nearby.",
-    "Best of 3 rounds.",
-    "Open the RPS popup • click roll on “shoot!”."
-  ],
-  rps: true
-};
-
-function getAllBreaks(){
-  const customAsBreaks = (CONFIG.activities || []).map(a => ({
-    id: a.id,
-    name: a.name,
-    seconds: null,
-    steps: (a.steps && a.steps.length) ? a.steps : ["Open the activity and complete it."],
-    activity: { url: a.url, mode: a.mode || "iframe", cssUrl: a.cssUrl || "", name: a.name }
-  }));
-  return [RPS_BREAK, ...customAsBreaks];
-}
-let BREAKS = getAllBreaks();
-
-/* ================= Options UI ================= */
-let editingId = null;
-
-function renderActivityList(){
-  const wrap = $("activityList");
-  wrap.innerHTML = "";
-
-  const list = CONFIG.activities || [];
-  if (!list.length){
-    wrap.innerHTML = `<div class="menuHint">No activities yet. Add one above (RPS is built-in).</div>`;
-    return;
-  }
-
-  list.forEach(a => {
-    const row = document.createElement("div");
-    row.className = "activityItem";
-
-    const meta = document.createElement("div");
-    meta.className = "activityMeta";
-
-    const name = document.createElement("div");
-    name.className = "activityName";
-    name.textContent = a.name || "(Untitled)";
-
-    const url = document.createElement("div");
-    url.className = "activityUrl";
-    url.textContent = a.url || "";
-
-    const tags = document.createElement("div");
-    tags.className = "activityTags";
-    tags.innerHTML = `
-      <span class="pill">${(a.mode || "iframe") === "newtab" ? "New tab" : "Popup"}</span>
-      ${a.tag ? `<span class="pill">${a.tag}</span>` : ""}
-      ${a.cssUrl ? `<span class="pill">Per-site CSS</span>` : ""}
-    `;
-
-    meta.appendChild(name);
-    meta.appendChild(url);
-    meta.appendChild(tags);
-
-    const actions = document.createElement("div");
-    actions.className = "btnRow";
-    actions.style.justifyContent = "flex-end";
-
-    const editBtn = document.createElement("button");
-    editBtn.textContent = "Edit";
-    editBtn.type = "button";
-    editBtn.addEventListener("click", ()=> loadIntoForm(a.id));
-
-    const delBtn = document.createElement("button");
-    delBtn.textContent = "Delete";
-    delBtn.type = "button";
-    delBtn.addEventListener("click", ()=> deleteActivity(a.id));
-
-    actions.appendChild(editBtn);
-    actions.appendChild(delBtn);
-
-    row.appendChild(meta);
-    row.appendChild(actions);
-    wrap.appendChild(row);
-  });
-}
-
-function loadIntoForm(id){
-  const a = (CONFIG.activities || []).find(x => x.id === id);
-  if (!a) return;
-  editingId = id;
-  $("actName").value = a.name || "";
-  $("actUrl").value = a.url || "";
-  $("actMode").value = a.mode || "iframe";
-  $("actTag").value = a.tag || "";
-  $("actSteps").value = (a.steps || []).join("\n");
-  $("actCss").value = a.cssUrl || "";
-  $("editHint").textContent = `Editing: ${a.name} (${a.id})`;
-}
-
-function clearForm(){
-  editingId = null;
-  $("actName").value = "";
-  $("actUrl").value = "";
-  $("actMode").value = "iframe";
-  $("actTag").value = "";
-  $("actSteps").value = "";
-  $("actCss").value = "";
-  $("editHint").textContent = "";
-}
-
-function deleteActivity(id){
-  CONFIG.activities = (CONFIG.activities || []).filter(x => x.id !== id);
-  saveConfig(CONFIG);
-  BREAKS = getAllBreaks();
-  renderActivityList();
-  clearForm();
-}
-
-function saveActivityFromForm(){
-  const name = $("actName").value.trim();
-  const url = $("actUrl").value.trim();
-  const mode = $("actMode").value;
-  const tag = $("actTag").value.trim();
-  const cssUrl = $("actCss").value.trim();
-  const steps = $("actSteps").value.split("\n").map(s => s.trim()).filter(Boolean);
-
-  if (!name || !url){
-    alert("Please enter at least a Name and URL.");
-    return;
-  }
-
-  const id = editingId || uid();
-  const item = { id, name, url, mode, tag, steps, cssUrl };
-
-  const list = CONFIG.activities || [];
-  const idx = list.findIndex(x => x.id === id);
-  if (idx >= 0) list[idx] = item;
-  else list.unshift(item);
-
-  CONFIG.activities = list;
-  saveConfig(CONFIG);
-
-  BREAKS = getAllBreaks();
-  renderActivityList();
-  loadIntoForm(id);
-}
-
-/* Export / Import */
-function exportJson(){ $("jsonBox").value = JSON.stringify(CONFIG, null, 2); }
-function importJson(){
-  const raw = $("jsonBox").value.trim();
-  if (!raw) return alert("Paste config JSON into the box first.");
-  try{
-    const cfg = JSON.parse(raw);
-    if (!cfg || typeof cfg !== "object") throw new Error("Invalid JSON object.");
-    if (!Array.isArray(cfg.activities)) cfg.activities = [];
-    CONFIG = { ...DEFAULT_CONFIG, ...cfg };
-    saveConfig(CONFIG);
-    BREAKS = getAllBreaks();
-    applyCssUrl(CONFIG.cssUrl || "activities.css");
-    renderActivityList();
-    clearForm();
-    alert("Imported!");
-  } catch(e){
-    alert("Import failed: " + e.message);
-  }
-}
-function resetCustom(){
-  if (!confirm("This will delete ALL teacher-added activities. Continue?")) return;
-  CONFIG.activities = [];
-  saveConfig(CONFIG);
-  BREAKS = getAllBreaks();
-  renderActivityList();
-  clearForm();
-}
-
-/* ================= Options Menu behavior ================= */
-const optionsBtn = $("optionsBtn");
-const optionsMenu = $("optionsMenu");
-const closeMenuBtn = $("closeMenu");
-
-function openMenu(){
-  optionsMenu.classList.remove("hidden");
-  optionsBtn.setAttribute("aria-expanded", "true");
-}
-function closeMenu(){
-  optionsMenu.classList.add("hidden");
-  optionsBtn.setAttribute("aria-expanded", "false");
-}
-function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
-
-optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); });
-closeMenuBtn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
-document.addEventListener("pointerdown", (e)=>{
-  if (optionsMenu.classList.contains("hidden")) return;
-  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
-});
-document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeMenu(); });
-
-$("applyCssBtn").addEventListener("click", ()=> applyCssUrl($("cssUrl").value.trim()));
-$("reloadCssBtn").addEventListener("click", reloadCssNow);
-$("exportBtn").addEventListener("click", exportJson);
-$("importBtn").addEventListener("click", importJson);
-$("resetCustomBtn").addEventListener("click", resetCustom);
-$("saveActBtn").addEventListener("click", saveActivityFromForm);
-$("clearActBtn").addEventListener("click", clearForm);
-
-/* ================= Activity Modal ================= */
-const activityModal = $("activityModal");
-const frame = $("activityFrame");
-let currentActivity = null;
-
-function openActivity(act){
-  currentActivity = act;
-  $("activityTitle").textContent = "🧠 " + (act.name || "Activity");
-  $("activityHint").textContent =
-    (act.mode === "newtab")
-      ? "This activity opens in a new tab."
-      : "If a site blocks embedding, use “Open in new tab”.";
-
-  setPerActivityCss(act.cssUrl || "");
-
-  if (act.mode === "newtab"){
-    window.open(act.url, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  frame.src = act.url;
-  activityModal.classList.remove("hidden");
-}
-function closeActivity(){
-  activityModal.classList.add("hidden");
-  frame.src = "about:blank";
-  setPerActivityCss("");
-  currentActivity = null;
-}
-$("activityClose").addEventListener("click", closeActivity);
-activityModal.addEventListener("pointerdown", (e)=>{ if (e.target === activityModal) closeActivity(); });
-
-$("activityNewTab").addEventListener("click", ()=>{
-  if (!currentActivity) return;
-  window.open(currentActivity.url, "_blank", "noopener,noreferrer");
-});
-$("activityReloadCss").addEventListener("click", ()=>{
-  reloadCssNow();
-  if (currentActivity && currentActivity.cssUrl) setPerActivityCss(currentActivity.cssUrl);
-});
-document.addEventListener("keydown", (e)=>{
-  if (e.key === "Escape" && !activityModal.classList.contains("hidden")) closeActivity();
-});
-
-/* ================= Hard-coded RPS (animated) ================= */
-const RPS = [
-  { name:"Rock", emoji:"🪨" },
-  { name:"Paper", emoji:"📄" },
-  { name:"Scissors", emoji:"✂️" }
-];
-
-let rpsRolling = false;
-let rpsTimer = null;
-let rpsFinalTimer = null;
-
-function setRpsUI(pick){
-  $("rpsBig").textContent = pick.emoji;
-  $("rpsLabel").textContent = pick.name;
-}
-
-function rollRpsAnimated(){
-  if (rpsRolling) return;
-  rpsRolling = true;
-
-  if (rpsTimer) clearInterval(rpsTimer);
-  if (rpsFinalTimer) clearTimeout(rpsFinalTimer);
-
-  $("rpsBig").classList.add("isRolling");
-  $("rpsLabel").classList.add("isRolling");
-
-  rpsTimer = setInterval(()=>{
-    const temp = RPS[Math.floor(Math.random() * RPS.length)];
-    setRpsUI(temp);
-  }, 80);
-
-  rpsFinalTimer = setTimeout(()=>{
-    clearInterval(rpsTimer);
-    rpsTimer = null;
-
-    const finalPick = RPS[Math.floor(Math.random() * RPS.length)];
-    setRpsUI(finalPick);
-
-    $("rpsBig").classList.remove("isRolling");
-    $("rpsLabel").classList.remove("isRolling");
-
-    rpsRolling = false;
-  }, 720);
-}
-
-function openRps(){
-  rollRpsAnimated();
-  $("rpsModal").classList.remove("hidden");
-}
-function closeRps(){
-  $("rpsModal").classList.add("hidden");
-}
-$("rpsClose").addEventListener("click", closeRps);
-$("rpsRoll").addEventListener("click", rollRpsAnimated);
-$("rpsAgain").addEventListener("click", rollRpsAnimated);
-$("rpsModal").addEventListener("pointerdown", (e)=>{ if (e.target === $("rpsModal")) closeRps(); });
-document.addEventListener("keydown", (e)=>{
-  if (e.key === "Escape" && !$("rpsModal").classList.contains("hidden")) closeRps();
-});
-
-/* ================= Timer / Picker (simple) ================= */
-let current = null;
-let durationSec = 0;
-let remainingSec = 0;
-let running = false;
-let rafId = null;
-let lastTickMs = 0;
-
-function setBg(){
-  if (!current || (!running && remainingSec === durationSec)){
-    document.body.style.backgroundColor = "var(--bgGrey)";
-    return;
-  }
-  if (!running && remainingSec === 0 && durationSec){
-    document.body.style.backgroundColor = "var(--bgGreen)";
-    return;
-  }
-  if (!running){
-    document.body.style.backgroundColor = "var(--bgOrange)";
-    return;
-  }
-  if (durationSec && remainingSec <= 10) document.body.style.backgroundColor = "var(--bgRed)";
-  else document.body.style.backgroundColor = "var(--bgOrange)";
-}
-
-function setUI(){
-  $("breakName").textContent = current ? current.name : "Tap to pick a break";
-  $("breakAssist").textContent = current ? (current.steps || []).join("\n") : "Click here or press “Next”";
-  $("timeLeft").textContent = (current && current.seconds) ? mmss(remainingSec) : "--:--";
-
-  let chip = "READY";
-  if (!current) chip = "READY";
-  else if (running) chip = "RUNNING";
-  else if (current.seconds && remainingSec === 0) chip = "DONE";
-  else if (current.seconds && remainingSec !== durationSec) chip = "PAUSED";
-  else chip = (current.seconds ? "READY" : "NO TIMER");
-  $("stateChip").textContent = chip;
-
-  $("startPauseBtn").disabled = !current || !current.seconds;
-  $("startPauseBtn").textContent = running ? "Pause" : "Start";
-
-  const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 0;
-  $("progressFill").style.width = `${clamp(pctDone * 100, 0, 100)}%`;
-
-  const hasActivity = !!(current && current.activity);
-  $("openActBtn").classList.toggle("hidden", !hasActivity);
-
-  $("modeHint").textContent =
-    current ? (current.id === "rps" ? "Game" : "Activity") : "Any";
-
-  setBg();
-}
-
-function stopLoop(){
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = null;
-}
-
-function tickLoop(nowMs){
-  if (!running) return;
-  if (!lastTickMs) lastTickMs = nowMs;
-  const dt = (nowMs - lastTickMs) / 1000;
-
-  if (dt >= 0.2){
-    const drop = Math.floor(dt);
-    remainingSec = Math.max(0, remainingSec - drop);
-    lastTickMs += drop * 1000;
-    setUI();
-    if (remainingSec === 0){
-      running = false;
-      stopLoop();
-      setUI();
-      return;
-    }
-  }
-  rafId = requestAnimationFrame(tickLoop);
-}
-
-function start(){
-  if (!current || !current.seconds) return;
-  if (running) return;
-  running = true;
-  lastTickMs = 0;
-  stopLoop();
-  rafId = requestAnimationFrame(tickLoop);
-  setUI();
-}
-function pause(){ running = false; stopLoop(); setUI(); }
-function toggleStartPause(){ running ? pause() : start(); }
-
-function resetTimer(){
-  pause();
-  remainingSec = durationSec;
-  setUI();
-}
-
-function pickRandom(){
-  if (!BREAKS.length) return null;
-  return BREAKS[Math.floor(Math.random() * BREAKS.length)];
-}
-
-function setBreak(b){
-  current = b;
-  running = false;
-  stopLoop();
-
-  durationSec = b.seconds ? b.seconds : 0;
-  remainingSec = durationSec;
-
-  setUI();
-
-  // Auto-open behaviour:
-  if (b.id === "rps"){
-    openRps();
-  } else if (b.activity){
-    openActivity({ ...b.activity, name: b.name });
-  }
-}
-
-function nextBreak(){
-  const b = pickRandom();
-  if (!b) return;
-  setBreak(b);
-}
-
-/* Buttons */
-$("pickBtn").addEventListener("click", nextBreak);
-$("nextBtn").addEventListener("click", nextBreak);
-$("breakBtn").addEventListener("click", nextBreak);
-$("startPauseBtn").addEventListener("click", toggleStartPause);
-$("resetBtn").addEventListener("click", resetTimer);
-$("openActBtn").addEventListener("click", ()=>{
-  if (current && current.activity) openActivity({ ...current.activity, name: current.name });
-});
-
-/* Keyboard */
-document.addEventListener("keydown", (e)=>{
-  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
-  if (tag === "input" || tag === "textarea" || tag === "select") return;
-
-  if (e.key === " "){
-    // if RPS modal open, space rolls
-    if (!$("rpsModal").classList.contains("hidden")){
-      e.preventDefault();
-      rollRpsAnimated();
-      return;
-    }
-    e.preventDefault();
-    toggleStartPause();
-  }
-  if (e.key.toLowerCase() === "n"){ e.preventDefault(); nextBreak(); }
-  if (e.key.toLowerCase() === "r"){ e.preventDefault(); resetTimer(); }
-});
-
-/* INIT */
-function init(){
-  $("cssUrl").value = CONFIG.cssUrl || "activities.css";
-  applyCssUrl(CONFIG.cssUrl || "activities.css");
-  renderActivityList();
-  setUI();
-}
-init();
-  </script>
+  <!-- Activities config (teacher-editable defaults live here) -->
+  <script src="activities.js"></script>
+
+  <!-- Main brainbreak logic -->
+  <script src="brainbreak.js"></script>
 </body>
 </html>
