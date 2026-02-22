@@ -1,5 +1,6 @@
 {
-  "activities": [
+  const DEFAULT_DATA = {
+  activities:  [
     {
       "id": "a_b23224d8e7c5619c83d38cd8",
       "name": "Fermi Problem",
