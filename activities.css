@@ -1,0 +1,28 @@
+{
+  "cssUrl": "activities.css",
+  "activities": [
+    {
+      "id": "a_542087a98ae88819c83580639",
+      "name": "Photo Guess",
+      "url": "https://www.braingle.com/trivia/photo.php",
+      "mode": "newtab",
+      "tag": "",
+      "steps": [],
+      "cssUrl": ""
+    },
+    {
+      "id": "wordle",
+      "name": "Wordle (Daily)",
+      "type": "iframe",
+      "url": "https://powerlanguage-wordle.github.io/",
+      "autoOpen": false
+    },
+    {
+      "id": "riddle",
+      "name": "Random Riddle",
+      "type": "riddle",
+      "url": "https://randomgenerator.pro/random-riddle-generator/",
+      "autoOpen": false
+    }
+  ]
+}
