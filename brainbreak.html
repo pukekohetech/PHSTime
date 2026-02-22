@@ -365,6 +365,19 @@
       font-size: 18px;
       text-align:center;
     }
+
+    /* --- RPS animation between rolls --- */
+    .rpsBig.isRolling{
+      animation: rpsPop 220ms ease-in-out infinite;
+    }
+    @keyframes rpsPop{
+      0%   { transform: translateY(0) rotate(0deg) scale(1); }
+      50%  { transform: translateY(-4px) rotate(-3deg) scale(1.04); }
+      100% { transform: translateY(0) rotate(3deg) scale(1); }
+    }
+    .rpsLabel.isRolling{
+      opacity: .55;
+    }
   </style>
 </head>
 
@@ -594,13 +607,10 @@ function loadConfig(){
   try{ return JSON.parse(raw); } catch(e){ return null; }
 }
 
-/* ================= Config =================
-Teacher-managed activities ONLY.
-RPS is hard-coded and not editable.
-*/
+/* ================= Config ================= */
 const DEFAULT_CONFIG = {
   cssUrl: "activities.css",
-  activities: [] // teacher adds everything here
+  activities: []
 };
 
 let CONFIG = loadConfig() || DEFAULT_CONFIG;
@@ -889,27 +899,61 @@ document.addEventListener("keydown", (e)=>{
   if (e.key === "Escape" && !activityModal.classList.contains("hidden")) closeActivity();
 });
 
-/* ================= Hard-coded RPS ================= */
+/* ================= Hard-coded RPS (animated) ================= */
 const RPS = [
   { name:"Rock", emoji:"🪨" },
   { name:"Paper", emoji:"📄" },
   { name:"Scissors", emoji:"✂️" }
 ];
-function rollRps(){
-  const pick = RPS[Math.floor(Math.random() * RPS.length)];
+
+let rpsRolling = false;
+let rpsTimer = null;
+let rpsFinalTimer = null;
+
+function setRpsUI(pick){
   $("rpsBig").textContent = pick.emoji;
   $("rpsLabel").textContent = pick.name;
 }
+
+function rollRpsAnimated(){
+  if (rpsRolling) return;
+  rpsRolling = true;
+
+  if (rpsTimer) clearInterval(rpsTimer);
+  if (rpsFinalTimer) clearTimeout(rpsFinalTimer);
+
+  $("rpsBig").classList.add("isRolling");
+  $("rpsLabel").classList.add("isRolling");
+
+  rpsTimer = setInterval(()=>{
+    const temp = RPS[Math.floor(Math.random() * RPS.length)];
+    setRpsUI(temp);
+  }, 80);
+
+  rpsFinalTimer = setTimeout(()=>{
+    clearInterval(rpsTimer);
+    rpsTimer = null;
+
+    const finalPick = RPS[Math.floor(Math.random() * RPS.length)];
+    setRpsUI(finalPick);
+
+    $("rpsBig").classList.remove("isRolling");
+    $("rpsLabel").classList.remove("isRolling");
+
+    rpsRolling = false;
+  }, 720);
+}
+
 function openRps(){
-  rollRps();
+  rollRpsAnimated();
   $("rpsModal").classList.remove("hidden");
 }
 function closeRps(){
   $("rpsModal").classList.add("hidden");
 }
 $("rpsClose").addEventListener("click", closeRps);
-$("rpsRoll").addEventListener("click", rollRps);
-$("rpsAgain").addEventListener("click", rollRps);
+$("rpsRoll").addEventListener("click", rollRpsAnimated);
+$("rpsAgain").addEventListener("click", rollRpsAnimated);
 $("rpsModal").addEventListener("pointerdown", (e)=>{ if (e.target === $("rpsModal")) closeRps(); });
 document.addEventListener("keydown", (e)=>{
   if (e.key === "Escape" && !$("rpsModal").classList.contains("hidden")) closeRps();
@@ -1059,7 +1103,7 @@ document.addEventListener("keydown", (e)=>{
     // if RPS modal open, space rolls
     if (!$("rpsModal").classList.contains("hidden")){
       e.preventDefault();
-      rollRps();
+      rollRpsAnimated();
       return;
     }
     e.preventDefault();
