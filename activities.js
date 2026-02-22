@@ -1,40 +1,61 @@
-window.PHS_ACTIVITIES_DEFAULTS = {
-  activities: [
+{
+  "activities": [
     {
-      id: "photo_guess",
-      name: "Photo Guess",
-      type: "newtab",
-      url: "https://www.braingle.com/trivia/photo.php",
-      autoOpen: false,
-      enabled: true,
-      steps: []
+      "id": "a_b23224d8e7c5619c83d38cd8",
+      "name": "Fermi Problem",
+      "type": "iframe",
+      "url": "https://fermi-questions.andrechek.com/",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Write instructions here…"
+      ],
+      "autoOpen": false,
+      "enabled": true
     },
     {
-      id: "wordle",
-      name: "Wordle (Daily)",
-      type: "iframe",
-      url: "https://powerlanguage-wordle.github.io/",
-      autoOpen: false,
-      enabled: true,
-      steps: []
+      "id": "photo_guess",
+      "name": "Photo Guess",
+      "type": "newtab",
+      "url": "https://www.braingle.com/trivia/photo.php",
+      "tag": "",
+      "seconds": null,
+      "steps": [],
+      "autoOpen": false,
+      "enabled": true
     },
     {
-      id: "riddle",
-      name: "Random Riddle",
-      type: "riddle",
-      url: "https://randomgenerator.pro/random-riddle-generator/",
-      autoOpen: false,
-      enabled: true,
-      steps: []
+      "id": "wordle",
+      "name": "Wordle (Daily)",
+      "type": "iframe",
+      "url": "https://powerlanguage-wordle.github.io/",
+      "tag": "",
+      "seconds": null,
+      "steps": [],
+      "autoOpen": false,
+      "enabled": true
     },
     {
-      id: "rps",
-      name: "Rock • Paper • Scissors",
-      type: "rps",
-      url: "",
-      autoOpen: true,
-      enabled: true,
-      steps: []
+      "id": "riddle",
+      "name": "Random Riddle",
+      "type": "iframe",
+      "url": "https://randomgenerator.pro/random-riddle-generator/",
+      "tag": "",
+      "seconds": null,
+      "steps": [],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
+      "id": "rps",
+      "name": "Rock • Paper • Scissors",
+      "type": "rps",
+      "url": "",
+      "tag": "",
+      "seconds": null,
+      "steps": [],
+      "autoOpen": true,
+      "enabled": true
     }
   ]
-};
+}
