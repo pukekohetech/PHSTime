@@ -72,4 +72,5 @@ const DEFAULT_DATA = {
 };
 
 // Make it accessible to other scripts if needed:
-window.PHS_DEFAULT_DATA = DEFAULT_DATA;
+//window.PHS_DEFAULT_DATA = DEFAULT_DATA;
+window.PHS_ACTIVITIES_DEFAULTS = DEFAULT_DATA;
