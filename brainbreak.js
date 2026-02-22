@@ -148,7 +148,7 @@ function defaultActivities(){
     name: "Rock • Paper • Scissors",
     type: "rps",
     enabled: true,
-    autoOpen: true,
+    autoOpen: false,
     steps: ["Open the game and roll on “shoot!”"]
   }]);
 
