@@ -24,6 +24,18 @@
       "autoOpen": false,
       "enabled": true
     },
+      {
+      "id": "Rando_Question",
+      "name": "Random Question",
+      "type": "iframe",
+      "url": "https://faculty.washington.edu/ejslager/random-generator/index.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [],
+      "autoOpen": false,
+      "enabled": true
+    },
+    
     {
       "id": "wordle",
       "name": "Wordle (Daily)",
