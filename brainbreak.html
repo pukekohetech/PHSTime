@@ -8,11 +8,10 @@
   <!-- Base shared styling -->
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Activities styling (teacher-updateable file) -->
+  <!-- Default activities CSS (teacher can override via upload/download + local cache) -->
   <link rel="stylesheet" href="activities.css" />
 
   <style>
-    /* Page base (mirrors timer vibe) */
     .page-brain{
       min-height:100vh;
       display:grid;
@@ -22,14 +21,13 @@
     }
     .page-brain .brainCard{ margin-top: 70px; }
 
-    /* Active nav highlight */
     .page-brain .appNav__btn[data-nav="brain"]{
       background: rgba(0,0,0,0.10);
       box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
     }
 
     .brainCard{
-      width: min(720px, calc(100% - 28px));
+      width: min(780px, calc(100% - 28px));
       background: var(--card);
       border-radius: 22px;
       box-shadow: var(--shadow);
@@ -66,7 +64,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 420px;
+      max-width: 520px;
     }
 
     .stateChip{
@@ -146,7 +144,7 @@
     }
 
     .page-brain #optionsMenu{
-      width: min(560px, calc(100vw - 20px));
+      width: min(720px, calc(100vw - 20px));
       max-height: min(84vh, 860px);
       overflow:auto;
     }
@@ -155,19 +153,6 @@
       top: 0;
       background: rgba(255,255,255,0.92);
       z-index: 2;
-    }
-
-    /* Small select styling for teacher editor (uses native select) */
-    select{
-      width:100%;
-      border-radius: 14px;
-      border: 1px solid rgba(0,0,0,0.12);
-      padding: 10px 12px;
-      font-weight: 900;
-      background: rgba(255,255,255,0.8);
-      box-shadow: none;
-      cursor: pointer;
-      font-family: inherit;
     }
   </style>
 </head>
@@ -198,7 +183,7 @@
       <div class="menuBody">
         <div class="menuRow">
           <button id="fullscreenBtn" type="button">Full screen</button>
-          <button id="resetAllBtn" type="button">Reset</button>
+          <button id="resetAllBtn" type="button" class="danger">Reset (local)</button>
         </div>
 
         <div class="divider"></div>
@@ -230,6 +215,18 @@
           <div class="smallNote">Turn off any items you don’t want in your random picker.</div>
         </details>
 
+        <details open>
+          <summary>Teacher: Activities + CSS</summary>
+          <div class="u-h-10"></div>
+
+          <div id="teacherPanel"></div>
+
+          <div class="u-h-10"></div>
+          <div class="smallNote">
+            Tip: download a backup JSON before you make big edits.
+          </div>
+        </details>
+
         <details>
           <summary>Keyboard shortcuts</summary>
           <div class="u-h-10"></div>
@@ -241,7 +238,6 @@
           </div>
         </details>
 
-        <!-- Teacher: Activities editor is injected here by brainbreak.js -->
       </div>
     </div>
   </div>
@@ -268,7 +264,7 @@
     <div class="controlRow" role="group" aria-label="Controls">
       <button id="pickBtn" type="button">Pick random</button>
       <button id="startPauseBtn" type="button" disabled>Start</button>
-      <!-- Open button is injected by brainbreak.js (id="openActivityBtn") -->
+      <button id="openBtn" type="button" class="hidden">Open</button>
       <button id="nextBtn" type="button">Next</button>
       <button id="resetBtn" type="button">Reset</button>
     </div>
@@ -279,10 +275,13 @@
     </div>
   </div>
 
-  <!-- Activities config (teacher-editable defaults live here) -->
+  <!-- Modal host (activities, RPS, riddles) injected by JS -->
+  <div id="modalHost"></div>
+
+  <!-- Default activities config (teacher can override via local storage) -->
   <script src="activities.js"></script>
 
-  <!-- Main brainbreak logic -->
+  <!-- App logic -->
   <script src="brainbreak.js"></script>
 </body>
 </html>
