@@ -1,4 +1,4 @@
-// activities.js
+5// activities.js
 
 const DEFAULT_DATA = {
   activities: [
@@ -65,7 +65,7 @@ const DEFAULT_DATA = {
       tag: "",
       seconds: null,
       steps: [],
-      autoOpen: true,
+      autoOpen: false,
       enabled: true
     }
   ]
