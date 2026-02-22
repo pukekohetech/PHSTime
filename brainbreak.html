@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brain Breaks</title>
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Global Activities CSS (teacher can reload latest at any time) -->
+  <link id="activitiesCssLink" rel="stylesheet" href="activities.css" />
+
+  <style>
+    /* ===== Page layout (keeps your current vibe) ===== */
+    .page-brain{
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      background: var(--bgGrey);
+      transition: background-color 400ms ease;
+    }
+    .page-brain .brainCard{ margin-top: 70px; }
+
+    .page-brain .appNav__btn[data-nav="brain"]{
+      background: rgba(0,0,0,0.10);
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
+    }
+
+    .brainCard{
+      width: min(760px, calc(100% - 28px));
+      background: var(--card);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      padding: 18px 18px 16px;
+      overflow: hidden;
+    }
+
+    .titleRow{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .titleLeft{
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .title{
+      font-weight: 950;
+      letter-spacing: -0.3px;
+      font-size: 18px;
+      margin: 0;
+    }
+    .sub{
+      font-weight: 800;
+      opacity: .65;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 520px;
+    }
+
+    .stateChip{
+      flex: 0 0 auto;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.08);
+      font-weight: 950;
+      font-size: 12px;
+      opacity: .85;
+      white-space: nowrap;
+    }
+
+    .breakBtn{
+      width: 100%;
+      border: 0;
+      border-radius: 18px;
+      padding: 18px 14px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      user-select: none;
+      text-align:center;
+    }
+    .breakBtn:active{ transform: translateY(1px); }
+
+    .breakName{
+      font-weight: 980;
+      letter-spacing: -0.9px;
+      line-height: 1.05;
+      font-size: clamp(28px, 5vw, 52px);
+      margin: 0;
+    }
+    .breakAssist{
+      margin-top: 10px;
+      text-align:center;
+      font-size: 14px;
+      font-weight: 750;
+      opacity: .78;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+
+    .progressTrack{
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.12);
+      overflow:hidden;
+      margin: 14px 6px 10px;
+    }
+    .progressFill{
+      height: 100%;
+      width: 0%;
+      background: rgba(0,0,0,0.25);
+      transition: width 160ms linear;
+    }
+
+    .controlRow{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    .miniRow{
+      display:flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-weight: 900;
+      font-size: 13px;
+      opacity: .9;
+    }
+
+    /* ===== Generic modal ===== */
+    .hidden{ display:none !important; }
+    .modalOverlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
+      display: grid;
+      place-items: center;
+      z-index: 200;
+      padding: 14px;
+    }
+    .modalCard{
+      width: min(980px, calc(100vw - 28px));
+      height: min(90vh, 980px);
+      background: rgba(255,255,255,0.92);
+      border-radius: 22px;
+      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+      overflow: hidden;
+      display:flex;
+      flex-direction: column;
+    }
+    .modalHeader{
+      padding: 12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.92);
+    }
+    .modalTitle{
+      font-weight: 950;
+      letter-spacing: -0.2px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+    }
+    .modalBody{
+      padding: 12px;
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+    }
+    .modalFrameWrap{
+      flex: 1 1 auto;
+      border-radius: 14px;
+      overflow:hidden;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.8);
+    }
+    .modalFrame{
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .modalHint{
+      font-size: 13px;
+      font-weight: 850;
+      opacity: .78;
+      line-height: 1.35;
+      text-align: center;
+    }
+    .modalActions{
+      display:flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ===== Options panel ===== */
+    .controls{
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 120;
+      display:flex;
+      gap: 10px;
+      align-items:center;
+    }
+    #optionsBtn{
+      border: 0;
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-weight: 950;
+      cursor: pointer;
+      background: rgba(255,255,255,0.88);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+    }
+
+    #optionsMenu{
+      position: fixed;
+      top: 60px;
+      right: 10px;
+      width: min(680px, calc(100vw - 20px));
+      max-height: min(84vh, 920px);
+      overflow:auto;
+      background: rgba(255,255,255,0.94);
+      border-radius: 18px;
+      box-shadow: 0 18px 44px rgba(0,0,0,0.20);
+      z-index: 220;
+    }
+    .menuHeader{
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,0.96);
+      z-index: 2;
+      padding: 12px 12px;
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .menuTitle{ font-weight: 980; }
+    .menuHint{ font-size: 12px; font-weight: 800; opacity: .70; }
+    .menuBody{ padding: 12px; display:grid; gap: 12px; }
+    .divider{ height:1px; background: rgba(0,0,0,0.08); margin: 4px 0; }
+
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 720px){
+      .row2{ grid-template-columns: 1fr; }
+    }
+
+    label.small{
+      font-size: 12px;
+      font-weight: 900;
+      opacity: .75;
+      display:block;
+      margin-bottom: 6px;
+    }
+    input[type="text"], textarea, select{
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.12);
+      padding: 10px 10px;
+      font-weight: 800;
+      outline: none;
+      background: rgba(255,255,255,0.9);
+    }
+    textarea{ min-height: 88px; resize: vertical; }
+
+    .btnRow{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      align-items:center;
+    }
+    .btnRow button{
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 950;
+      cursor: pointer;
+      background: rgba(0,0,0,0.08);
+    }
+    .btnPrimary{
+      background: rgba(0,0,0,0.12) !important;
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
+    }
+
+    .listCard{
+      border-radius: 14px;
+      background: rgba(0,0,0,0.04);
+      padding: 10px;
+      display:grid;
+      gap: 8px;
+    }
+    .activityItem{
+      display:flex;
+      gap: 10px;
+      align-items:flex-start;
+      justify-content: space-between;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.85);
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+    .activityMeta{ min-width: 0; }
+    .activityName{ font-weight: 980; }
+    .activityUrl{
+      font-weight: 850;
+      opacity: .70;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 460px;
+    }
+    .activityTags{
+      margin-top: 6px;
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      font-weight: 900;
+      opacity: .75;
+    }
+    .pill{
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.06);
+    }
+  </style>
+</head>
+
+<body class="page-brain">
+
+  <nav class="appNav" aria-label="PHS Classroom Tools">
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
+    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
+    <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
+  </nav>
+
+  <!-- OPTIONS BUTTON + PANEL -->
+  <div class="controls">
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️ Options</button>
+  </div>
+
+  <div id="optionsMenu" class="hidden" role="dialog" aria-label="Options">
+    <div class="menuHeader" id="menuHeader" title="Drag down to close">
+      <div>
+        <div class="menuTitle">Teacher Options</div>
+        <div class="menuHint">Add activities + reload CSS + export/import</div>
+      </div>
+      <button id="closeMenu" type="button" title="Close">✕</button>
+    </div>
+
+    <div class="menuBody">
+      <div class="row2">
+        <div>
+          <label class="small">Activities CSS URL (optional)</label>
+          <input id="cssUrl" type="text" placeholder="activities.css or https://..." />
+          <div class="btnRow" style="margin-top:10px;">
+            <button id="applyCssBtn" class="btnPrimary" type="button">Use CSS URL</button>
+            <button id="reloadCssBtn" type="button">Reload latest CSS</button>
+          </div>
+          <div class="menuHint" style="margin-top:8px;">
+            Tip: “Reload latest CSS” cache-busts so you can download updates any time.
+          </div>
+        </div>
+
+        <div>
+          <label class="small">Save / Backup</label>
+          <div class="btnRow">
+            <button id="exportBtn" class="btnPrimary" type="button">Export JSON</button>
+            <button id="importBtn" type="button">Import JSON</button>
+            <button id="resetCustomBtn" type="button">Reset custom activities</button>
+          </div>
+          <textarea id="jsonBox" placeholder="Export appears here. Paste JSON here to import."></textarea>
+          <div class="menuHint">Saved in cookies (and localStorage backup).</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="menuTitle" style="font-size:14px;">Add / Edit Activity</div>
+        <div class="row2" style="margin-top:10px;">
+          <div>
+            <label class="small">Name</label>
+            <input id="actName" type="text" placeholder="e.g., Wordle (Daily)" />
+          </div>
+          <div>
+            <label class="small">URL</label>
+            <input id="actUrl" type="text" placeholder="https://..." />
+          </div>
+        </div>
+
+        <div class="row2" style="margin-top:10px;">
+          <div>
+            <label class="small">Open mode</label>
+            <select id="actMode">
+              <option value="iframe">Popup (iframe)</option>
+              <option value="newtab">New tab</option>
+            </select>
+          </div>
+          <div>
+            <label class="small">Category tag (optional)</label>
+            <input id="actTag" type="text" placeholder="e.g., puzzle / riddle / warmup" />
+          </div>
+        </div>
+
+        <div class="row2" style="margin-top:10px;">
+          <div>
+            <label class="small">Steps / Instructions (one per line)</label>
+            <textarea id="actSteps" placeholder="Play one round quietly&#10;Close when done"></textarea>
+          </div>
+          <div>
+            <label class="small">Optional per-activity CSS URL</label>
+            <input id="actCss" type="text" placeholder="leave blank or https://..." />
+            <div class="menuHint" style="margin-top:8px;">
+              Use this if a specific site needs special iframe styling.
+            </div>
+          </div>
+        </div>
+
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="saveActBtn" class="btnPrimary" type="button">Save activity</button>
+          <button id="clearActBtn" type="button">Clear form</button>
+        </div>
+        <div class="menuHint" id="editHint" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="menuTitle" style="font-size:14px;">Custom Activities</div>
+        <div class="listCard" id="activityList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CARD -->
+  <div class="brainCard" aria-label="Brain break picker">
+    <div class="titleRow">
+      <div class="titleLeft">
+        <p class="title">Brain Break Assistant</p>
+        <div class="sub" id="subLabel">PICK A BREAK • START • GO BACK TO LEARNING</div>
+      </div>
+      <div class="stateChip" id="stateChip">READY</div>
+    </div>
+
+    <button class="breakBtn" id="breakBtn" type="button" aria-label="Brain break display button">
+      <p class="breakName" id="breakName">Tap to pick a break</p>
+      <div class="breakAssist" id="breakAssist">Click here or press “Next”</div>
+    </button>
+
+    <div class="progressTrack" id="progressTrack" aria-hidden="false">
+      <div class="progressFill" id="progressFill"></div>
+    </div>
+
+    <div class="controlRow" role="group" aria-label="Controls">
+      <button id="pickBtn" type="button">Pick random</button>
+      <button id="startPauseBtn" type="button" disabled>Start</button>
+      <button id="openActBtn" type="button" class="hidden">Open activity</button>
+      <button id="nextBtn" type="button">Next</button>
+      <button id="resetBtn" type="button">Reset</button>
+    </div>
+
+    <div class="miniRow">
+      <span class="valuePill">Time: <span id="timeLeft">--:--</span></span>
+      <span class="valuePill">Mode: <span id="modeHint">Any</span></span>
+    </div>
+  </div>
+
+  <!-- ONE GENERIC ACTIVITY MODAL -->
+  <div id="activityModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="activityTitle">
+    <div class="modalCard">
+      <div class="modalHeader">
+        <div class="modalTitle" id="activityTitle">🧠 Activity</div>
+        <button id="activityClose" type="button" title="Close">✕</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="modalActions">
+          <button id="activityNewTab" type="button">Open in new tab</button>
+          <button id="activityReloadCss" type="button">Reload latest CSS</button>
+        </div>
+
+        <div class="modalFrameWrap">
+          <iframe id="activityFrame" class="modalFrame" src="about:blank" title="Activity" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        </div>
+
+        <div class="modalHint" id="activityHint">
+          If a site blocks embedding, use “Open in new tab”.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+/* ================= Helpers ================= */
+const $ = (id) => document.getElementById(id);
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const mmss = (totalSeconds) => {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2,"0")}`;
+};
+const uid = () => "a_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+
+/* ================= Cookie + Storage ================= */
+const STORE_KEY = "phs_brain_config_v1";
+
+function setCookie(name, value, days=365){
+  const expires = new Date(Date.now() + days*864e5).toUTCString();
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+function getCookie(name){
+  const key = encodeURIComponent(name) + "=";
+  return document.cookie.split("; ").reduce((acc, part) => {
+    if (part.startsWith(key)) return decodeURIComponent(part.slice(key.length));
+    return acc;
+  }, "");
+}
+
+function saveConfig(cfg){
+  const json = JSON.stringify(cfg);
+  // cookies for “teacher settings”
+  setCookie(STORE_KEY, json, 365);
+  // backup
+  try{ localStorage.setItem(STORE_KEY, json); } catch(e){}
+}
+
+function loadConfig(){
+  // prefer cookie (as requested)
+  let raw = getCookie(STORE_KEY);
+  if (!raw){
+    try{ raw = localStorage.getItem(STORE_KEY) || ""; } catch(e){}
+  }
+  if (!raw) return null;
+  try{ return JSON.parse(raw); } catch(e){ return null; }
+}
+
+/* ================= Default Breaks (built-in) ================= */
+const BUILTIN_BREAKS = [
+  { id:"stretch2", name:"2-min stretch break", seconds: 120, steps:[
+    "Stand up.",
+    "Reach arms up for 10s.",
+    "Shoulder rolls x10.",
+    "Neck: look left/right (slow) x5.",
+    "Shake out hands • sit back down."
+  ]},
+  { id:"walk3", name:"3-min walk + water", seconds: 180, steps:[
+    "Stand up and push chair in.",
+    "Walk calmly to the door/window and back.",
+    "Grab a sip of water.",
+    "Return to seat • ready to learn."
+  ]},
+  { id:"doodle2", name:"Quick doodle challenge (2 mins)", seconds: 120, steps:[
+    "Draw: a robot cat / lava lamp / flying toaster (pick 1).",
+    "Add 3 details (buttons, wheels, antenna, patterns).",
+    "Show a neighbour (optional)."
+  ]},
+  { id:"wyr", name:"Would you rather (1 question)", seconds: null, steps:[
+    "Teacher picks a quick question.",
+    "Students vote silently (left/right).",
+    "One student explains why (10 seconds)."
+  ]}
+];
+
+/* ================= Config Model =================
+cfg = {
+  cssUrl: "activities.css" OR "https://...",
+  customActivities: [
+    { id, name, url, mode:"iframe|newtab", tag:"...", steps:[...], cssUrl:"..." }
+  ]
+}
+*/
+const DEFAULT_CONFIG = {
+  cssUrl: "activities.css",
+  customActivities: [
+    // examples (teacher can delete)
+    {
+      id: "wordle",
+      name: "Wordle (Daily)",
+      url: "https://powerlanguage-wordle.github.io/",
+      mode: "iframe",
+      tag: "puzzle",
+      steps: ["Play one round quietly.", "Close when done."],
+      cssUrl: ""
+    },
+    {
+      id: "braingle_photo",
+      name: "Braingle Photo Quiz",
+      url: "https://www.braingle.com/trivia/photo.php?last=1",
+      mode: "iframe",
+      tag: "quiz",
+      steps: ["Guess the object.", "Use ‘new tab’ if blocked."],
+      cssUrl: ""
+    },
+    {
+      id: "riddle_gen",
+      name: "Random Riddle Generator",
+      url: "https://randomgenerator.pro/random-riddle-generator/",
+      mode: "iframe",
+      tag: "riddle",
+      steps: ["Generate a riddle.", "Have a quick guess.", "Reveal the answer."],
+      cssUrl: ""
+    }
+  ]
+};
+
+let CONFIG = loadConfig() || DEFAULT_CONFIG;
+saveConfig(CONFIG); // ensure cookie exists
+
+/* ================= CSS management ================= */
+function applyCssUrl(url){
+  const link = $("activitiesCssLink");
+  link.href = url || "activities.css";
+  CONFIG.cssUrl = link.href;
+  $("cssUrl").value = CONFIG.cssUrl;
+  saveConfig(CONFIG);
+}
+function reloadCssNow(){
+  const link = $("activitiesCssLink");
+  const base = (CONFIG.cssUrl && CONFIG.cssUrl.trim()) ? CONFIG.cssUrl.trim() : "activities.css";
+  const sep = base.includes("?") ? "&" : "?";
+  link.href = base + sep + "v=" + Date.now(); // cache-bust
+}
+
+/* Optional per-activity CSS injection */
+let perActivityCssEl = null;
+function setPerActivityCss(cssUrl){
+  if (perActivityCssEl){
+    perActivityCssEl.remove();
+    perActivityCssEl = null;
+  }
+  if (!cssUrl) return;
+  perActivityCssEl = document.createElement("link");
+  perActivityCssEl.rel = "stylesheet";
+  const sep = cssUrl.includes("?") ? "&" : "?";
+  perActivityCssEl.href = cssUrl + sep + "v=" + Date.now();
+  document.head.appendChild(perActivityCssEl);
+}
+
+/* ================= Break list composition ================= */
+function getAllBreaks(){
+  const customAsBreaks = (CONFIG.customActivities || []).map(a => ({
+    id: a.id,
+    name: a.name,
+    seconds: null,
+    steps: (a.steps && a.steps.length) ? a.steps : ["Open the activity and complete it."],
+    activity: { url: a.url, mode: a.mode || "iframe", cssUrl: a.cssUrl || "", name: a.name }
+  }));
+  return [...BUILTIN_BREAKS, ...customAsBreaks];
+}
+let BREAKS = getAllBreaks();
+
+/* ================= Options UI ================= */
+let editingId = null;
+
+function renderActivityList(){
+  const wrap = $("activityList");
+  wrap.innerHTML = "";
+
+  const list = CONFIG.customActivities || [];
+  if (!list.length){
+    wrap.innerHTML = `<div class="menuHint">No custom activities yet. Add one above.</div>`;
+    return;
+  }
+
+  list.forEach(a => {
+    const row = document.createElement("div");
+    row.className = "activityItem";
+
+    const meta = document.createElement("div");
+    meta.className = "activityMeta";
+
+    const name = document.createElement("div");
+    name.className = "activityName";
+    name.textContent = a.name || "(Untitled)";
+
+    const url = document.createElement("div");
+    url.className = "activityUrl";
+    url.textContent = a.url || "";
+
+    const tags = document.createElement("div");
+    tags.className = "activityTags";
+    tags.innerHTML = `
+      <span class="pill">${(a.mode || "iframe") === "newtab" ? "New tab" : "Popup"}</span>
+      ${a.tag ? `<span class="pill">${a.tag}</span>` : ""}
+      ${a.cssUrl ? `<span class="pill">Per-site CSS</span>` : ""}
+    `;
+
+    meta.appendChild(name);
+    meta.appendChild(url);
+    meta.appendChild(tags);
+
+    const actions = document.createElement("div");
+    actions.className = "btnRow";
+    actions.style.justifyContent = "flex-end";
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit";
+    editBtn.type = "button";
+    editBtn.addEventListener("click", ()=> loadIntoForm(a.id));
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "Delete";
+    delBtn.type = "button";
+    delBtn.addEventListener("click", ()=> deleteActivity(a.id));
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    row.appendChild(meta);
+    row.appendChild(actions);
+    wrap.appendChild(row);
+  });
+}
+
+function loadIntoForm(id){
+  const a = (CONFIG.customActivities || []).find(x => x.id === id);
+  if (!a) return;
+  editingId = id;
+  $("actName").value = a.name || "";
+  $("actUrl").value = a.url || "";
+  $("actMode").value = a.mode || "iframe";
+  $("actTag").value = a.tag || "";
+  $("actSteps").value = (a.steps || []).join("\n");
+  $("actCss").value = a.cssUrl || "";
+  $("editHint").textContent = `Editing: ${a.name} (${a.id})`;
+}
+
+function clearForm(){
+  editingId = null;
+  $("actName").value = "";
+  $("actUrl").value = "";
+  $("actMode").value = "iframe";
+  $("actTag").value = "";
+  $("actSteps").value = "";
+  $("actCss").value = "";
+  $("editHint").textContent = "";
+}
+
+function deleteActivity(id){
+  CONFIG.customActivities = (CONFIG.customActivities || []).filter(x => x.id !== id);
+  saveConfig(CONFIG);
+  BREAKS = getAllBreaks();
+  renderActivityList();
+  clearForm();
+}
+
+function saveActivityFromForm(){
+  const name = $("actName").value.trim();
+  const url = $("actUrl").value.trim();
+  const mode = $("actMode").value;
+  const tag = $("actTag").value.trim();
+  const cssUrl = $("actCss").value.trim();
+  const steps = $("actSteps").value.split("\n").map(s => s.trim()).filter(Boolean);
+
+  if (!name || !url){
+    alert("Please enter at least a Name and URL.");
+    return;
+  }
+
+  const id = editingId || uid();
+
+  const item = { id, name, url, mode, tag, steps, cssUrl };
+
+  const list = CONFIG.customActivities || [];
+  const idx = list.findIndex(x => x.id === id);
+
+  if (idx >= 0) list[idx] = item;
+  else list.unshift(item);
+
+  CONFIG.customActivities = list;
+  saveConfig(CONFIG);
+
+  BREAKS = getAllBreaks();
+  renderActivityList();
+  loadIntoForm(id);
+}
+
+/* Export / Import */
+function exportJson(){
+  $("jsonBox").value = JSON.stringify(CONFIG, null, 2);
+}
+function importJson(){
+  const raw = $("jsonBox").value.trim();
+  if (!raw) return alert("Paste config JSON into the box first.");
+  try{
+    const cfg = JSON.parse(raw);
+    if (!cfg || typeof cfg !== "object") throw new Error("Invalid JSON object.");
+    // basic sanity
+    if (!Array.isArray(cfg.customActivities)) cfg.customActivities = [];
+    CONFIG = { ...DEFAULT_CONFIG, ...cfg };
+    saveConfig(CONFIG);
+    BREAKS = getAllBreaks();
+    applyCssUrl(CONFIG.cssUrl || "activities.css");
+    renderActivityList();
+    clearForm();
+    alert("Imported!");
+  } catch(e){
+    alert("Import failed: " + e.message);
+  }
+}
+
+function resetCustom(){
+  if (!confirm("Reset custom activities to defaults?")) return;
+  CONFIG.customActivities = DEFAULT_CONFIG.customActivities.slice();
+  saveConfig(CONFIG);
+  BREAKS = getAllBreaks();
+  renderActivityList();
+  clearForm();
+}
+
+/* ================= Options Menu behavior ================= */
+const optionsBtn = $("optionsBtn");
+const optionsMenu = $("optionsMenu");
+const closeMenuBtn = $("closeMenu");
+
+function openMenu(){
+  optionsMenu.classList.remove("hidden");
+  optionsBtn.setAttribute("aria-expanded", "true");
+}
+function closeMenu(){
+  optionsMenu.classList.add("hidden");
+  optionsBtn.setAttribute("aria-expanded", "false");
+}
+function toggleMenu(){
+  optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu();
+}
+optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); });
+closeMenuBtn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
+document.addEventListener("pointerdown", (e)=>{
+  if (optionsMenu.classList.contains("hidden")) return;
+  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+});
+document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeMenu(); });
+
+/* Options controls wiring */
+$("applyCssBtn").addEventListener("click", ()=> applyCssUrl($("cssUrl").value.trim()));
+$("reloadCssBtn").addEventListener("click", reloadCssNow);
+$("exportBtn").addEventListener("click", exportJson);
+$("importBtn").addEventListener("click", importJson);
+$("resetCustomBtn").addEventListener("click", resetCustom);
+$("saveActBtn").addEventListener("click", saveActivityFromForm);
+$("clearActBtn").addEventListener("click", clearForm);
+
+/* ================= Activity Modal ================= */
+const modal = $("activityModal");
+const frame = $("activityFrame");
+let currentActivity = null;
+
+function openActivity(act){
+  currentActivity = act;
+  $("activityTitle").textContent = "🧠 " + (act.name || "Activity");
+  $("activityHint").textContent =
+    (act.mode === "newtab")
+      ? "This activity opens in a new tab."
+      : "If a site blocks embedding, use “Open in new tab”.";
+
+  // set per-activity CSS
+  setPerActivityCss(act.cssUrl || "");
+
+  if (act.mode === "newtab"){
+    window.open(act.url, "_blank", "noopener,noreferrer");
+    return; // no modal needed
+  }
+
+  // iframe mode
+  frame.src = act.url;
+  modal.classList.remove("hidden");
+}
+
+function closeActivity(){
+  modal.classList.add("hidden");
+  frame.src = "about:blank";
+  setPerActivityCss("");
+  currentActivity = null;
+}
+
+$("activityClose").addEventListener("click", closeActivity);
+modal.addEventListener("pointerdown", (e)=>{ if (e.target === modal) closeActivity(); });
+
+$("activityNewTab").addEventListener("click", ()=>{
+  if (!currentActivity) return;
+  window.open(currentActivity.url, "_blank", "noopener,noreferrer");
+});
+
+$("activityReloadCss").addEventListener("click", ()=>{
+  reloadCssNow();
+  // also refresh per-activity css if present
+  if (currentActivity && currentActivity.cssUrl) setPerActivityCss(currentActivity.cssUrl);
+});
+
+document.addEventListener("keydown", (e)=>{
+  if (e.key === "Escape" && !modal.classList.contains("hidden")) closeActivity();
+});
+
+/* ================= Timer / Assistant ================= */
+let current = null;
+let durationSec = 0;
+let remainingSec = 0;
+let running = false;
+let rafId = null;
+let lastTickMs = 0;
+
+function setProgressVisible(on){
+  const el = $("progressTrack");
+  el.classList.toggle("hidden", !on);
+  el.setAttribute("aria-hidden", on ? "false" : "true");
+}
+
+function setBg(){
+  if (!current || (!running && remainingSec === durationSec)){
+    document.body.style.backgroundColor = "var(--bgGrey)";
+    return;
+  }
+  if (!running && remainingSec === 0 && durationSec){
+    document.body.style.backgroundColor = "var(--bgGreen)";
+    return;
+  }
+  if (!running){
+    document.body.style.backgroundColor = "var(--bgOrange)";
+    return;
+  }
+  if (durationSec && remainingSec <= 10) document.body.style.backgroundColor = "var(--bgRed)";
+  else document.body.style.backgroundColor = "var(--bgOrange)";
+}
+
+function setUI(){
+  $("breakName").textContent = current ? current.name : "Tap to pick a break";
+  $("breakAssist").textContent = current ? (current.steps || []).join("\n") : "Click here or press “Next”";
+
+  $("timeLeft").textContent = (current && current.seconds) ? mmss(remainingSec) : "--:--";
+
+  let chip = "READY";
+  if (!current) chip = "READY";
+  else if (running) chip = "RUNNING";
+  else if (current.seconds && remainingSec === 0) chip = "DONE";
+  else if (current.seconds && remainingSec !== durationSec) chip = "PAUSED";
+  else chip = (current.seconds ? "READY" : "NO TIMER");
+  $("stateChip").textContent = chip;
+
+  $("startPauseBtn").disabled = !current || !current.seconds;
+  $("startPauseBtn").textContent = running ? "Pause" : (current && current.seconds && remainingSec === 0 ? "Restart" : "Start");
+
+  const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 0;
+  $("progressFill").style.width = `${clamp(pctDone * 100, 0, 100)}%`;
+
+  const hasActivity = !!(current && current.activity);
+  $("openActBtn").classList.toggle("hidden", !hasActivity);
+
+  $("modeHint").textContent =
+    current ? (current.seconds ? "Timed" : (current.activity ? "Activity" : "Quick")) : "Any";
+
+  setBg();
+}
+
+function stopLoop(){
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
+function tickLoop(nowMs){
+  if (!running) return;
+
+  if (!lastTickMs) lastTickMs = nowMs;
+  const dt = (nowMs - lastTickMs) / 1000;
+
+  if (dt >= 0.2){
+    const drop = Math.floor(dt);
+    remainingSec = Math.max(0, remainingSec - drop);
+    lastTickMs += drop * 1000;
+    setUI();
+
+    if (remainingSec === 0){
+      running = false;
+      stopLoop();
+      setUI();
+      return;
+    }
+  }
+  rafId = requestAnimationFrame(tickLoop);
+}
+
+function start(){
+  if (!current || !current.seconds) return;
+  if (remainingSec === 0) remainingSec = durationSec;
+  if (running) return;
+  running = true;
+  lastTickMs = 0;
+  setUI();
+  stopLoop();
+  rafId = requestAnimationFrame(tickLoop);
+}
+function pause(){
+  running = false;
+  stopLoop();
+  setUI();
+}
+function toggleStartPause(){ running ? pause() : start(); }
+
+function resetTimer(){
+  pause();
+  if (current && current.seconds){
+    remainingSec = durationSec;
+  } else {
+    remainingSec = 0;
+    durationSec = 0;
+  }
+  setUI();
+}
+
+function pickRandom(){
+  const pool = BREAKS.slice(); // all
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function setBreak(b){
+  current = b;
+  running = false;
+  stopLoop();
+
+  durationSec = b.seconds ? b.seconds : 0;
+  remainingSec = durationSec;
+
+  setUI();
+
+  // Auto-open activities (your requirement)
+  if (b.activity){
+    openActivity({ ...b.activity, name: b.name });
+  }
+}
+
+function nextBreak(){
+  const b = pickRandom();
+  if (!b) return;
+  setBreak(b);
+}
+
+/* Buttons */
+$("pickBtn").addEventListener("click", nextBreak);
+$("nextBtn").addEventListener("click", nextBreak);
+$("breakBtn").addEventListener("click", nextBreak);
+$("startPauseBtn").addEventListener("click", toggleStartPause);
+$("resetBtn").addEventListener("click", resetTimer);
+
+$("openActBtn").addEventListener("click", ()=>{
+  if (current && current.activity) openActivity({ ...current.activity, name: current.name });
+});
+
+/* Keyboard */
+document.addEventListener("keydown", (e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+  if (e.key === " "){
+    e.preventDefault();
+    toggleStartPause();
+  }
+  if (e.key.toLowerCase() === "n"){ e.preventDefault(); nextBreak(); }
+  if (e.key.toLowerCase() === "r"){ e.preventDefault(); resetTimer(); }
+});
+
+/* ================= INIT ================= */
+function init(){
+  // load css URL from config
+  $("cssUrl").value = CONFIG.cssUrl || "activities.css";
+  applyCssUrl(CONFIG.cssUrl || "activities.css");
+
+  renderActivityList();
+  setProgressVisible(true);
+  setUI();
+}
+init();
+  </script>
+</body>
+</html>
