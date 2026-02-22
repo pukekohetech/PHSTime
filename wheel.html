@@ -14,8 +14,8 @@
     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
     <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
-    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
   </nav>
+
   <div class="toast" id="toast">Saved</div>
 
   <!-- OPTIONS MENU -->
@@ -125,8 +125,34 @@ Mana Award"></textarea>
           </div>
 
           <div class="smallNote u-mt-8">
-            Tip: Remove an item with the ✕ next to it in the list.
+            Tip: Remove an item with the ✕ next to it in the list. You can restore removed items below.
           </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <!-- Recently removed (restore) -->
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Recently removed</div>
+              <div class="smallNote">Restore items deleted with ✕ (per set).</div>
+            </div>
+            <button id="restoreAllBtn" type="button" title="Restore all removed items for this set">Restore all</button>
+          </div>
+
+          <!-- NEW: search trash -->
+          <div class="u-h-8"></div>
+          <input
+            id="trashSearch"
+            type="text"
+            class="searchBox"
+            placeholder="Search removed items…"
+            style="box-shadow:none;"
+          />
+
+          <div class="u-h-8"></div>
+          <div id="trashList" class="u-grid-gap-8"></div>
+          <div class="smallNote u-mt-8" id="trashHint">No removed items.</div>
         </details>
 
         <div class="divider"></div>
@@ -173,6 +199,21 @@ Mana Award"></textarea>
     <div class="sidePanel">
       <div class="miniLabel">Click an entry to include/exclude (✕ deletes)</div>
 
+      <!-- Quick add -->
+      <div class="menuRow u-mt-8" style="gap:8px;">
+        <input
+          id="quickAddInput"
+          class="u-flex-1"
+          type="text"
+          placeholder="Quick add entry…"
+          style="min-width: 0;"
+        />
+        <button id="quickAddBtn" type="button" title="Add to current set">Add</button>
+      </div>
+      <div class="smallNote u-mt-8">Adds immediately to the current set (student name or wheel option).</div>
+
+      <div class="u-h-10"></div>
+
       <input
         id="searchBox"
         class="searchBox"
@@ -216,7 +257,9 @@ Mana Award"></textarea>
    Class Wheel – robust paste parsing + per-set exclusions
    + 3 default wheels: Consequences / Treats / Brain Break
    + remembers last active set automatically
-   + "automatic saving" (debounced) for set renames, etc.
+   + automatic saving (debounced)
+   + Delete warning (confirm)
+   + Restore removed students individually (trash per set + search)
    ========================================================= */
 
 const $ = (id) => document.getElementById(id);
@@ -395,7 +438,19 @@ let activeSetId=null;
 
 function uid(){ return "set_" + Math.random().toString(16).slice(2) + Date.now().toString(16); }
 function getActiveSet(){ return sets.find(s=>s.id===activeSetId) || null; }
-function saveSets(){ if (storageOK()) localStorage.setItem(SETS_KEY, JSON.stringify(sets)); }
+
+function normalizeSet(s){
+  if (!s) return s;
+  if (!s.students) s.students = [];
+  if (!s.excludedIds) s.excludedIds = {};
+  if (!Array.isArray(s.trash)) s.trash = []; // removed items (restore)
+  return s;
+}
+
+function saveSets(){
+  if (!storageOK()) return;
+  localStorage.setItem(SETS_KEY, JSON.stringify(sets));
+}
 const saveSetsDebounced = debounce(()=>{ saveSets(); toast("Saved"); }, 350);
 
 function loadSets(){
@@ -403,9 +458,12 @@ function loadSets(){
   try{
     const raw=localStorage.getItem(SETS_KEY);
     sets = raw ? JSON.parse(raw) : [];
+    sets.forEach(normalizeSet);
   }catch(e){ sets=[]; }
 }
+
 function includedStudents(set){
+  normalizeSet(set);
   const ex=set?.excludedIds || {};
   return (set?.students || []).filter(st=>!ex[st.id]);
 }
@@ -416,43 +474,21 @@ const DEFAULT_TREATS_NAME       = "Default • Treats";
 const DEFAULT_BRAINBREAK_NAME   = "Default • Brain Break";
 
 const DEFAULT_CONSEQUENCES = [
-  "Cleanup Duty",
-  "Help Tidy Classroom",
-  "Board Cleaning Duty",
-  "Pack-up Supervision",
-  "Seat Change",
-  "Extra Practice Question",
-  "5-Minute Quiet Reflection",
-  "Lunch Time Catch-Up",
-  "After-School Reflection",
-  "Teacher’s Choice"
+  "Cleanup Duty","Help Tidy Classroom","Board Cleaning Duty","Pack-up Supervision",
+  "Seat Change","Extra Practice Question","5-Minute Quiet Reflection","Lunch Time Catch-Up",
+  "After-School Reflection","Teacher’s Choice"
 ];
 
 const DEFAULT_TREATS = [
-  "Mana Award",
-  "5 Bonus House Points",
-  "Teacher Shout-Out",
-  "Positive Call Home",
-  "Early Pack-up Pass",
-  "Lucky Escape",
-  "Choose the Music (2 mins)",
-  "Free Choice Activity (5 mins)",
-  "Tech Time (5 mins)",
-  "Class Vote",
-  "Spin Again",
-  "Double Spin"
+  "Mana Award","5 Bonus House Points","Teacher Shout-Out","Positive Call Home",
+  "Early Pack-up Pass","Lucky Escape","Choose the Music (2 mins)","Free Choice Activity (5 mins)",
+  "Tech Time (5 mins)","Class Vote","Spin Again","Double Spin"
 ];
 
 const DEFAULT_BRAIN_BREAKS = [
-  "2-min stretch break",
-  "3-min walk + water",
-  "Quick doodle challenge (2 mins)",
-  "Would you rather (1 question)",
-  "Rock, Paper, Scissors",
-  "Trivia Question",
-  "Silent ball (3 mins)",
-  "Breathing reset (60s)",
-  "Desk tidy sprint (90s)"
+  "2-min stretch break","3-min walk + water","Quick doodle challenge (2 mins)",
+  "Would you rather (1 question)","Rock, Paper, Scissors","Trivia Question",
+  "Silent ball (3 mins)","Breathing reset (60s)","Desk tidy sprint (90s)"
 ];
 
 function createDefaultSetIfNone(){
@@ -469,7 +505,7 @@ function createDefaultSetIfNone(){
       form: "",
       timetableClass: ""
     }));
-    return { id: setId, name, students, excludedIds: {} };
+    return normalizeSet({ id: setId, name, students, excludedIds: {} });
   }
 
   const a = makeSet(DEFAULT_CONSEQUENCES_NAME, DEFAULT_CONSEQUENCES);
@@ -487,17 +523,11 @@ function createDefaultSetIfNone(){
 }
 
 /* =========================================================
-   Robust Parsing
+   Robust Parsing (kept for paste import)
    ========================================================= */
-
 function normHeader(h){
-  return (h||"")
-    .toString()
-    .replace(/^\uFEFF/, "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g," ")
-    .replace(/[^\w ]/g,"");
+  return (h||"").toString().replace(/^\uFEFF/, "").trim().toLowerCase()
+    .replace(/\s+/g," ").replace(/[^\w ]/g,"");
 }
 function detectDelimiter(firstLine){
   const line=firstLine||"";
@@ -532,11 +562,9 @@ function parseDelimited(text){
 
   const delim=detectDelimiter(lines[0]);
   let rows=[];
-  if (delim === ","){
-    rows = parseCSVWithQuotes(lines.join("\n"));
-  } else {
-    rows = lines.map(l => l.split(delim));
-  }
+  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\n"));
+  else rows = lines.map(l => l.split(delim));
+
   rows = rows.filter(r=>r.some(c=>safeText(c)!==""));
   return { rows, delim };
 }
@@ -545,7 +573,6 @@ function headerIndexMap(headers){
   headers.forEach((h,i)=> map.set(normHeader(h), i));
   return map;
 }
-
 const HEADER_ALIASES = {
   id: ["student id","id","studentid","student number","student no","nsn"],
   first: ["first name","firstname","given name","forename"],
@@ -554,14 +581,10 @@ const HEADER_ALIASES = {
   tutor: ["tutor","form","form class","formclass","homegroup","home group"],
   tt: ["timetable class","class","tt class","timetable"]
 };
-
 function findAnyIndex(map, aliases){
-  for (const k of aliases){
-    if (map.has(k)) return map.get(k);
-  }
+  for (const k of aliases){ if (map.has(k)) return map.get(k); }
   return -1;
 }
-
 function looksLikeHeaderRow(cells){
   const joined = cells.map(normHeader).join(" ");
   const hits = [
@@ -569,7 +592,6 @@ function looksLikeHeaderRow(cells){
   ].filter(k => joined.includes(k));
   return hits.length >= 2;
 }
-
 function splitNameSmart(s){
   s = safeText(s);
   if (!s) return { first:"", last:"" };
@@ -581,7 +603,6 @@ function splitNameSmart(s){
   if (parts.length===1) return { first:parts[0], last:"" };
   return { first:parts.slice(0,-1).join(" "), last:parts.slice(-1).join("") };
 }
-
 function parseStudentsFlexible(text, setId){
   const { rows, delim } = parseDelimited(text);
   if (!rows.length) return { ok:false, reason:"Paste is empty." };
@@ -589,13 +610,11 @@ function parseStudentsFlexible(text, setId){
   const firstRow = rows[0].map(safeText);
   const headerMode = looksLikeHeaderRow(firstRow);
 
-  let headers = null, dataRows = null, map = null;
+  let dataRows = rows;
+  let map = null;
   if (headerMode){
-    headers = firstRow;
+    map = headerIndexMap(firstRow);
     dataRows = rows.slice(1);
-    map = headerIndexMap(headers);
-  } else {
-    dataRows = rows;
   }
 
   let iID=-1, iFirst=-1, iLast=-1, iName=-1, iTutor=-1, iTT=-1;
@@ -611,9 +630,7 @@ function parseStudentsFlexible(text, setId){
   const out=[];
   const seenKey=new Set();
 
-  function makeSetLocalId(seed){
-    return `${setId}::${seed}`;
-  }
+  function makeSetLocalId(seed){ return `${setId}::${seed}`; }
 
   for (let rIndex=0; rIndex<dataRows.length; rIndex++){
     const r = dataRows[rIndex];
@@ -637,20 +654,15 @@ function parseStudentsFlexible(text, setId){
     } else {
       const joined = r.map(safeText).filter(Boolean).join(" ").trim();
       if (!joined) continue;
-
       const p = splitNameSmart(joined);
       first = p.first; last = p.last;
       full = (first + " " + last).trim() || joined;
     }
 
-    if (!safeText(full)){
-      full = (safeText(first)+" "+safeText(last)).trim();
-    }
+    if (!safeText(full)) full = (safeText(first)+" "+safeText(last)).trim();
     if (!safeText(full)) continue;
 
-    const baseId = sid || (safeText(first)+"|"+safeText(last)+"|"+rIndex);
-    const id = sid ? makeSetLocalId("SID:"+sid) : makeSetLocalId("ROW:"+baseId);
-
+    const id = sid ? makeSetLocalId("SID:"+sid) : makeSetLocalId("ROW:"+rIndex);
     const dedupeKey = sid ? ("SID:"+sid) : ("NAME:"+full.toLowerCase());
     if (seenKey.has(dedupeKey)) continue;
     seenKey.add(dedupeKey);
@@ -667,80 +679,88 @@ function parseStudentsFlexible(text, setId){
   }
 
   if (!out.length){
-    return {
-      ok:false,
-      reason:"Could not find any names. Paste needs at least one name per line.",
-      diag: headerMode ? `headerMode=true delim=${delim}` : `headerMode=false delim=${delim}`
-    };
+    return { ok:false, reason:"Could not find any names. Paste needs at least one name per line.",
+      diag: headerMode ? `headerMode=true delim=${delim}` : `headerMode=false delim=${delim}` };
   }
 
-  return {
-    ok:true,
-    students: out,
-    diag: headerMode ? `headerMode=true delim=${delim} students=${out.length}` : `headerMode=false delim=${delim} students=${out.length}`
-  };
+  return { ok:true, students: out };
 }
 
-/* ================= Edit current set (add/dedupe/delete) ================= */
+/* ================= Add / Restore helpers ================= */
+function makeNewEntry(name, setId){
+  const base = safeText(name);
+  const id = `${setId}::MAN:${Date.now().toString(16)}:${Math.random().toString(16).slice(2)}`;
+  return { id, sid:"", first:"", last:"", name: base, form:"", timetableClass:"" };
+}
+function addTextEntriesToSet(set, rawText){
+  normalizeSet(set);
+  const text = (rawText || "").trim();
+  if (!text) return 0;
+  const lines = text.split(/\r?\n/).map(safeText).filter(Boolean);
+  if (!lines.length) return 0;
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  let added = 0;
+
+  for (const line of lines){
+    const k = line.toLowerCase();
+    if (!k) continue;
+    if (existing.has(k)) continue;
+    existing.add(k);
+    set.students.push(makeNewEntry(line, set.id));
+    added++;
+  }
+  return added;
+}
+function restoreFromTrash(set, entryId){
+  normalizeSet(set);
+  const idx = set.trash.findIndex(x => x.id === entryId);
+  if (idx < 0) return false;
+
+  const item = set.trash.splice(idx, 1)[0];
+
+  // avoid duplicates by name
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  const k = (item.name || "").trim().toLowerCase();
+  if (k && existing.has(k)) return true;
+
+  set.students.push(item);
+  return true;
+}
+function restoreAllTrash(set){
+  normalizeSet(set);
+  if (!set.trash.length) return 0;
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  let restored = 0;
+
+  const trashCopy = set.trash.slice().reverse();
+  set.trash = [];
+
+  for (const item of trashCopy){
+    const k = (item.name || "").trim().toLowerCase();
+    if (k && existing.has(k)) continue;
+    existing.add(k);
+    set.students.push(item);
+    restored++;
+  }
+  return restored;
+}
+
+/* ================= Options: add entries ================= */
 function addEntriesToActiveSet(rawText){
   const set = getActiveSet();
   if (!set){ toast("No set loaded"); return; }
 
-  const text = (rawText || "").trim();
-  if (!text){ toast("Nothing to add"); return; }
+  const n = addTextEntriesToSet(set, rawText);
+  if (!n){ toast("Nothing to add"); return; }
 
-  const res = parseStudentsFlexible(text, set.id);
-  if (!res.ok){
-    alert(`Add entries failed:\n${res.reason}\n\n${res.diag ? ("Details:\n"+res.diag) : ""}`);
-    return;
-  }
-
-  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
-  const toAdd = res.students.filter(s => {
-    const k = (s.name || "").trim().toLowerCase();
-    if (!k) return false;
-    if (existing.has(k)) return false;
-    existing.add(k);
-    return true;
-  });
-
-  set.students.push(...toAdd);
-  saveSets();
+  saveSetsDebounced();
   setStatus();
   renderStudentList();
+  renderTrashList();
   if (!spinning && displayPool === null) drawWheel(rot, null);
-  toast(`Added ${toAdd.length}`);
-}
-
-function dedupeActiveSet(){
-  const set = getActiveSet();
-  if (!set) return;
-
-  const seen = new Set();
-  const next = [];
-
-  for (const st of set.students){
-    const k = (st.name || "").trim().toLowerCase();
-    if (!k) continue;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    next.push(st);
-  }
-
-  set.students = next;
-
-  // clean excluded ids that no longer exist
-  const validIds = new Set(set.students.map(s => s.id));
-  const ex = set.excludedIds || {};
-  for (const id of Object.keys(ex)){
-    if (!validIds.has(id)) delete ex[id];
-  }
-
-  saveSets();
-  setStatus();
-  renderStudentList();
-  if (!spinning && displayPool === null) drawWheel(rot, null);
-  toast("De-duped");
+  toast(`Added ${n}`);
 }
 
 $("addEntriesBtn").addEventListener("click", ()=>{
@@ -751,10 +771,60 @@ $("addEntriesBtn").addEventListener("click", ()=>{
 
 $("dedupeSetBtn").addEventListener("click", ()=>{
   if (spinning){ toast("Finish the spin 🙂"); return; }
-  dedupeActiveSet();
+  const set = getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+
+  const seen = new Set();
+  const next = [];
+  for (const st of set.students){
+    const k = (st.name || "").trim().toLowerCase();
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    next.push(st);
+  }
+  set.students = next;
+
+  const validIds = new Set(set.students.map(s => s.id));
+  const ex = set.excludedIds || {};
+  for (const id of Object.keys(ex)){
+    if (!validIds.has(id)) delete ex[id];
+  }
+
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  renderTrashList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("De-duped");
 });
 
-/* ================= UI: sets buttons & manager ================= */
+/* ================= Quick add ================= */
+function quickAdd(){
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+
+  const v = safeText($("quickAddInput").value);
+  if (!v){ toast("Type something first"); return; }
+
+  const added = addTextEntriesToSet(set, v);
+  if (!added){ toast("Already exists"); return; }
+
+  $("quickAddInput").value = "";
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("Added");
+}
+$("quickAddBtn").addEventListener("click", quickAdd);
+$("quickAddInput").addEventListener("keydown", (e)=>{
+  if (e.key === "Enter"){ e.preventDefault(); quickAdd(); }
+});
+
+/* ================= Set UI ================= */
 function setActiveSet(id){
   activeSetId = id;
   saveActiveSet(activeSetId);
@@ -774,7 +844,9 @@ function renderSetButtons(){
     return;
   }
 
-  for (const s of sets){
+  for (const s0 of sets){
+    const s = normalizeSet(s0);
+
     const b=document.createElement("button");
     b.className="setBtn"+(s.id===activeSetId?" active":"");
     b.type="button";
@@ -788,6 +860,7 @@ function renderSetButtons(){
       renderSetButtons();
       renderSetManager();
       refreshAll();
+      renderTrashList();
       toast("Loaded");
     });
     row.appendChild(b);
@@ -802,7 +875,9 @@ function renderSetManager(){
     return;
   }
 
-  for (const s of sets){
+  for (const s0 of sets){
+    const s = normalizeSet(s0);
+
     const box=document.createElement("div");
     box.style.display="grid";
     box.style.gridTemplateColumns="1fr auto auto";
@@ -814,8 +889,6 @@ function renderSetManager(){
     inp.value=s.name;
     inp.style.boxShadow="none";
     inp.placeholder="Set label";
-
-    // Automatic save while typing (debounced)
     inp.addEventListener("input", ()=>{
       s.name=(inp.value||"Untitled").trim();
       renderSetButtons();
@@ -833,6 +906,7 @@ function renderSetManager(){
       pendingExcludeId=null;
       renderSetButtons();
       refreshAll();
+      renderTrashList();
       toast("Loaded");
     });
 
@@ -850,6 +924,7 @@ function renderSetManager(){
       displayPool=null;
       pendingExcludeId=null;
       refreshAll();
+      renderTrashList();
       toast("Deleted");
     });
 
@@ -869,6 +944,7 @@ function setBg(state){
 function setStatus(){
   const set=getActiveSet();
   if (!set){ $("statusChip").textContent="No set loaded"; return; }
+  normalizeSet(set);
   const inc=includedStudents(set).length;
   const exc=(set.students.length - inc);
   $("statusChip").textContent=`${set.name} • ${inc} in • ${exc} out`;
@@ -965,7 +1041,93 @@ function drawWheel(rotation=0, pool=null){
   ctx.restore();
 }
 
-/* ================= Exclusion list + delete (✕) ================= */
+/* ================= Trash UI (restore individually) ================= */
+function renderTrashList(){
+  const set = getActiveSet();
+  const wrap = $("trashList");
+  const hint = $("trashHint");
+  const q = safeText($("trashSearch").value).toLowerCase();
+  wrap.innerHTML = "";
+
+  if (!set){
+    hint.textContent = "No set loaded.";
+    return;
+  }
+
+  normalizeSet(set);
+  let items = (set.trash || []).slice().reverse(); // newest first
+  if (q){
+    items = items.filter(x => (x.name||"").toLowerCase().includes(q));
+  }
+
+  if (!set.trash.length){
+    hint.textContent = "No removed items.";
+    return;
+  }
+
+  hint.textContent = q
+    ? `${items.length} match${items.length===1?"":"es"} in removed items (total ${set.trash.length}).`
+    : `${set.trash.length} removed item${set.trash.length===1?"":"s"} — click Restore.`;
+
+  if (!items.length && q){
+    wrap.innerHTML = `<div class="smallNote" style="padding:6px 0;">No matches.</div>`;
+    return;
+  }
+
+  for (const st of items){
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "1fr auto";
+    row.style.gap = "8px";
+    row.style.alignItems = "center";
+
+    const label = document.createElement("div");
+    label.textContent = st.name || "(unnamed)";
+    label.style.fontWeight = "900";
+    label.style.opacity = "0.9";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Restore";
+    btn.addEventListener("click", ()=>{
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+      const ok = restoreFromTrash(set, st.id);
+      if (!ok){ toast("Not found"); return; }
+      if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      renderTrashList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast("Restored");
+    });
+
+    row.appendChild(label);
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+$("trashSearch").addEventListener("input", ()=> renderTrashList());
+
+$("restoreAllBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set) { toast("No set loaded"); return; }
+  normalizeSet(set);
+
+  const n = restoreAllTrash(set);
+  if (!n) { toast("Nothing to restore"); return; }
+
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  renderTrashList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast(`Restored ${n}`);
+});
+
+/* ================= Exclusion list + delete warning (confirm) ================= */
 function renderStudentList(){
   const set=getActiveSet();
   const list=$("studentList");
@@ -978,6 +1140,8 @@ function renderStudentList(){
     $("freezeHint").textContent="—";
     return;
   }
+
+  normalizeSet(set);
 
   $("freezeHint").textContent = spinning ? "Changes take effect next spin." : "Ready.";
 
@@ -1027,22 +1191,31 @@ function renderStudentList(){
 
     row.appendChild(left);
 
-    // delete button (needs .rowDel in your styles.css)
+    // delete button (✕) — WITH WARNING + goes to trash for restore
     const del=document.createElement("button");
     del.type="button";
     del.className="rowDel";
     del.textContent="✕";
-    del.title="Remove from set";
+    del.title="Remove from set (restore in Options)";
     del.addEventListener("click",(e)=>{
       e.stopPropagation();
       if (spinning){ toast("Finish the spin 🙂"); return; }
+
+      const ok = confirm(`Remove "${st.name}" from this set?\n\nYou can restore it later in:\nOptions (⚙️) → Edit current set → Recently removed`);
+      if (!ok) return;
+
       set.students = set.students.filter(x => x.id !== st.id);
       if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
-      saveSets();
+
+      set.trash = set.trash || [];
+      set.trash.push(st);
+
+      saveSetsDebounced();
       setStatus();
       renderStudentList();
+      renderTrashList();
       if (!spinning && displayPool === null) drawWheel(rot, null);
-      toast("Removed");
+      toast("Removed (can restore)");
     });
     row.appendChild(del);
 
@@ -1053,13 +1226,11 @@ function renderStudentList(){
       if (set.excludedIds[st.id]) delete set.excludedIds[st.id];
       else set.excludedIds[st.id]=true;
 
-      saveSetsDebounced(); // auto save (debounced)
+      saveSetsDebounced();
       setStatus();
       renderStudentList();
 
-      if (!spinning && displayPool === null){
-        drawWheel(rot, null);
-      }
+      if (!spinning && displayPool === null) drawWheel(rot, null);
       toast(spinning ? "Updated (next spin)" : "Updated");
     });
   }
@@ -1069,8 +1240,9 @@ $("searchBox").addEventListener("input", ()=> renderStudentList());
 $("includeAllBtn").addEventListener("click", ()=>{
   const set=getActiveSet();
   if (!set) return;
+  normalizeSet(set);
   set.excludedIds={};
-  saveSets();
+  saveSetsDebounced();
   setStatus();
   renderStudentList();
   if (!spinning && displayPool===null) drawWheel(rot,null);
@@ -1080,10 +1252,11 @@ $("includeAllBtn").addEventListener("click", ()=>{
 $("excludeAllBtn").addEventListener("click", ()=>{
   const set=getActiveSet();
   if (!set) return;
+  normalizeSet(set);
   const ex={};
   for (const st of set.students) ex[st.id]=true;
   set.excludedIds=ex;
-  saveSets();
+  saveSetsDebounced();
   setStatus();
   renderStudentList();
   if (!spinning && displayPool===null) drawWheel(rot,null);
@@ -1108,7 +1281,7 @@ function popConfetti(){
   setTimeout(()=>layer.classList.remove("show"), 2400);
 }
 
-/* ================= Spin logic ================= */
+/* ================= Spin logic (unchanged) ================= */
 let spinning=false;
 let spinPool=null;
 let pendingExcludeId=null;
@@ -1127,14 +1300,21 @@ function applyPendingExclude(){
   if (!pendingExcludeId) return;
   const set=getActiveSet();
   if (!set){ pendingExcludeId=null; return; }
+  normalizeSet(set);
   set.excludedIds=set.excludedIds||{};
   set.excludedIds[pendingExcludeId]=true;
   pendingExcludeId=null;
-  saveSets();
+  saveSetsDebounced();
   setStatus();
   renderStudentList();
 }
 function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
+function setBg(state){
+  if (state==="spinning") document.body.style.backgroundColor="var(--bgOrange)";
+  else if (state==="winner") document.body.style.backgroundColor="var(--bgGreen)";
+  else document.body.style.backgroundColor="var(--bgGrey)";
+}
 
 function startSpin(){
   if (spinning) return;
@@ -1262,7 +1442,7 @@ document.addEventListener("keydown",(e)=>{
 
 /* ================= Create set from paste ================= */
 function createSetFromStudents(name, students){
-  const newSet={ id:uid(), name:(name||"Untitled").trim(), students, excludedIds:{} };
+  const newSet = normalizeSet({ id:uid(), name:(name||"Untitled").trim(), students, excludedIds:{} });
   sets.unshift(newSet);
   setActiveSet(newSet.id);
   saveSets();
@@ -1271,6 +1451,7 @@ function createSetFromStudents(name, students){
   renderSetButtons();
   renderSetManager();
   refreshAll();
+  renderTrashList();
 }
 
 $("importPasteBtn").addEventListener("click", ()=>{
@@ -1313,6 +1494,7 @@ $("clearSetsBtn").addEventListener("click", ()=>{
   renderSetButtons();
   renderSetManager();
   refreshAll();
+  renderTrashList();
   toast("Cleared");
 });
 
@@ -1330,6 +1512,8 @@ function refreshAll(){
     drawWheel(rot, null);
     return;
   }
+
+  normalizeSet(set);
 
   if (!set.students.length){
     $("winnerBox").textContent="This set is empty 🙂";
@@ -1360,7 +1544,7 @@ function init(){
   loadSets();
   createDefaultSetIfNone();
 
-  // Remember last active set (even after weeks)
+  // Remember last active set
   const remembered = loadActiveSet();
   if (remembered && sets.some(s => s.id === remembered)) {
     activeSetId = remembered;
@@ -1372,6 +1556,7 @@ function init(){
   renderSetButtons();
   renderSetManager();
   refreshAll();
+  renderTrashList();
   drawWheel(rot, null);
 }
 init();
