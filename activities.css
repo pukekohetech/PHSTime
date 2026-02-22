@@ -1,28 +1,128 @@
-{
-  "cssUrl": "activities.js",
-  "activities": [
-    {
-      "id": "a_542087a98ae88819c83580639",
-      "name": "Photo Guess",
-      "url": "https://www.braingle.com/trivia/photo.php",
-      "mode": "newtab",
-      "tag": "",
-      "steps": [],
-      "cssUrl": ""
-    },
-    {
-      "id": "wordle",
-      "name": "Wordle (Daily)",
-      "type": "iframe",
-      "url": "https://powerlanguage-wordle.github.io/",
-      "autoOpen": false
-    },
-    {
-      "id": "riddle",
-      "name": "Random Riddle",
-      "type": "riddle",
-      "url": "https://randomgenerator.pro/random-riddle-generator/",
-      "autoOpen": false
+/* =========================================================
+   PHS Classroom Tools — activities.js (FULL CONFIG FILE)
+   ---------------------------------------------------------
+   - Teacher-editable activity list
+   - Loaded via:
+       <script src="activities.js"></script>
+   - Exposes:
+       window.PHS_ACTIVITIES
+   - Can be safely replaced without touching HTML
+   ========================================================= */
+
+(function(){
+
+  const CONFIG = {
+
+    /* -----------------------------------------------------
+       Optional: Global activity CSS file
+       (Used to style activity modals / embeds)
+       Leave blank "" if not used
+    ----------------------------------------------------- */
+    cssUrl: "activities.css",
+
+    /* -----------------------------------------------------
+       Activity List
+       Supported types:
+         - iframe   → opens inside modal iframe
+         - newtab   → opens in new browser tab
+         - riddle   → fetches & displays riddle text
+         - rps      → built-in Rock Paper Scissors
+    ----------------------------------------------------- */
+    activities: [
+
+      /* ---------- Braingle Photo Quiz ---------- */
+      {
+        id: "photo_guess",
+        name: "Photo Guess",
+        type: "newtab",
+        url: "https://www.braingle.com/trivia/photo.php",
+        tag: "Trivia",
+        autoOpen: false,
+        cssUrl: ""
+      },
+
+      /* ---------- Wordle Clone ---------- */
+      {
+        id: "wordle",
+        name: "Wordle (Daily)",
+        type: "iframe",
+        url: "https://powerlanguage-wordle.github.io/",
+        tag: "Word Game",
+        autoOpen: false,
+        height: 720,
+        cssUrl: ""
+      },
+
+      /* ---------- Random Riddle Generator ---------- */
+      {
+        id: "riddle",
+        name: "Random Riddle",
+        type: "riddle",
+        url: "https://randomgenerator.pro/random-riddle-generator/",
+        tag: "Thinking",
+        autoOpen: false,
+        cssUrl: ""
+      },
+
+      /* ---------- Rock Paper Scissors (Hard-coded) ---------- */
+      {
+        id: "rps",
+        name: "Rock Paper Scissors",
+        type: "rps",
+        tag: "Quick Game",
+        autoOpen: false,
+        cssUrl: ""
+      }
+
+    ]
+  };
+
+
+  /* =========================================================
+     OPTIONAL: Dynamic CSS Loader
+     Loads global cssUrl and per-activity cssUrl automatically
+  ========================================================= */
+
+  function loadCss(url){
+    if(!url) return;
+    const existing = document.querySelector(`link[data-activity-css="${url}"]`);
+    if(existing) return;
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = url;
+    link.dataset.activityCss = url;
+    document.head.appendChild(link);
+  }
+
+  /* Load global CSS if defined */
+  if(CONFIG.cssUrl){
+    loadCss(CONFIG.cssUrl);
+  }
+
+  /* =========================================================
+     Expose config globally
+  ========================================================= */
+  window.PHS_ACTIVITIES = CONFIG;
+
+
+  /* =========================================================
+     Helper: Get Activity By ID
+  ========================================================= */
+  window.getActivityById = function(id){
+    return CONFIG.activities.find(a => a.id === id);
+  };
+
+
+  /* =========================================================
+     Helper: Ensure Activity CSS Is Loaded
+  ========================================================= */
+  window.ensureActivityCss = function(activity){
+    if(!activity) return;
+    if(activity.cssUrl){
+      loadCss(activity.cssUrl);
     }
-  ]
-}
+  };
+
+
+})();
