@@ -5,14 +5,22 @@
      - wheel.html (page-wheel)
      - timer.html (page-timer)
      - noise.html (page-noise)
-     - brainbreak.html (page-brain)  ✅ NEW
+     - brainbreak.html (page-brain)
+
    Requires:
      <link rel="stylesheet" href="styles.css">
-     <body class="page-index"> / <body class="page-wheel"> / <body class="page-timer"> / <body class="page-noise"> / <body class="page-brain">
+     <body class="page-index"> / <body class="page-wheel"> / <body class="page-timer">
+     / <body class="page-noise"> / <body class="page-brain">
 
    Notes:
-     - Brain Breaks page now supports: Teacher Options panel, Activity modal (iframe), RPS modal.
-     - Keep per-site tweaks in activities.css (linked separately) to avoid editing this file often.
+     - ALL Brain Break styles are now in THIS file (no activities.css needed).
+     - brainbreak.js uses these classnames:
+       actModalOverlay, actModalCard, actModalHeader, actModalTitle, actModalClose,
+       actModalBody, actIframe, riddleBox, riddleQ, riddleA, riddleBtns,
+       teacherWrap, teacherTopRow, teacherTable, teacherRow, teacherRowLeft,
+       teacherRowTitle, teacherRowMeta, teacherRowBtns, editForm, editField,
+       editLabel, editBtns, editSelect, includeGrid, rpsCard, rpsBig, rpsLabel,
+       rpsPulse, rpsPop
    ========================================================= */
 
 /* ========== Design Tokens ========== */
@@ -52,8 +60,6 @@ body{
 
 /* =========================================================
    Top App Navigation (ALL pages)
-   Add to HTML on each page:
-   <nav class="appNav"> ... </nav>
    ========================================================= */
 .appNav{
   position: fixed;
@@ -336,7 +342,7 @@ PAGE: NOISE (noise.html)
 }
 
 /* =========================================================
-   PAGE: BRAIN BREAKS (brainbreak.html)  ✅ NEW
+   PAGE: BRAIN BREAKS (brainbreak.html)
    ========================================================= */
 .page-brain{
   min-height:100vh;
@@ -463,7 +469,6 @@ PAGE: NOISE (noise.html)
   opacity: .9;
 }
 
-/* Brain options panel (if you use fixed panel instead of the default absolute menu) */
 .page-brain #optionsMenu{
   width: min(720px, calc(100vw - 20px));
   max-height: min(84vh, 920px);
@@ -476,82 +481,96 @@ PAGE: NOISE (noise.html)
   z-index: 2;
 }
 
-/* Brain options: nicer form layout helpers */
-.page-brain .row2{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-@media (max-width: 720px){
-  .page-brain .row2{ grid-template-columns: 1fr; }
-}
-.page-brain label.small{
-  display:block;
-  font-size: 12px;
-  font-weight: 900;
-  opacity: .75;
-  margin-bottom: 6px;
-}
-.page-brain .btnRow{
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  align-items:center;
-}
-.page-brain .btnPrimary{
-  background: rgba(0,0,0,0.12) !important;
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10);
-}
-
-/* Activity list card */
-.page-brain .listCard{
-  border-radius: 14px;
-  background: rgba(0,0,0,0.04);
-  padding: 10px;
+/* =========================================================
+   Brain Breaks — Teacher editor + Include list (used by brainbreak.js)
+   ========================================================= */
+.page-brain .includeGrid{
   display:grid;
   gap: 8px;
 }
-.page-brain .activityItem{
+.page-brain .teacherWrap{
+  display:grid;
+  gap: 10px;
+}
+.page-brain .teacherTopRow{
   display:flex;
   gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  justify-content: flex-start;
+}
+.page-brain .teacherTable{
+  display:grid;
+  gap: 8px;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.04);
+  padding: 10px;
+}
+.page-brain .teacherRow{
+  display:flex;
   align-items:flex-start;
   justify-content: space-between;
+  gap: 10px;
   padding: 10px;
   border-radius: 12px;
   background: rgba(255,255,255,0.85);
   border: 1px solid rgba(0,0,0,0.08);
 }
-.page-brain .activityMeta{ min-width: 0; }
-.page-brain .activityName{ font-weight: 980; }
-.page-brain .activityUrl{
+.page-brain .teacherRowLeft{
+  min-width: 0;
+  display:grid;
+  gap: 4px;
+}
+.page-brain .teacherRowTitle{
+  font-weight: 980;
+  letter-spacing: -0.2px;
+}
+.page-brain .teacherRowMeta{
   font-weight: 850;
-  opacity: .70;
+  opacity: .75;
   font-size: 12px;
   white-space: nowrap;
-  overflow: hidden;
+  overflow:hidden;
   text-overflow: ellipsis;
   max-width: 520px;
 }
-.page-brain .activityTags{
-  margin-top: 6px;
+.page-brain .teacherRowBtns{
   display:flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items:center;
+}
+
+/* Edit modal form */
+.page-brain .editForm{
+  display:grid;
+  gap: 10px;
+}
+.page-brain .editField{
+  display:grid;
+  gap: 6px;
+}
+.page-brain .editLabel{
   font-size: 12px;
   font-weight: 900;
   opacity: .75;
 }
-.page-brain .pill{
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.06);
+.page-brain .editSelect{
+  width: 100%;
+}
+.page-brain .editBtns{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
 }
 
 /* =========================================================
-   Shared MODAL styles (Brain Breaks)
+   Brain Breaks — Modal system (brainbreak.js uses these)
    ========================================================= */
-.modalOverlay{
+.actModalOverlay{
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.28);
@@ -561,8 +580,10 @@ PAGE: NOISE (noise.html)
   z-index: 200;
   padding: 14px;
 }
-.modalCard{
+
+.actModalCard{
   width: min(980px, calc(100vw - 28px));
+  max-width: 980px;
   height: min(90vh, 980px);
   background: rgba(255,255,255,0.92);
   border-radius: 22px;
@@ -571,7 +592,8 @@ PAGE: NOISE (noise.html)
   display:flex;
   flex-direction: column;
 }
-.modalHeader{
+
+.actModalHeader{
   padding: 12px 14px;
   display:flex;
   align-items:center;
@@ -580,68 +602,116 @@ PAGE: NOISE (noise.html)
   border-bottom: 1px solid rgba(0,0,0,0.08);
   background: rgba(255,255,255,0.92);
 }
-.modalTitle{
+
+.actModalTitle{
   font-weight: 950;
   letter-spacing: -0.2px;
   display:flex;
   align-items:center;
   gap: 8px;
+  min-width: 0;
 }
-.modalBody{
+
+.actModalClose{
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 14px;
+  display:grid;
+  place-items:center;
+  font-size: 16px;
+}
+
+.actModalBody{
   padding: 12px;
   display:flex;
   flex-direction: column;
   gap: 10px;
   height: 100%;
+  overflow:auto;
 }
-.modalActions{
+
+.actIframe{
+  width: 100%;
+  height: 100%;
+  min-height: 60vh;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.8);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+}
+
+/* Riddle UI */
+.riddleBox{
+  border-radius: 16px;
+  background: rgba(0,0,0,0.04);
+  padding: 14px;
+  display:grid;
+  gap: 12px;
+}
+.riddleQ{
+  font-weight: 980;
+  letter-spacing: -0.2px;
+  font-size: 20px;
+  line-height: 1.2;
+  text-align: center;
+}
+.riddleA{
+  font-weight: 900;
+  opacity: .85;
+  font-size: 16px;
+  line-height: 1.25;
+  text-align: center;
+}
+.riddleBtns{
   display:flex;
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
 }
-.modalHint{
-  font-size: 13px;
-  font-weight: 850;
-  opacity: .78;
-  line-height: 1.35;
-  text-align: center;
-}
-.modalFrameWrap{
-  flex: 1 1 auto;
-  border-radius: 14px;
-  overflow:hidden;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-  background: rgba(255,255,255,0.8);
-}
-.modalFrame{
-  width: 100%;
-  height: 100%;
-  border: 0;
+
+/* =========================================================
+   Brain Breaks — RPS animation hooks used by brainbreak.js
+   ========================================================= */
+.rpsCard .actModalBody{
+  text-align:center;
+  justify-content: center;
+  gap: 12px;
 }
 
-/* RPS visuals + animation hooks */
 .rpsBig{
   font-size: clamp(90px, 18vw, 140px);
   line-height: 1;
   filter: drop-shadow(0 10px 22px rgba(0,0,0,0.14));
   text-align:center;
+  transition: transform 120ms ease;
 }
+
 .rpsLabel{
   font-weight: 950;
   letter-spacing: -0.3px;
   font-size: 18px;
   text-align:center;
+  opacity: .95;
 }
-.rpsBig.isRolling{
-  animation: rpsPop 220ms ease-in-out infinite;
+
+.rpsPulse{
+  animation: rpsPulse 120ms ease-in-out;
+}
+@keyframes rpsPulse{
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+.rpsPop{
+  animation: rpsPop 220ms ease-in-out;
 }
 @keyframes rpsPop{
-  0%   { transform: translateY(0) rotate(0deg) scale(1); }
-  50%  { transform: translateY(-4px) rotate(-3deg) scale(1.04); }
-  100% { transform: translateY(0) rotate(3deg) scale(1); }
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.10); }
+  100% { transform: scale(1); }
 }
-.rpsLabel.isRolling{ opacity: .55; }
 
 /* =========================================================
    PAGE: INDEX (index.html)
