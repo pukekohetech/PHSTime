@@ -1284,6 +1284,8 @@ function renderAllPanels(){
 /* ================= WIRING ================= */
 pickBtn?.addEventListener("click", nextRandom);
 
+chooseBtn?.addEventListener("click", openChooserModal);
+
 breakBtn?.addEventListener("click", ()=> {
   // tap big button = pick next
   nextRandom();
