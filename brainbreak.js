@@ -116,6 +116,8 @@ const resetAllBtn = $("resetAllBtn");
 
 const modalHost = $("modalHost");
 
+const chooseBtn = $("chooseBtn");
+
 /* ================= TEACHER CSS (in-browser) ================= */
 function ensureTeacherCssNode(){
   let node = document.getElementById("teacherCss");
@@ -212,6 +214,132 @@ function pickRandom(){
   const pool = enabledPool();
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)];
+}
+/* ================= Chooser PICK ================= */
+function openChooserModal(){
+  const overlay = makeOverlay();
+
+  const card = document.createElement("div");
+  card.className = "actModalCard";
+
+  const header = document.createElement("div");
+  header.className = "actModalHeader";
+
+  const title = document.createElement("div");
+  title.className = "actModalTitle";
+  title.textContent = "Choose a Brain Break";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "actModalClose";
+  closeBtn.type = "button";
+  closeBtn.textContent = "✕";
+  closeBtn.addEventListener("click", closeAllOverlays);
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "actModalBody";
+
+  // search box
+  const search = document.createElement("input");
+  search.type = "text";
+  search.placeholder = "Search…";
+  search.style.width = "100%";
+  search.style.padding = "10px 12px";
+  search.style.borderRadius = "12px";
+  search.style.border = "1px solid rgba(0,0,0,0.15)";
+  search.style.marginBottom = "10px";
+  search.autocomplete = "off";
+
+  // list container
+  const list = document.createElement("div");
+  list.style.display = "grid";
+  list.style.gap = "8px";
+
+  // choose what appears in the list:
+  // - enabled only (recommended), OR show all and label disabled
+  const allActs = activities.slice(); // preserve order
+  const pool = allActs; // change to enabledPool() if you want enabled only
+
+  function render(filterText=""){
+    list.innerHTML = "";
+    const q = filterText.trim().toLowerCase();
+
+    const filtered = pool.filter(a=>{
+      const hay = `${a.name} ${a.tag || ""} ${a.type || ""}`.toLowerCase();
+      return !q || hay.includes(q);
+    });
+
+    if (!filtered.length){
+      const empty = document.createElement("div");
+      empty.className = "smallNote";
+      empty.textContent = "No matches.";
+      list.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(act=>{
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pillBtn";
+      btn.style.display = "flex";
+      btn.style.justifyContent = "space-between";
+      btn.style.alignItems = "center";
+      btn.style.padding = "12px 14px";
+
+      const left = document.createElement("div");
+      left.style.display = "grid";
+
+      const name = document.createElement("div");
+      name.style.fontWeight = "900";
+      name.textContent = act.name;
+
+      const meta = document.createElement("div");
+      meta.className = "smallNote";
+      const timerTxt = act.seconds ? ` • ${mmss(act.seconds)}` : "";
+      const enabledTxt = (act.enabled === false) ? " • (disabled)" : "";
+      meta.textContent = `${act.type}${timerTxt}${enabledTxt}${act.tag ? " • " + act.tag : ""}`;
+
+      left.appendChild(name);
+      left.appendChild(meta);
+
+      const right = document.createElement("div");
+      right.style.fontWeight = "900";
+      right.textContent = "Select";
+
+      btn.appendChild(left);
+      btn.appendChild(right);
+
+      // if disabled, still show but prevent selection
+      if (act.enabled === false){
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        btn.style.cursor = "not-allowed";
+      } else {
+        btn.addEventListener("click", ()=>{
+          setCurrent(act);
+          closeAllOverlays();
+        });
+      }
+
+      list.appendChild(btn);
+    });
+  }
+
+  search.addEventListener("input", ()=>render(search.value));
+
+  body.appendChild(search);
+  body.appendChild(list);
+
+  card.appendChild(header);
+  card.appendChild(body);
+  overlay.appendChild(card);
+
+  openModal(overlay);
+
+  render("");
+  search.focus();
 }
 
 /* ================= TIMER LOOP ================= */
