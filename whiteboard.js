@@ -29,7 +29,8 @@
   // Dock tools
   const dockBtns = Array.from(document.querySelectorAll(".dockBtn[data-tool]"));
   const clearBtn = document.getElementById("clearBtn");
-
+const undoBtn = document.getElementById("undoBtn");
+const redoBtn = document.getElementById("redoBtn");
   // Colour popover
   const colorBtn = document.getElementById("colorBtn");
   const colorPop = document.getElementById("colorPop");
