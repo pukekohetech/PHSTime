@@ -566,6 +566,7 @@ function onPointerDown(e) {
         color: state.color,
         fontSize: Math.max(14, Math.round(state.size * 4))
       });
+       setActiveTool("select");
       redrawAll();
       return;
     }
