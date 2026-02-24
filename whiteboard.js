@@ -98,7 +98,17 @@ const redoBtn = document.getElementById("redoBtn");
     viewW: 0,
     viewH: 0
   };
+undoBtn?.addEventListener("click", () => {
+  hardResetGesture();
+  undo();
+  showToast("Undo");
+});
 
+redoBtn?.addEventListener("click", () => {
+  hardResetGesture();
+  redo();
+  showToast("Redo");
+});
   // ---------- Helpers ----------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dpr = () => Math.max(1, Math.min(3, window.devicePixelRatio || 1));
