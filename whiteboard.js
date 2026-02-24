@@ -530,8 +530,10 @@
   }
 
   // ---------- Pointer interactions ----------
-  function onPointerDown(e) {
-    if (e.target !== inkCanvas) return;
+  
+function onPointerDown(e) {
+  // If click is NOT directly on the drawing canvas, do nothing
+  if (!inkCanvas.contains(e.target)) return;
 
     gesture.active = true;
     gesture.pointerId = e.pointerId;
