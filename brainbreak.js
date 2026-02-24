@@ -21,6 +21,11 @@
          - "newtab" (opens URL in a new tab)
          - "riddle" (fetches random riddle from a page, or fallback)
          - "rps" (hard-coded Rock Paper Scissors modal with animation)
+
+   Update included in this version:
+     ✅ Automatically converts YouTube "watch" / youtu.be links to embeddable URLs
+     ✅ Expands iframe allow permissions for YouTube playback
+     ✅ Optional chooser button support (if #chooseBtn exists in HTML)
    ========================================================= */
 
 /* ================= HELPERS ================= */
@@ -55,6 +60,28 @@ function uid(prefix="a"){ return `${prefix}_${Math.random().toString(16).slice(2
 
 function safeJsonParse(str, fallback=null){
   try { return JSON.parse(str); } catch(e){ return fallback; }
+}
+
+/**
+ * Converts common YouTube links into an iframe-safe embed URL.
+ * - https://youtu.be/<id>                -> https://www.youtube-nocookie.com/embed/<id>
+ * - https://www.youtube.com/watch?v=<id> -> https://www.youtube-nocookie.com/embed/<id>
+ * Leaves other URLs untouched.
+ */
+function normalizeUrlForIframe(url){
+  if (!url) return "";
+  let u = String(url).trim();
+
+  // Convert youtu.be/<id>
+  const m1 = u.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
+  if (m1) return `https://www.youtube-nocookie.com/embed/${m1[1]}`;
+
+  // Convert youtube.com/watch?v=<id>
+  const isWatch = u.includes("youtube.com/watch");
+  const m2 = u.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
+  if (isWatch && m2) return `https://www.youtube-nocookie.com/embed/${m2[1]}`;
+
+  return u;
 }
 
 /* ================= OPTIONS MENU (simple) ================= */
@@ -109,14 +136,13 @@ const timeLeft = $("timeLeft");
 const stateChip = $("stateChip");
 
 const pickBtn = $("pickBtn");
+const chooseBtn = $("chooseBtn"); // optional button in HTML
 const startPauseBtn = $("startPauseBtn");
 const openBtn = $("openBtn");
 const resetBtn = $("resetBtn");
 const resetAllBtn = $("resetAllBtn");
 
 const modalHost = $("modalHost");
-
-const chooseBtn = $("chooseBtn");
 
 /* ================= TEACHER CSS (in-browser) ================= */
 function ensureTeacherCssNode(){
@@ -159,7 +185,7 @@ function defaultActivities(){
     id: a.id || uid("a"),
     name: a.name || "Untitled",
     type: a.type || (a.url ? "newtab" : "quick"),
-    url: a.url || "",
+    url: a.url ? String(a.url) : "",
     mode: a.mode || "", // legacy
     tag: a.tag || "",
     seconds: Number.isFinite(a.seconds) ? a.seconds : (a.type === "timed" ? 60 : null),
@@ -181,7 +207,7 @@ function loadActivities(){
         id: a.id || uid("a"),
         name: a.name || "Untitled",
         type: a.type || (a.url ? "newtab" : "quick"),
-        url: a.url || "",
+        url: a.url ? String(a.url) : "",
         tag: a.tag || "",
         seconds: Number.isFinite(a.seconds) ? a.seconds : (a.type === "timed" ? 60 : null),
         steps: Array.isArray(a.steps) ? a.steps : [],
@@ -214,132 +240,6 @@ function pickRandom(){
   const pool = enabledPool();
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)];
-}
-/* ================= Chooser PICK ================= */
-function openChooserModal(){
-  const overlay = makeOverlay();
-
-  const card = document.createElement("div");
-  card.className = "actModalCard";
-
-  const header = document.createElement("div");
-  header.className = "actModalHeader";
-
-  const title = document.createElement("div");
-  title.className = "actModalTitle";
-  title.textContent = "Choose a Brain Break";
-
-  const closeBtn = document.createElement("button");
-  closeBtn.className = "actModalClose";
-  closeBtn.type = "button";
-  closeBtn.textContent = "✕";
-  closeBtn.addEventListener("click", closeAllOverlays);
-
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-
-  const body = document.createElement("div");
-  body.className = "actModalBody";
-
-  // search box
-  const search = document.createElement("input");
-  search.type = "text";
-  search.placeholder = "Search…";
-  search.style.width = "100%";
-  search.style.padding = "10px 12px";
-  search.style.borderRadius = "12px";
-  search.style.border = "1px solid rgba(0,0,0,0.15)";
-  search.style.marginBottom = "10px";
-  search.autocomplete = "off";
-
-  // list container
-  const list = document.createElement("div");
-  list.style.display = "grid";
-  list.style.gap = "8px";
-
-  // choose what appears in the list:
-  // - enabled only (recommended), OR show all and label disabled
-  const allActs = activities.slice(); // preserve order
-  const pool = allActs; // change to enabledPool() if you want enabled only
-
-  function render(filterText=""){
-    list.innerHTML = "";
-    const q = filterText.trim().toLowerCase();
-
-    const filtered = pool.filter(a=>{
-      const hay = `${a.name} ${a.tag || ""} ${a.type || ""}`.toLowerCase();
-      return !q || hay.includes(q);
-    });
-
-    if (!filtered.length){
-      const empty = document.createElement("div");
-      empty.className = "smallNote";
-      empty.textContent = "No matches.";
-      list.appendChild(empty);
-      return;
-    }
-
-    filtered.forEach(act=>{
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pillBtn";
-      btn.style.display = "flex";
-      btn.style.justifyContent = "space-between";
-      btn.style.alignItems = "center";
-      btn.style.padding = "12px 14px";
-
-      const left = document.createElement("div");
-      left.style.display = "grid";
-
-      const name = document.createElement("div");
-      name.style.fontWeight = "900";
-      name.textContent = act.name;
-
-      const meta = document.createElement("div");
-      meta.className = "smallNote";
-      const timerTxt = act.seconds ? ` • ${mmss(act.seconds)}` : "";
-      const enabledTxt = (act.enabled === false) ? " • (disabled)" : "";
-      meta.textContent = `${act.type}${timerTxt}${enabledTxt}${act.tag ? " • " + act.tag : ""}`;
-
-      left.appendChild(name);
-      left.appendChild(meta);
-
-      const right = document.createElement("div");
-      right.style.fontWeight = "900";
-      right.textContent = "Select";
-
-      btn.appendChild(left);
-      btn.appendChild(right);
-
-      // if disabled, still show but prevent selection
-      if (act.enabled === false){
-        btn.disabled = true;
-        btn.style.opacity = "0.5";
-        btn.style.cursor = "not-allowed";
-      } else {
-        btn.addEventListener("click", ()=>{
-          setCurrent(act);
-          closeAllOverlays();
-        });
-      }
-
-      list.appendChild(btn);
-    });
-  }
-
-  search.addEventListener("input", ()=>render(search.value));
-
-  body.appendChild(search);
-  body.appendChild(list);
-
-  card.appendChild(header);
-  card.appendChild(body);
-  overlay.appendChild(card);
-
-  openModal(overlay);
-
-  render("");
-  search.focus();
 }
 
 /* ================= TIMER LOOP ================= */
@@ -461,11 +361,17 @@ function launchIframe(act){
   body.className = "actModalBody";
 
   const iframe = document.createElement("iframe");
-  iframe.src = act.url;
+
+  // ✅ Auto-normalize YouTube links for iframe (extra safety)
+  iframe.src = normalizeUrlForIframe(act.url);
+
   iframe.title = act.name || "Activity";
   iframe.loading = "lazy";
   iframe.referrerPolicy = "no-referrer";
-  iframe.allow = "fullscreen";
+
+  // ✅ Expanded permissions for YouTube playback + fullscreen etc.
+  iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen";
+
   iframe.className = "actIframe";
 
   body.appendChild(iframe);
@@ -718,6 +624,122 @@ function openCurrentActivity(){
   // For quick/timed breaks, nothing to open
 }
 
+/* ================= OPTIONAL: CHOOSER MODAL =================
+   Works if your HTML contains: <button id="chooseBtn">Choose</button>
+*/
+function openChooserModal(){
+  const overlay = makeOverlay();
+
+  const card = document.createElement("div");
+  card.className = "actModalCard";
+
+  const header = document.createElement("div");
+  header.className = "actModalHeader";
+
+  const title = document.createElement("div");
+  title.className = "actModalTitle";
+  title.textContent = "Choose a Brain Break";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "actModalClose";
+  closeBtn.type = "button";
+  closeBtn.textContent = "✕";
+  closeBtn.addEventListener("click", closeAllOverlays);
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "actModalBody";
+
+  const search = document.createElement("input");
+  search.type = "text";
+  search.placeholder = "Search…";
+  search.style.width = "100%";
+  search.style.padding = "10px 12px";
+  search.style.borderRadius = "12px";
+  search.style.border = "1px solid rgba(0,0,0,0.15)";
+  search.style.marginBottom = "10px";
+  search.autocomplete = "off";
+
+  const list = document.createElement("div");
+  list.style.display = "grid";
+  list.style.gap = "8px";
+
+  // Show enabled only (most teachers expect this)
+  const pool = enabledPool();
+
+  function render(filterText=""){
+    list.innerHTML = "";
+    const q = filterText.trim().toLowerCase();
+
+    const filtered = pool.filter(a=>{
+      const hay = `${a.name} ${a.tag || ""} ${a.type || ""}`.toLowerCase();
+      return !q || hay.includes(q);
+    });
+
+    if (!filtered.length){
+      const empty = document.createElement("div");
+      empty.className = "smallNote";
+      empty.textContent = "No matches.";
+      list.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(act=>{
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pillBtn";
+      btn.style.display = "flex";
+      btn.style.justifyContent = "space-between";
+      btn.style.alignItems = "center";
+      btn.style.padding = "12px 14px";
+
+      const left = document.createElement("div");
+      left.style.display = "grid";
+
+      const name = document.createElement("div");
+      name.style.fontWeight = "900";
+      name.textContent = act.name;
+
+      const meta = document.createElement("div");
+      meta.className = "smallNote";
+      const timerTxt = act.seconds ? ` • ${mmss(act.seconds)}` : "";
+      meta.textContent = `${act.type}${timerTxt}${act.tag ? " • " + act.tag : ""}`;
+
+      left.appendChild(name);
+      left.appendChild(meta);
+
+      const right = document.createElement("div");
+      right.style.fontWeight = "900";
+      right.textContent = "Select";
+
+      btn.appendChild(left);
+      btn.appendChild(right);
+
+      btn.addEventListener("click", ()=>{
+        setCurrent(act);
+        closeAllOverlays();
+      });
+
+      list.appendChild(btn);
+    });
+  }
+
+  search.addEventListener("input", ()=>render(search.value));
+
+  body.appendChild(search);
+  body.appendChild(list);
+
+  card.appendChild(header);
+  card.appendChild(body);
+  overlay.appendChild(card);
+
+  openModal(overlay);
+  render("");
+  search.focus();
+}
+
 /* ================= UI RENDERING ================= */
 function setUI(){
   breakName.textContent = current ? current.name : "Tap to pick a break";
@@ -742,7 +764,7 @@ function setUI(){
   const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 0;
   progressFill.style.width = `${clamp(pctDone * 100, 0, 100)}%`;
 
-  // start button
+  // start button (timer-only by design)
   startPauseBtn.disabled = !hasTimer;
   startPauseBtn.textContent = running ? "Pause" : (hasTimer && remainingSec === 0 ? "Restart" : "Start");
 
@@ -965,7 +987,7 @@ function renderTeacherPanel(){
   const note = document.createElement("div");
   note.className = "smallNote";
   note.textContent =
-    "Tip: ‘iframe’ opens inside the page. ‘newtab’ opens a new tab. ‘riddle’ always works (has a fallback). RPS is built-in.";
+    "Tip: ‘iframe’ opens inside the page. ‘newtab’ opens a new tab. ‘riddle’ always works (has a fallback). RPS is built-in. YouTube links pasted into URL will be auto-converted for iframe embedding.";
 
   wrap.appendChild(note);
 
@@ -1016,7 +1038,7 @@ function renderTeacherPanel(){
           id: a.id || uid("a"),
           name: a.name || "Untitled",
           type: a.type || (a.url ? "newtab" : "quick"),
-          url: a.url || "",
+          url: a.url ? String(a.url) : "",
           seconds: Number.isFinite(a.seconds) ? a.seconds : (a.type === "timed" ? 60 : null),
           steps: Array.isArray(a.steps) ? a.steps : [],
           autoOpen: !!a.autoOpen,
@@ -1160,7 +1182,11 @@ function openEditModal(act){
   saveBtn.addEventListener("click", ()=>{
     act.name = nameIn.input.value.trim() || "Untitled";
     act.type = typeIn.select.value;
-    act.url = urlIn.input.value.trim();
+
+    // ✅ Auto-convert YouTube links for iframe embedding
+    // (We only convert for iframe type; for newtab/riddle we keep pasted URL as-is)
+    const rawUrl = urlIn.input.value.trim();
+    act.url = (act.type === "iframe") ? normalizeUrlForIframe(rawUrl) : rawUrl;
 
     act.enabled = enabledIn.input.checked;
     act.autoOpen = autoOpenIn.input.checked;
@@ -1328,6 +1354,13 @@ document.addEventListener("keydown", (e)=>{
   if (e.key.toLowerCase() === "n"){
     e.preventDefault();
     nextRandom();
+  }
+  if (e.key.toLowerCase() === "l"){
+    // L = list/chooser (if button exists)
+    if (chooseBtn){
+      e.preventDefault();
+      openChooserModal();
+    }
   }
   if (e.key === " "){
     // if any overlay open, space triggers roll (for RPS) by clicking first button if present
