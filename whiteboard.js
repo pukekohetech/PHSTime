@@ -142,7 +142,12 @@
   function snapAngleRad(angleRad) {
     // Snap to nearest in this set (degrees):
     // 0, 30, 45, 60, 90 and their opposites are covered by adding 120/135/150/180.
-    const snapsDeg = [0, 30, 45, 60, 90, 120, 135, 150, 180];
+   const snapsDeg = [
+     0,
+     30, 45, 60, 90, 120, 135, 150,
+    -30,-45,-60,-90,-120,-135,-150,
+     180
+  ];
     const snaps = snapsDeg.map(d => d * Math.PI / 180);
 
     // Normalize to [-PI, PI)
