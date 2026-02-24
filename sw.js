@@ -11,6 +11,9 @@ const ASSETS = [
   "./brainbreak.html"
   "./brainbreak.js",
   "./timer.html",
+  "./whiteboard.html",
+  "./whiteboard.css",
+  "./whiteboard.js",
   "./manifest.webmanifest",
   "./favicon.ico",
   "./apple-touch-icon.png",
