@@ -1,6 +1,9 @@
 /* =========================================================
    whiteboard.js — background as DOM image (no zoom artefacts)
 
+   + Angle snap for line/arrow when holding Ctrl (or Cmd on Mac)
+     Snaps to: 0, ±30, ±45, ±60, ±90 (and opposites)
+
    RELEVANT FIXES (alignment/mouse/touch):
      ✅ Use inkCanvas.getBoundingClientRect() for pointer mapping (not stage)
      ✅ Remove duplicate clientToScreen() definition (you had TWO)
@@ -29,8 +32,9 @@
   // Dock tools
   const dockBtns = Array.from(document.querySelectorAll(".dockBtn[data-tool]"));
   const clearBtn = document.getElementById("clearBtn");
-const undoBtn = document.getElementById("undoBtn");
-const redoBtn = document.getElementById("redoBtn");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
+
   // Colour popover
   const colorBtn = document.getElementById("colorBtn");
   const colorPop = document.getElementById("colorPop");
@@ -98,17 +102,19 @@ const redoBtn = document.getElementById("redoBtn");
     viewW: 0,
     viewH: 0
   };
-undoBtn?.addEventListener("click", () => {
-  hardResetGesture();
-  undo();
-  showToast("Undo");
-});
 
-redoBtn?.addEventListener("click", () => {
-  hardResetGesture();
-  redo();
-  showToast("Redo");
-});
+  undoBtn?.addEventListener("click", () => {
+    hardResetGesture();
+    undo();
+    showToast("Undo");
+  });
+
+  redoBtn?.addEventListener("click", () => {
+    hardResetGesture();
+    redo();
+    showToast("Redo");
+  });
+
   // ---------- Helpers ----------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dpr = () => Math.max(1, Math.min(3, window.devicePixelRatio || 1));
@@ -126,10 +132,45 @@ redoBtn?.addEventListener("click", () => {
   // Pointer mapping MUST use the canvas rect
   function canvasRect() { return inkCanvas.getBoundingClientRect(); }
 
-  // ✅ SINGLE correct clientToScreen (you had two; this removes the bug)
+  // ✅ SINGLE correct clientToScreen
   function clientToScreen(evt) {
     const r = canvasRect();
     return { sx: evt.clientX - r.left, sy: evt.clientY - r.top };
+  }
+
+  // --- Angle snapping helpers (Ctrl/Cmd) ---
+  function snapAngleRad(angleRad) {
+    // Snap to nearest in this set (degrees):
+    // 0, 30, 45, 60, 90 and their opposites are covered by adding 120/135/150/180.
+    const snapsDeg = [0, 30, 45, 60, 90, 120, 135, 150, 180];
+    const snaps = snapsDeg.map(d => d * Math.PI / 180);
+
+    // Normalize to [-PI, PI)
+    const a = Math.atan2(Math.sin(angleRad), Math.cos(angleRad));
+
+    let best = snaps[0];
+    let bestDiff = Infinity;
+
+    for (const s of snaps) {
+      const diff = Math.abs(Math.atan2(Math.sin(a - s), Math.cos(a - s)));
+      if (diff < bestDiff) { bestDiff = diff; best = s; }
+    }
+    return best;
+  }
+
+  function snapEndpointToAngles(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.0001) return { x2, y2 };
+
+    const ang = Math.atan2(dy, dx);
+    const snapped = snapAngleRad(ang);
+
+    return {
+      x2: x1 + Math.cos(snapped) * len,
+      y2: y1 + Math.sin(snapped) * len
+    };
   }
 
   function updateSwatch() {
@@ -175,7 +216,7 @@ redoBtn?.addEventListener("click", () => {
     redrawAll();
   }
 
-  // ---------- Undo/Redo (keyboard only) ----------
+  // ---------- Undo/Redo ----------
   function snapshot() {
     return {
       tool: state.tool,
@@ -256,7 +297,7 @@ redoBtn?.addEventListener("click", () => {
     redrawAll();
   }
 
-  // ---------- Background CSS transform (NO artefacts) ----------
+  // ---------- Background CSS transform ----------
   function applyBgTransform() {
     bgLayer.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
 
@@ -541,10 +582,9 @@ redoBtn?.addEventListener("click", () => {
   }
 
   // ---------- Pointer interactions ----------
-  
-function onPointerDown(e) {
-  // If click is NOT directly on the drawing canvas, do nothing
-  if (!inkCanvas.contains(e.target)) return;
+  function onPointerDown(e) {
+    // If click is NOT directly on the drawing canvas, do nothing
+    if (!inkCanvas.contains(e.target)) return;
 
     gesture.active = true;
     gesture.pointerId = e.pointerId;
@@ -577,7 +617,7 @@ function onPointerDown(e) {
         color: state.color,
         fontSize: Math.max(14, Math.round(state.size * 4))
       });
-       setActiveTool("select");
+      setActiveTool("select");
       redrawAll();
       return;
     }
@@ -690,8 +730,24 @@ function onPointerDown(e) {
     }
 
     if (gesture.mode === "drawShape" && gesture.activeObj) {
-      gesture.activeObj.x2 = w.x;
-      gesture.activeObj.y2 = w.y;
+      let x2 = w.x;
+      let y2 = w.y;
+
+      // Ctrl snaps angles for line + arrow (Cmd on Mac too)
+      const snapHeld = e.ctrlKey || e.metaKey;
+      const k = gesture.activeObj.kind;
+
+      if (snapHeld && (k === "line" || k === "arrow")) {
+        const snapped = snapEndpointToAngles(
+          gesture.activeObj.x1, gesture.activeObj.y1,
+          x2, y2
+        );
+        x2 = snapped.x2;
+        y2 = snapped.y2;
+      }
+
+      gesture.activeObj.x2 = x2;
+      gesture.activeObj.y2 = y2;
       redrawAll();
       return;
     }
