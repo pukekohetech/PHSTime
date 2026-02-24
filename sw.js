@@ -8,7 +8,7 @@ const ASSETS = [
   "./noise.html",
   "./activities.css",
   "./activities.js",
-  "./brainbreak.html"
+  "./brainbreak.html",
   "./brainbreak.js",
   "./timer.html",
   "./whiteboard.html",
