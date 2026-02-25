@@ -629,6 +629,8 @@
 
   function computeHandles() {
     uiHandles.visible = false;
+    // Only show selection handles while the Select tool is active
+    if (state.tool !== "select") return;
     uiHandles.box = null;
     uiHandles.rotate = null;
     uiHandles.corners = null;
@@ -710,7 +712,7 @@
       uiCtx.restore();
     }
 
-    // selection box + handles
+    // selection box + handles (Select tool only)
     computeHandles();
     if (!uiHandles.visible) return;
 
