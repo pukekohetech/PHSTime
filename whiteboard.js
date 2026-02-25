@@ -1,16 +1,18 @@
 /* =========================================================
    whiteboard.js — background as DOM image (no zoom artefacts)
 
-   + Angle snap for line/arrow when holding Ctrl (or Cmd on Mac)
-     Snaps to: 0, ±30, ±45, ±60, ±90 (and opposites)
+   ADDITIONS (requested):
+     ✅ Transform handles on selected objects (scale corners + rotate handle)
+     ✅ Shift = uniform scale
+     ✅ Shift while rotating = snap to 15° increments
+     ✅ Cursor changes when hovering handles
+     ✅ Move/Scale/Rotate tools (↔ ⤡ ⟲) act on selection if selected; otherwise background
+     ✅ Delete key removes selected object
 
-   RELEVANT FIXES (alignment/mouse/touch):
-     ✅ Use inkCanvas.getBoundingClientRect() for pointer mapping (not stage)
-     ✅ Remove duplicate clientToScreen() definition (you had TWO)
-     ✅ Preserve DPR (devicePixelRatio) in ALL drawing transforms
-        - applyWorldTransform() now sets DPR first, then pan/zoom
-        - drawUI() uses DPR transform for screen-space UI
-     ✅ Clear uses backing-store pixels; drawing restores DPR correctly
+   Existing:
+     + Angle snap for line/arrow when holding Ctrl (or Cmd on Mac)
+       Snaps to: 0, ±30, ±45, ±60, ±90 (and opposites)
+     ✅ DPR-safe transforms & pointer mapping using inkCanvas rect
    ========================================================= */
 
 (() => {
@@ -32,8 +34,6 @@
   // Dock tools
   const dockBtns = Array.from(document.querySelectorAll(".dockBtn[data-tool]"));
   const clearBtn = document.getElementById("clearBtn");
-  const undoBtn = document.getElementById("undoBtn");
-  const redoBtn = document.getElementById("redoBtn");
 
   // Colour popover
   const colorBtn = document.getElementById("colorBtn");
@@ -41,14 +41,14 @@
   const colorInput = document.getElementById("colorInput");
   const brushSize = document.getElementById("brushSize");
   const brushOut = document.getElementById("brushOut");
-  const swatchDot = document.getElementById("swatchDot");
+  const swatchLive = document.getElementById("swatchLive");
 
   // Settings panel
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsPanel = document.getElementById("settingsPanel");
   const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 
-  // Panel controls (no zoom/colour)
+  // Panel controls
   const titleInput = document.getElementById("titleInput");
   const applyTitleBtn = document.getElementById("applyTitleBtn");
 
@@ -93,7 +93,7 @@
     // Ink objects (world coords)
     objects: [],
 
-    // Undo/redo (shortcuts only)
+    // Undo/redo
     undo: [],
     redo: [],
 
@@ -103,17 +103,13 @@
     viewH: 0
   };
 
-  undoBtn?.addEventListener("click", () => {
-    hardResetGesture();
-    undo();
-    showToast("Undo");
-  });
-
-  redoBtn?.addEventListener("click", () => {
-    hardResetGesture();
-    redo();
-    showToast("Redo");
-  });
+  // Handle geometry cached each redraw (screen coords)
+  const uiHandles = {
+    visible: false,
+    box: null, // {x,y,w,h}
+    rotate: null, // {x,y,r}
+    corners: null // [{name,x,y,s}]
+  };
 
   // ---------- Helpers ----------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -140,14 +136,12 @@
 
   // --- Angle snapping helpers (Ctrl/Cmd) ---
   function snapAngleRad(angleRad) {
-    // Snap to nearest in this set (degrees):
-    // 0, 30, 45, 60, 90 and their opposites are covered by adding 120/135/150/180.
-   const snapsDeg = [
-     0,
-     30, 45, 60, 90, 120, 135, 150,
-    -30,-45,-60,-90,-120,-135,-150,
-     180
-  ];
+    const snapsDeg = [
+      0,
+      30, 45, 60, 90, 120, 135, 150,
+     -30,-45,-60,-90,-120,-135,-150,
+      180
+    ];
     const snaps = snapsDeg.map(d => d * Math.PI / 180);
 
     // Normalize to [-PI, PI)
@@ -179,7 +173,7 @@
   }
 
   function updateSwatch() {
-    swatchDot.style.background = state.color;
+    swatchLive.style.background = state.color;
   }
 
   function setColor(hex) {
@@ -197,6 +191,7 @@
   function setActiveTool(tool) {
     state.tool = tool;
     dockBtns.forEach(b => b.classList.toggle("is-active", b.dataset.tool === tool));
+    updateCursorFromTool();
   }
 
   // Screen <-> World (screen coords are CSS px)
@@ -222,6 +217,10 @@
   }
 
   // ---------- Undo/Redo ----------
+  function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
   function snapshot() {
     return {
       tool: state.tool,
@@ -232,7 +231,7 @@
       panY: state.panY,
       title: state.title,
       bg: { ...state.bg },
-      objects: JSON.parse(JSON.stringify(state.objects))
+      objects: deepClone(state.objects)
     };
   }
 
@@ -253,11 +252,9 @@
     const bg = snap.bg || { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
     state.bg = { ...bg };
 
-    state.objects = Array.isArray(snap.objects)
-      ? JSON.parse(JSON.stringify(snap.objects))
-      : [];
-
+    state.objects = Array.isArray(snap.objects) ? deepClone(snap.objects) : [];
     state.selectionIndex = -1;
+
     applyBgTransform();
     redrawAll();
   }
@@ -286,7 +283,7 @@
     state.viewH = Math.floor(r.height);
 
     const scale = dpr();
-    state.pixelRatio = scale; // ✅ track DPR
+    state.pixelRatio = scale;
 
     canvas.width = Math.max(1, Math.floor(state.viewW * scale));
     canvas.height = Math.max(1, Math.floor(state.viewH * scale));
@@ -326,15 +323,14 @@
 
   // ---------- Rendering ----------
   function clearCtx(ctx, canvas) {
-    // clear in backing-store pixels
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  // ✅ CRITICAL: Apply DPR first, then camera pan/zoom
+  // ✅ Apply DPR first, then camera pan/zoom
   function applyWorldTransform(ctx) {
     const pr = state.pixelRatio || 1;
-    ctx.setTransform(pr, 0, 0, pr, 0, 0); // DPR => drawing coords = CSS px
+    ctx.setTransform(pr, 0, 0, pr, 0, 0);
     ctx.translate(state.panX, state.panY);
     ctx.scale(state.zoom, state.zoom);
   }
@@ -381,7 +377,11 @@
       inkCtx.fillStyle = obj.color;
       inkCtx.textBaseline = "top";
       inkCtx.font = `700 ${obj.fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
-      inkCtx.fillText(obj.text, obj.x, obj.y);
+      inkCtx.save();
+      inkCtx.translate(obj.x, obj.y);
+      if (obj.rot) inkCtx.rotate(obj.rot);
+      inkCtx.fillText(obj.text, 0, 0);
+      inkCtx.restore();
       inkCtx.restore();
       return;
     }
@@ -427,6 +427,7 @@
   const measureCtx = document.createElement("canvas").getContext("2d");
 
   function objectBounds(obj) {
+    // NOTE: bounds are axis-aligned; rotated text will be approximate (good enough for handles)
     if (obj.kind === "text") {
       measureCtx.font = `700 ${obj.fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
       const w = measureCtx.measureText(obj.text || "").width;
@@ -517,18 +518,146 @@
     obj.x1 += dx; obj.y1 += dy; obj.x2 += dx; obj.y2 += dy;
   }
 
+  function scaleObjectXY(obj, fx, fy, ax, ay) {
+    if (!isFinite(fx)) fx = 1;
+    if (!isFinite(fy)) fy = 1;
+
+    // protect against tiny/negative flips
+    fx = clamp(fx, -20, 20);
+    fy = clamp(fy, -20, 20);
+
+    if (obj.kind === "text") {
+      // move position around anchor and scale font size (uniform-ish)
+      obj.x = ax + (obj.x - ax) * fx;
+      obj.y = ay + (obj.y - ay) * fy;
+      const uni = Math.max(0.2, (Math.abs(fx) + Math.abs(fy)) / 2);
+      obj.fontSize = Math.max(6, obj.fontSize * uni);
+      return;
+    }
+
+    if (obj.kind === "stroke" || obj.kind === "erase") {
+      (obj.points || []).forEach(p => {
+        p.x = ax + (p.x - ax) * fx;
+        p.y = ay + (p.y - ay) * fy;
+      });
+      return;
+    }
+
+    obj.x1 = ax + (obj.x1 - ax) * fx;
+    obj.y1 = ay + (obj.y1 - ay) * fy;
+    obj.x2 = ax + (obj.x2 - ax) * fx;
+    obj.y2 = ay + (obj.y2 - ay) * fy;
+  }
+
+  function rotatePoint(px, py, cx, cy, angle) {
+    const dx = px - cx;
+    const dy = py - cy;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: cx + dx * cos - dy * sin,
+      y: cy + dx * sin + dy * cos
+    };
+  }
+
+  function rotateObject(obj, angle) {
+    const b = objectBounds(obj);
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
+
+    if (obj.kind === "text") {
+      obj.rot = (obj.rot || 0) + angle;
+      return;
+    }
+
+    if (obj.kind === "stroke" || obj.kind === "erase") {
+      (obj.points || []).forEach(p => {
+        const r = rotatePoint(p.x, p.y, cx, cy, angle);
+        p.x = r.x; p.y = r.y;
+      });
+      return;
+    }
+
+    const p1 = rotatePoint(obj.x1, obj.y1, cx, cy, angle);
+    const p2 = rotatePoint(obj.x2, obj.y2, cx, cy, angle);
+    obj.x1 = p1.x; obj.y1 = p1.y;
+    obj.x2 = p2.x; obj.y2 = p2.y;
+  }
+
   function drawInk() {
     clearCtx(inkCtx, inkCanvas);
     for (const obj of state.objects) drawInkObject(obj);
   }
 
+  function computeHandles() {
+    uiHandles.visible = false;
+    uiHandles.box = null;
+    uiHandles.rotate = null;
+    uiHandles.corners = null;
+
+    if (state.selectionIndex < 0) return;
+    const obj = state.objects[state.selectionIndex];
+    if (!obj) return;
+
+    const b = objectBounds(obj);
+    const p1 = worldToScreen(b.minX, b.minY);
+    const p2 = worldToScreen(b.maxX, b.maxY);
+
+    const x = Math.min(p1.x, p2.x);
+    const y = Math.min(p1.y, p2.y);
+    const w = Math.abs(p2.x - p1.x);
+    const h = Math.abs(p2.y - p1.y);
+
+    const s = 10; // handle size (screen px)
+    const cx = x + w/2;
+    const top = y;
+
+    uiHandles.visible = true;
+    uiHandles.box = { x, y, w, h };
+    uiHandles.corners = [
+      { name:"nw", x:x,   y:y,   s },
+      { name:"ne", x:x+w, y:y,   s },
+      { name:"se", x:x+w, y:y+h, s },
+      { name:"sw", x:x,   y:y+h, s },
+    ];
+    uiHandles.rotate = { x: cx, y: top - 22, r: 7 };
+  }
+
+  function hitHandle(sx, sy) {
+    if (!uiHandles.visible || !uiHandles.box) return null;
+
+    // rotate
+    if (uiHandles.rotate) {
+      const dx = sx - uiHandles.rotate.x;
+      const dy = sy - uiHandles.rotate.y;
+      if (Math.hypot(dx, dy) <= uiHandles.rotate.r + 6) return { kind:"rotate" };
+    }
+
+    // corners
+    if (uiHandles.corners) {
+      for (const c of uiHandles.corners) {
+        const half = c.s;
+        if (sx >= c.x - half && sx <= c.x + half && sy >= c.y - half && sy <= c.y + half) {
+          return { kind:"scale", corner: c.name };
+        }
+      }
+    }
+
+    // inside box -> move
+    const b = uiHandles.box;
+    if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) {
+      return { kind:"move" };
+    }
+
+    return null;
+  }
+
   function drawUI() {
     clearCtx(uiCtx, uiCanvas);
 
-    // Screen-space UI must still use DPR so it matches pointer coords
     const pr = state.pixelRatio || 1;
 
-    // Title (not zoomed)
+    // Title (screen space)
     if (state.title) {
       uiCtx.save();
       uiCtx.setTransform(pr, 0, 0, pr, 0, 0);
@@ -543,20 +672,44 @@
       uiCtx.restore();
     }
 
-    // Selection box
-    if (state.selectionIndex >= 0 && state.objects[state.selectionIndex]) {
-      const b = objectBounds(state.objects[state.selectionIndex]);
-      const p1 = worldToScreen(b.minX, b.minY);
-      const p2 = worldToScreen(b.maxX, b.maxY);
+    // selection box + handles
+    computeHandles();
+    if (!uiHandles.visible) return;
 
-      uiCtx.save();
-      uiCtx.setTransform(pr, 0, 0, pr, 0, 0);
+    const b = uiHandles.box;
+    uiCtx.save();
+    uiCtx.setTransform(pr, 0, 0, pr, 0, 0);
+    uiCtx.strokeStyle = "rgba(46, 204, 113, 0.95)";
+    uiCtx.lineWidth = 2;
+    uiCtx.setLineDash([6, 4]);
+    uiCtx.strokeRect(b.x, b.y, b.w, b.h);
+    uiCtx.setLineDash([]);
+
+    // rotate handle line
+    uiCtx.beginPath();
+    uiCtx.moveTo(b.x + b.w/2, b.y);
+    uiCtx.lineTo(uiHandles.rotate.x, uiHandles.rotate.y);
+    uiCtx.stroke();
+
+    // rotate handle circle
+    uiCtx.fillStyle = "rgba(255,255,255,0.95)";
+    uiCtx.beginPath();
+    uiCtx.arc(uiHandles.rotate.x, uiHandles.rotate.y, uiHandles.rotate.r, 0, Math.PI*2);
+    uiCtx.fill();
+    uiCtx.stroke();
+
+    // corner handles
+    for (const c of uiHandles.corners) {
+      uiCtx.fillStyle = "rgba(255,255,255,0.95)";
       uiCtx.strokeStyle = "rgba(46, 204, 113, 0.95)";
       uiCtx.lineWidth = 2;
-      uiCtx.setLineDash([6, 4]);
-      uiCtx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-      uiCtx.restore();
+      uiCtx.beginPath();
+      uiCtx.rect(c.x - c.s, c.y - c.s, c.s*2, c.s*2);
+      uiCtx.fill();
+      uiCtx.stroke();
     }
+
+    uiCtx.restore();
   }
 
   function redrawAll() {
@@ -570,9 +723,21 @@
     active: false,
     pointerId: null,
     mode: "none",
+    startWorld: null,
+    startScreen: null,
     lastWorld: null,
     lastScreen: null,
-    activeObj: null
+    activeObj: null,
+
+    // For transform handles (stable, non-accumulating)
+    selIndex: -1,
+    selStartObj: null,
+    selAnchor: null,
+    selStartVec: null,
+    selStartAngle: 0,
+
+    // Background stable start
+    bgStart: null
   };
 
   let spacePanning = false;
@@ -581,14 +746,147 @@
     gesture.active = false;
     gesture.pointerId = null;
     gesture.mode = "none";
+    gesture.startWorld = null;
+    gesture.startScreen = null;
     gesture.lastWorld = null;
     gesture.lastScreen = null;
     gesture.activeObj = null;
+
+    gesture.selIndex = -1;
+    gesture.selStartObj = null;
+    gesture.selAnchor = null;
+    gesture.selStartVec = null;
+    gesture.selStartAngle = 0;
+
+    gesture.bgStart = null;
+  }
+
+  // ---------- Cursor UX ----------
+  function updateCursorFromTool() {
+    if (state.tool === "pen" || state.tool === "line" || state.tool === "rect" || state.tool === "circle" || state.tool === "arrow") {
+      inkCanvas.style.cursor = "crosshair";
+      return;
+    }
+    if (state.tool === "eraser") {
+      inkCanvas.style.cursor = "cell";
+      return;
+    }
+    if (state.tool === "text") {
+      inkCanvas.style.cursor = "text";
+      return;
+    }
+    if (state.tool === "select") {
+      inkCanvas.style.cursor = "default";
+      return;
+    }
+    if (state.tool === "bgMove") {
+      inkCanvas.style.cursor = "grab";
+      return;
+    }
+    if (state.tool === "bgScale") {
+      inkCanvas.style.cursor = "nwse-resize";
+      return;
+    }
+    if (state.tool === "bgRotate") {
+      inkCanvas.style.cursor = "alias";
+      return;
+    }
+    inkCanvas.style.cursor = "default";
+  }
+
+  function updateHoverCursor(sx, sy) {
+    if (gesture.active) return; // don't fight active gesture
+    if (state.tool !== "select") { updateCursorFromTool(); return; }
+
+    const h = hitHandle(sx, sy);
+    if (!h) { inkCanvas.style.cursor = "default"; return; }
+
+    if (h.kind === "rotate") { inkCanvas.style.cursor = "grab"; return; }
+    if (h.kind === "move")   { inkCanvas.style.cursor = "move"; return; }
+
+    // scale corners
+    if (h.corner === "nw" || h.corner === "se") inkCanvas.style.cursor = "nwse-resize";
+    else inkCanvas.style.cursor = "nesw-resize";
   }
 
   // ---------- Pointer interactions ----------
+  function beginSelectionTransform(kind, e, w, sx, sy) {
+    const idx = state.selectionIndex;
+    if (idx < 0) return false;
+
+    pushUndo(); clearRedo();
+
+    gesture.selIndex = idx;
+    gesture.selStartObj = deepClone(state.objects[idx]);
+
+    const b = objectBounds(state.objects[idx]);
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
+    gesture.selAnchor = { x: cx, y: cy };
+
+    if (kind === "move") {
+      gesture.mode = "selMove";
+      gesture.startWorld = w;
+      return true;
+    }
+
+    if (kind === "scale") {
+      gesture.mode = "selScale";
+      gesture.startWorld = w;
+      gesture.selStartVec = { x: w.x - cx, y: w.y - cy };
+      return true;
+    }
+
+    if (kind === "rotate") {
+      gesture.mode = "selRotate";
+      gesture.startWorld = w;
+      gesture.selStartAngle = Math.atan2(w.y - cy, w.x - cx);
+      return true;
+    }
+
+    return false;
+  }
+
+  function beginBgTransform(mode, w) {
+    if (!state.bg.src) return false;
+    pushUndo(); clearRedo();
+    gesture.bgStart = { ...state.bg };
+    gesture.startWorld = w;
+    gesture.mode = mode; // bgMove/bgScale/bgRotate
+    return true;
+  }
+
+  // Tools ↔ ⤡ ⟲ act on selection if selected; otherwise background
+  function beginToolTransformForSelectionOrBg(tool, w) {
+    if (state.selectionIndex >= 0) {
+      // Use selection transforms but driven by drag direction (legacy tools)
+      pushUndo(); clearRedo();
+      gesture.selIndex = state.selectionIndex;
+      gesture.selStartObj = deepClone(state.objects[state.selectionIndex]);
+
+      const b = objectBounds(state.objects[state.selectionIndex]);
+      const cx = (b.minX + b.maxX) / 2;
+      const cy = (b.minY + b.maxY) / 2;
+      gesture.selAnchor = { x: cx, y: cy };
+      gesture.startWorld = w;
+
+      if (tool === "bgMove") gesture.mode = "selMove";
+      if (tool === "bgScale") {
+        gesture.mode = "selScale";
+        gesture.selStartVec = { x: w.x - cx, y: w.y - cy };
+      }
+      if (tool === "bgRotate") {
+        gesture.mode = "selRotate";
+        gesture.selStartAngle = Math.atan2(w.y - cy, w.x - cx);
+      }
+      return true;
+    }
+
+    // No selection -> background
+    return beginBgTransform(tool, w);
+  }
+
   function onPointerDown(e) {
-    // If click is NOT directly on the drawing canvas, do nothing
     if (!inkCanvas.contains(e.target)) return;
 
     gesture.active = true;
@@ -598,15 +896,19 @@
     const { sx, sy } = clientToScreen(e);
     const w = screenToWorld(sx, sy);
 
+    gesture.startScreen = { sx, sy };
     gesture.lastScreen = { sx, sy };
+    gesture.startWorld = w;
     gesture.lastWorld = w;
     gesture.activeObj = null;
 
     if (spacePanning) {
       gesture.mode = "pan";
+      inkCanvas.style.cursor = "grabbing";
       return;
     }
 
+    // Text tool: click to place, then auto-select
     if (state.tool === "text") {
       gesture.active = false;
       gesture.mode = "none";
@@ -620,33 +922,47 @@
         y: w.y,
         text: String(text),
         color: state.color,
-        fontSize: Math.max(14, Math.round(state.size * 4))
+        fontSize: Math.max(14, Math.round(state.size * 4)),
+        rot: 0
       });
+      state.selectionIndex = state.objects.length - 1;
       setActiveTool("select");
       redrawAll();
       return;
     }
 
-    if (state.tool === "bgMove" || state.tool === "bgScale" || state.tool === "bgRotate") {
-      if (!state.bg.src) return;
-      pushUndo(); clearRedo();
-      gesture.mode = state.tool;
-      return;
-    }
-
+    // Selection tool: handles + hit test
     if (state.tool === "select") {
+      const handle = hitHandle(sx, sy);
+      if (handle) {
+        // transform existing selection
+        if (beginSelectionTransform(handle.kind, e, w, sx, sy)) {
+          redrawAll();
+          return;
+        }
+      }
+
+      // no handle -> select object
       const hit = findHit(w.x, w.y);
       state.selectionIndex = hit;
       redrawAll();
+
       if (hit >= 0) {
-        pushUndo(); clearRedo();
-        gesture.mode = "selectMove";
+        // begin move on drag
+        beginSelectionTransform("move", e, w, sx, sy);
       } else {
         gesture.mode = "select";
       }
       return;
     }
 
+    // Background/transform tools (act on selection if selected)
+    if (state.tool === "bgMove" || state.tool === "bgScale" || state.tool === "bgRotate") {
+      beginToolTransformForSelectionOrBg(state.tool, w);
+      return;
+    }
+
+    // Drawing tools
     pushUndo(); clearRedo();
     state.selectionIndex = -1;
 
@@ -681,9 +997,11 @@
   }
 
   function onPointerMove(e) {
+    const { sx, sy } = clientToScreen(e);
+    updateHoverCursor(sx, sy);
+
     if (!gesture.active) return;
 
-    const { sx, sy } = clientToScreen(e);
     const w = screenToWorld(sx, sy);
 
     if (gesture.mode === "pan" && gesture.lastScreen) {
@@ -696,38 +1014,104 @@
       return;
     }
 
-    if (gesture.mode === "bgMove" && gesture.lastWorld) {
-      state.bg.x += (w.x - gesture.lastWorld.x);
-      state.bg.y += (w.y - gesture.lastWorld.y);
-      gesture.lastWorld = w;
-      redrawAll();
-      return;
-    }
-    if (gesture.mode === "bgScale" && gesture.lastWorld) {
-      const dy = (w.y - gesture.lastWorld.y);
-      const factor = 1 - dy * 0.02;
-      state.bg.scale = clamp(state.bg.scale * factor, 0.05, 10);
-      gesture.lastWorld = w;
-      redrawAll();
-      return;
-    }
-    if (gesture.mode === "bgRotate" && gesture.lastWorld) {
-      const dx = (w.x - gesture.lastWorld.x);
-      state.bg.rot += dx * 0.02;
-      gesture.lastWorld = w;
+    // Selection move (stable from snapshot)
+    if (gesture.mode === "selMove" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.startWorld) {
+      const dx = w.x - gesture.startWorld.x;
+      const dy = w.y - gesture.startWorld.y;
+      state.objects[gesture.selIndex] = deepClone(gesture.selStartObj);
+      moveObject(state.objects[gesture.selIndex], dx, dy);
       redrawAll();
       return;
     }
 
-    if (gesture.mode === "selectMove" && gesture.lastWorld && state.selectionIndex >= 0) {
-      const dx = w.x - gesture.lastWorld.x;
-      const dy = w.y - gesture.lastWorld.y;
-      moveObject(state.objects[state.selectionIndex], dx, dy);
-      gesture.lastWorld = w;
+    // Selection scale (stable from snapshot)
+    if (gesture.mode === "selScale" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.selAnchor && gesture.selStartVec) {
+      const ax = gesture.selAnchor.x;
+      const ay = gesture.selAnchor.y;
+
+      const v0 = gesture.selStartVec;
+      const v1 = { x: w.x - ax, y: w.y - ay };
+
+      // avoid divide by ~0
+      const fxRaw = (Math.abs(v0.x) < 0.001) ? 1 : (v1.x / v0.x);
+      const fyRaw = (Math.abs(v0.y) < 0.001) ? 1 : (v1.y / v0.y);
+
+      let fx = fxRaw;
+      let fy = fyRaw;
+
+      // Shift = uniform scale
+      if (e.shiftKey) {
+        const l0 = Math.hypot(v0.x, v0.y) || 1;
+        const l1 = Math.hypot(v1.x, v1.y) || 1;
+        const f = l1 / l0;
+        fx = f;
+        fy = f;
+      }
+
+      state.objects[gesture.selIndex] = deepClone(gesture.selStartObj);
+      scaleObjectXY(state.objects[gesture.selIndex], fx, fy, ax, ay);
       redrawAll();
       return;
     }
 
+    // Selection rotate (stable from snapshot)
+    if (gesture.mode === "selRotate" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.selAnchor) {
+      const ax = gesture.selAnchor.x;
+      const ay = gesture.selAnchor.y;
+
+      const a0 = gesture.selStartAngle;
+      let a1 = Math.atan2(w.y - ay, w.x - ax);
+      let delta = a1 - a0;
+
+      // Shift = snap 15 degrees
+      if (e.shiftKey) {
+        const step = 15 * Math.PI / 180;
+        delta = Math.round(delta / step) * step;
+      }
+
+      state.objects[gesture.selIndex] = deepClone(gesture.selStartObj);
+      rotateObject(state.objects[gesture.selIndex], delta);
+      redrawAll();
+      return;
+    }
+
+    // Background transforms (stable from snapshot)
+    if ((gesture.mode === "bgMove" || gesture.mode === "bgScale" || gesture.mode === "bgRotate") && gesture.bgStart && gesture.startWorld) {
+      const start = gesture.startWorld;
+
+      if (gesture.mode === "bgMove") {
+        state.bg = { ...gesture.bgStart };
+        state.bg.x = gesture.bgStart.x + (w.x - start.x);
+        state.bg.y = gesture.bgStart.y + (w.y - start.y);
+        applyBgTransform();
+        drawUI();
+        drawInk();
+        return;
+      }
+
+      if (gesture.mode === "bgScale") {
+        state.bg = { ...gesture.bgStart };
+        const dy = (w.y - start.y);
+        const factor = 1 - dy * 0.02;
+        state.bg.scale = clamp(gesture.bgStart.scale * factor, 0.05, 10);
+        applyBgTransform();
+        drawUI();
+        drawInk();
+        return;
+      }
+
+      if (gesture.mode === "bgRotate") {
+        state.bg = { ...gesture.bgStart };
+        const dx = (w.x - start.x);
+        state.bg.rot = gesture.bgStart.rot + dx * 0.02;
+        applyBgTransform();
+        drawUI();
+        drawInk();
+        return;
+      }
+    }
+
+    // Drawing
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
       gesture.activeObj.points.push(w);
       redrawAll();
@@ -738,7 +1122,7 @@
       let x2 = w.x;
       let y2 = w.y;
 
-      // Ctrl snaps angles for line + arrow (Cmd on Mac too)
+      // Ctrl/Cmd snaps angles for line + arrow
       const snapHeld = e.ctrlKey || e.metaKey;
       const k = gesture.activeObj.kind;
 
@@ -762,6 +1146,7 @@
     if (!gesture.active) return;
     try { inkCanvas.releasePointerCapture(gesture.pointerId); } catch {}
     hardResetGesture();
+    updateCursorFromTool();
   }
 
   inkCanvas.addEventListener("pointerdown", onPointerDown);
@@ -893,10 +1278,24 @@
     if (e.code === "Space") {
       spacePanning = true;
       e.preventDefault();
+      if (gesture.active && gesture.mode === "pan") inkCanvas.style.cursor = "grabbing";
     }
 
     const tag = (document.activeElement && document.activeElement.tagName) || "";
     const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+    // Delete removes selection (when not typing)
+    if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
+      if (state.selectionIndex >= 0) {
+        pushUndo(); clearRedo();
+        state.objects.splice(state.selectionIndex, 1);
+        state.selectionIndex = -1;
+        redrawAll();
+        showToast("Deleted");
+      }
+    }
+
+    // Tool hotkeys
     if (!typing) {
       const k = e.key.toLowerCase();
       if (k === "v") setActiveTool("select");
@@ -909,6 +1308,7 @@
       if (k === "e") setActiveTool("eraser");
     }
 
+    // Undo/redo shortcuts
     const isMac = navigator.platform.toUpperCase().includes("MAC");
     const mod = isMac ? e.metaKey : e.ctrlKey;
     if (!mod) return;
@@ -926,11 +1326,14 @@
   });
 
   document.addEventListener("keyup", (e) => {
-    if (e.code === "Space") spacePanning = false;
+    if (e.code === "Space") {
+      spacePanning = false;
+      updateCursorFromTool();
+    }
   });
 
   // ---------- Boards ----------
-  const LS_KEY = "PHS_WHITEBOARD_BOARDS_v6";
+  const LS_KEY = "PHS_WHITEBOARD_BOARDS_v7";
 
   function loadBoardsIndex() {
     try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
@@ -954,7 +1357,7 @@
   }
 
   function snapshotBoard() {
-    return { v: 6, savedAt: new Date().toISOString(), ...snapshot() };
+    return { v: 7, savedAt: new Date().toISOString(), ...snapshot() };
   }
 
   async function applyBoard(data) {
@@ -1061,6 +1464,7 @@
     setActiveTool("pen");
 
     applyBgTransform();
+    updateSwatch();
 
     resizeAll();
     requestAnimationFrame(resizeAll);

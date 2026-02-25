@@ -11,12 +11,10 @@
 
 <body class="page-whiteboard">
   <nav class="appNav" aria-label="PHS Classroom Tools">
-    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
-     <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ PHS Timer</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Timer</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
-    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
-    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
-    <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
+    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
   </nav>
 
   <div class="toast" id="toast" aria-live="polite">Saved</div>
@@ -27,8 +25,7 @@
       <!-- COLOUR (top icon) + brush size popover -->
       <div class="dockPopWrap">
         <button class="dockBtn dockBtn--swatch" id="colorBtn" title="Colour + Brush size">
-          🎨
-          <span class="swatchDot" id="swatchDot" aria-hidden="true"></span>
+          <span class="swatchLive" id="swatchLive" aria-hidden="true"></span>
         </button>
 
         <div class="dockPop is-hidden" id="colorPop" role="dialog" aria-label="Colour and brush size">
@@ -43,7 +40,7 @@
             <span id="brushOut" class="dockPop__pill">5</span>
           </div>
 
-          <div class="dockPop__note">Tip: Eraser size is based on brush size.</div>
+          <div class="dockPop__note">Shift: uniform scale • Shift (rotate): snap 15° • Delete: remove selected</div>
         </div>
       </div>
 
@@ -60,13 +57,13 @@
       <button class="dockBtn" data-tool="arrow" title="Arrow (A)">➤</button>
       <button class="dockBtn" data-tool="text" title="Text (T)">T</button>
       <button class="dockBtn" data-tool="eraser" title="Eraser (E)">🧽</button>
-<button class="dockBtn" id="undoBtn" type="button" title="Undo">↶</button>
-<button class="dockBtn" id="redoBtn" type="button" title="Redo">↷</button>
+
       <div class="dockSep"></div>
 
-      <button class="dockBtn" data-tool="bgMove" title="Background: Move">🖼️↔</button>
-      <button class="dockBtn" data-tool="bgScale" title="Background: Scale">🖼️⤡</button>
-      <button class="dockBtn" data-tool="bgRotate" title="Background: Rotate">🖼️⟲</button>
+      <!-- These act on selection if something is selected; otherwise they act on background -->
+      <button class="dockBtn" data-tool="bgMove" title="Move selection / background">↔</button>
+      <button class="dockBtn" data-tool="bgScale" title="Scale selection / background">⤡</button>
+      <button class="dockBtn" data-tool="bgRotate" title="Rotate selection / background">⟲</button>
 
       <div class="dockSep"></div>
 
@@ -76,7 +73,7 @@
     <!-- STAGE -->
     <section class="stageWrap">
       <div class="stage" id="stage" aria-label="Whiteboard stage">
-        <!-- Background is DOM (no canvas tiling artefacts) -->
+        <!-- Background is DOM (no zoom artefacts) -->
         <div id="bgLayer" aria-hidden="true">
           <img id="bgImg" alt="" />
         </div>
@@ -90,7 +87,7 @@
           ⚙️
         </button>
 
-        <!-- settings panel (NO zoom controls, NO colour controls) -->
+        <!-- settings panel -->
         <div class="panel is-hidden" id="settingsPanel" role="dialog" aria-label="Whiteboard settings">
           <div class="panel__top">
             <div class="panel__title">Board Settings</div>
@@ -112,7 +109,7 @@
                 <input id="bgFile" type="file" accept="image/*" class="panel__file" />
                 <button id="clearBgBtn" class="panel__btn" type="button">Clear</button>
               </div>
-              <div class="panel__note">Use 🖼️ tools on the left to move/scale/rotate.</div>
+              <div class="panel__note">Use ↔ ⤡ ⟲ on the left (acts on selection if one is selected).</div>
             </div>
 
             <div class="panel__group panel__group--wide">
@@ -134,7 +131,7 @@
       </div>
 
       <div class="hint">
-        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo
+        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected
       </div>
     </section>
   </main>
