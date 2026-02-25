@@ -376,12 +376,20 @@
       inkCtx.globalCompositeOperation = "source-over";
       inkCtx.fillStyle = obj.color;
       inkCtx.textBaseline = "top";
-      inkCtx.font = `700 ${obj.fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+
+      const m = textMetrics(obj);
+      inkCtx.font = `700 ${m.fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+
+      // Rotate around the *center* of the text box so it stays inside its bounds.
+      const cx = obj.x + m.w / 2;
+      const cy = obj.y + m.h / 2;
+
       inkCtx.save();
-      inkCtx.translate(obj.x, obj.y);
+      inkCtx.translate(cx, cy);
       if (obj.rot) inkCtx.rotate(obj.rot);
-      inkCtx.fillText(obj.text, 0, 0);
+      inkCtx.fillText(obj.text, -m.w / 2, -m.h / 2);
       inkCtx.restore();
+
       inkCtx.restore();
       return;
     }
@@ -426,13 +434,44 @@
   // reuse measuring context for text bounds
   const measureCtx = document.createElement("canvas").getContext("2d");
 
+  function textMetrics(obj) {
+    const fontSize = obj.fontSize || 20;
+    measureCtx.font = `700 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+    const text = obj.text || "";
+    const w = measureCtx.measureText(text).width;
+    const h = fontSize * 1.25;
+    return { w, h, fontSize };
+  }
+
+
   function objectBounds(obj) {
     // NOTE: bounds are axis-aligned; rotated text will be approximate (good enough for handles)
     if (obj.kind === "text") {
-      measureCtx.font = `700 ${obj.fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
-      const w = measureCtx.measureText(obj.text || "").width;
-      const h = obj.fontSize * 1.25;
-      return { minX: obj.x, minY: obj.y, maxX: obj.x + w, maxY: obj.y + h };
+      const m = textMetrics(obj);
+      const w = m.w;
+      const h = m.h;
+
+      // Axis-aligned bounds of a rotated rectangle around its center
+      const cx = obj.x + w / 2;
+      const cy = obj.y + h / 2;
+      const ang = obj.rot || 0;
+
+      const corners = [
+        { x: -w/2, y: -h/2 },
+        { x:  w/2, y: -h/2 },
+        { x:  w/2, y:  h/2 },
+        { x: -w/2, y:  h/2 },
+      ].map(p => {
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        return { x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos };
+      });
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of corners) {
+        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+      }
+      return { minX, minY, maxX, maxY };
     }
     if (obj.kind === "stroke" || obj.kind === "erase") {
       const pts = obj.points || [];
