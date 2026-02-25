@@ -61,6 +61,7 @@
   const loadBoardBtn = document.getElementById("loadBoardBtn");
 
   const exportBtn = document.getElementById("exportBtn");
+  const exportSvgBtn = document.getElementById("exportSvgBtn");
 
   // ---------- State ----------
   const state = {
@@ -714,17 +715,70 @@
 
   function computeHandles() {
     uiHandles.visible = false;
-    // Only show selection handles while the Select tool is active
-    if (state.tool !== "select") return;
     uiHandles.box = null;
     uiHandles.rotate = null;
     uiHandles.corners = null;
+    uiHandles.poly = null;
+    uiHandles.center = null;
 
+    if (state.tool !== "select") return;
     if (state.selectionIndex < 0) return;
     const obj = state.objects[state.selectionIndex];
     if (!obj) return;
 
     const b = objectBounds(obj);
+
+    const hasOwnRot = (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "text") && (obj.rot || 0);
+
+    if (hasOwnRot) {
+      let w = (b.maxX - b.minX);
+      let h = (b.maxY - b.minY);
+
+      if (obj.kind === "rect" || obj.kind === "circle") {
+        w = Math.abs(obj.x2 - obj.x1);
+        h = Math.abs(obj.y2 - obj.y1);
+      } else if (obj.kind === "text") {
+        const m = textMetrics(obj);
+        w = m.w; h = m.h;
+      }
+
+      const cx = (b.minX + b.maxX) / 2;
+      const cy = (b.minY + b.maxY) / 2;
+      const ang = obj.rot || 0;
+
+      const cornersW = [
+        { x: -w/2, y: -h/2 },
+        { x:  w/2, y: -h/2 },
+        { x:  w/2, y:  h/2 },
+        { x: -w/2, y:  h/2 },
+      ].map(p => {
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        return { x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos };
+      });
+
+      const cornersS = cornersW.map(p => worldToScreen(p.x, p.y));
+
+      const topMid = { x: (cornersS[0].x + cornersS[1].x)/2, y: (cornersS[0].y + cornersS[1].y)/2 };
+      const edge = { x: cornersS[1].x - cornersS[0].x, y: cornersS[1].y - cornersS[0].y };
+      const elen = Math.hypot(edge.x, edge.y) || 1;
+      const nx = -(edge.y / elen);
+      const ny =  (edge.x / elen);
+      const rotatePt = { x: topMid.x + nx * 28, y: topMid.y + ny * 28 };
+
+      const s = 10;
+      uiHandles.visible = true;
+      uiHandles.poly = cornersS;
+      uiHandles.corners = [
+        { name:"nw", x: cornersS[0].x, y: cornersS[0].y, s },
+        { name:"ne", x: cornersS[1].x, y: cornersS[1].y, s },
+        { name:"se", x: cornersS[2].x, y: cornersS[2].y, s },
+        { name:"sw", x: cornersS[3].x, y: cornersS[3].y, s },
+      ];
+      uiHandles.rotate = { x: rotatePt.x, y: rotatePt.y, r: 7 };
+      uiHandles.center = { x: (cornersS[0].x + cornersS[2].x)/2, y: (cornersS[0].y + cornersS[2].y)/2 };
+      return;
+    }
+
     const p1 = worldToScreen(b.minX, b.minY);
     const p2 = worldToScreen(b.maxX, b.maxY);
 
@@ -733,7 +787,7 @@
     const w = Math.abs(p2.x - p1.x);
     const h = Math.abs(p2.y - p1.y);
 
-    const s = 10; // handle size (screen px)
+    const s = 10;
     const cx = x + w/2;
     const top = y;
 
@@ -749,16 +803,14 @@
   }
 
   function hitHandle(sx, sy) {
-    if (!uiHandles.visible || !uiHandles.box) return null;
+    if (!uiHandles.visible) return null;
 
-    // rotate
     if (uiHandles.rotate) {
       const dx = sx - uiHandles.rotate.x;
       const dy = sy - uiHandles.rotate.y;
       if (Math.hypot(dx, dy) <= uiHandles.rotate.r + 6) return { kind:"rotate" };
     }
 
-    // corners
     if (uiHandles.corners) {
       for (const c of uiHandles.corners) {
         const half = c.s;
@@ -768,10 +820,21 @@
       }
     }
 
-    // inside box -> move
-    const b = uiHandles.box;
-    if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) {
-      return { kind:"move" };
+    if (uiHandles.box) {
+      const b = uiHandles.box;
+      if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) return { kind:"move" };
+    }
+
+    if (uiHandles.poly) {
+      const poly = uiHandles.poly;
+      let inside = false;
+      for (let i=0, j=poly.length-1; i<poly.length; j=i++) {
+        const xi=poly[i].x, yi=poly[i].y;
+        const xj=poly[j].x, yj=poly[j].y;
+        const intersect = ((yi>sy)!==(yj>sy)) && (sx < (xj-xi)*(sy-yi)/(yj-yi+1e-12) + xi);
+        if (intersect) inside = !inside;
+      }
+      if (inside) return { kind:"move" };
     }
 
     return null;
@@ -807,12 +870,26 @@
     uiCtx.strokeStyle = "rgba(46, 204, 113, 0.95)";
     uiCtx.lineWidth = 2;
     uiCtx.setLineDash([6, 4]);
-    uiCtx.strokeRect(b.x, b.y, b.w, b.h);
+    if (!uiHandles.poly) {
+      uiCtx.strokeRect(b.x, b.y, b.w, b.h);
+    } else {
+      const p = uiHandles.poly;
+      uiCtx.beginPath();
+      uiCtx.moveTo(p[0].x, p[0].y);
+      for (let i=1;i<p.length;i++) uiCtx.lineTo(p[i].x, p[i].y);
+      uiCtx.closePath();
+      uiCtx.stroke();
+    }
     uiCtx.setLineDash([]);
 
     // rotate handle line
     uiCtx.beginPath();
-    uiCtx.moveTo(b.x + b.w/2, b.y);
+    if (!uiHandles.poly) {
+      uiCtx.moveTo(b.x + b.w/2, b.y);
+    } else {
+      const p = uiHandles.poly;
+      uiCtx.moveTo((p[0].x+p[1].x)/2, (p[0].y+p[1].y)/2);
+    }
     uiCtx.lineTo(uiHandles.rotate.x, uiHandles.rotate.y);
     uiCtx.stroke();
 
@@ -1150,21 +1227,70 @@
     }
 
     // Selection scale (stable from snapshot)
-    if (gesture.mode === "selScale" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.selAnchor && gesture.selStartVec) {
+    if (gesture.mode === "selScale" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.selAnchor && gesture.startWorld) {
       const ax = gesture.selAnchor.x;
       const ay = gesture.selAnchor.y;
 
-      const v0 = gesture.selStartVec;
+      const start = gesture.startWorld;
+      const obj0 = gesture.selStartObj;
+
+      const hasOwnRot = (obj0.kind === "rect" || obj0.kind === "circle" || obj0.kind === "text") && (obj0.rot || 0);
+      if (hasOwnRot) {
+        const ang = obj0.rot || 0;
+        const cos = Math.cos(-ang), sin = Math.sin(-ang);
+
+        const v0x = (start.x - ax) * cos - (start.y - ay) * sin;
+        const v0y = (start.x - ax) * sin + (start.y - ay) * cos;
+
+        const v1x = (w.x - ax) * cos - (w.y - ay) * sin;
+        const v1y = (w.x - ax) * sin + (w.y - ay) * cos;
+
+        const fxRaw = (Math.abs(v0x) < 0.001) ? 1 : (v1x / v0x);
+        const fyRaw = (Math.abs(v0y) < 0.001) ? 1 : (v1y / v0y);
+
+        let fx = fxRaw;
+        let fy = fyRaw;
+
+        if (e.shiftKey) {
+          const l0 = Math.hypot(v0x, v0y) || 1;
+          const l1 = Math.hypot(v1x, v1y) || 1;
+          const f = l1 / l0;
+          fx = f; fy = f;
+        }
+
+        state.objects[gesture.selIndex] = deepClone(obj0);
+        const obj = state.objects[gesture.selIndex];
+
+        if (obj.kind === "text") {
+          const uni = Math.max(0.2, (Math.abs(fx) + Math.abs(fy)) / 2);
+          obj.fontSize = Math.max(6, obj0.fontSize * uni);
+
+          // keep center fixed (x/y is top-left)
+          const m0 = textMetrics(obj0);
+          obj.x = ax - (m0.w / 2);
+          obj.y = ay - (m0.h / 2);
+        } else if (obj.kind === "rect" || obj.kind === "circle") {
+          const w0 = Math.abs(obj0.x2 - obj0.x1);
+          const h0 = Math.abs(obj0.y2 - obj0.y1);
+          const w1 = Math.max(1, w0 * fx);
+          const h1 = Math.max(1, h0 * fy);
+          obj.x1 = ax - w1/2; obj.x2 = ax + w1/2;
+          obj.y1 = ay - h1/2; obj.y2 = ay + h1/2;
+        }
+
+        redrawAll();
+        return;
+      }
+
+      const v0 = { x: start.x - ax, y: start.y - ay };
       const v1 = { x: w.x - ax, y: w.y - ay };
 
-      // avoid divide by ~0
       const fxRaw = (Math.abs(v0.x) < 0.001) ? 1 : (v1.x / v0.x);
       const fyRaw = (Math.abs(v0.y) < 0.001) ? 1 : (v1.y / v0.y);
 
       let fx = fxRaw;
       let fy = fyRaw;
 
-      // Shift = uniform scale
       if (e.shiftKey) {
         const l0 = Math.hypot(v0.x, v0.y) || 1;
         const l1 = Math.hypot(v1.x, v1.y) || 1;
@@ -1173,7 +1299,7 @@
         fy = f;
       }
 
-      state.objects[gesture.selIndex] = deepClone(gesture.selStartObj);
+      state.objects[gesture.selIndex] = deepClone(obj0);
       scaleObjectXY(state.objects[gesture.selIndex], fx, fy, ax, ay);
       redrawAll();
       return;
@@ -1565,7 +1691,161 @@
 
   refreshBoardSelect();
 
-  // ---------- Export PNG (composite) ----------
+  
+  // ---------- Export SVG (vector) ----------
+  function svgEscape(s){
+    return String(s)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  }
+
+  function pathFromPoints(pts){
+    if (!pts || pts.length < 2) return "";
+    let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+    for (let i=1;i<pts.length;i++){
+      d += ` L ${pts[i].x.toFixed(2)} ${pts[i].y.toFixed(2)}`;
+    }
+    return d;
+  }
+
+  function exportSVG(){
+    const W = state.viewW;
+    const H = state.viewH;
+
+    const cam = `translate(${state.panX.toFixed(3)} ${state.panY.toFixed(3)}) scale(${state.zoom.toFixed(6)})`;
+
+    let bgMarkup = "";
+    if (state.bg.src){
+      const natW = state.bg.natW || 0;
+      const natH = state.bg.natH || 0;
+      const cx = natW/2, cy = natH/2;
+      const t = [
+        `translate(${state.bg.x.toFixed(3)} ${state.bg.y.toFixed(3)})`,
+        `translate(${cx.toFixed(3)} ${cy.toFixed(3)})`,
+        `rotate(${(state.bg.rot * 180/Math.PI).toFixed(6)})`,
+        `scale(${state.bg.scale.toFixed(6)})`,
+        `translate(${-cx.toFixed(3)} ${-cy.toFixed(3)})`
+      ].join(" ");
+      bgMarkup = `<image href="${state.bg.src}" x="0" y="0" width="${natW}" height="${natH}" transform="${t}" />`;
+    }
+
+    let defs = "";
+    let pastLayer = "";
+    let currentLayer = "";
+    let maskCount = 0;
+
+    function wrapWithEraseMask(erasePathD, eraseSize){
+      maskCount += 1;
+      const id = `m${maskCount}`;
+      const strokeW = Math.max(1, eraseSize || 20);
+
+      defs += `
+      <mask id="${id}" maskUnits="userSpaceOnUse">
+        <rect x="-100000" y="-100000" width="200000" height="200000" fill="white"/>
+        <path d="${erasePathD}" fill="none" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="${strokeW}"/>
+      </mask>`;
+
+      const combined = pastLayer + currentLayer;
+      pastLayer = `<g mask="url(#${id})">${combined}</g>`;
+      currentLayer = "";
+    }
+
+    for (const obj of state.objects){
+      if (obj.kind === "erase"){
+        const d = pathFromPoints(obj.points || []);
+        if (d) wrapWithEraseMask(d, obj.size);
+        continue;
+      }
+
+      if (obj.kind === "stroke"){
+        const d = pathFromPoints(obj.points || []);
+        if (!d) continue;
+        currentLayer += `<path d="${d}" fill="none" stroke="${obj.color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="${obj.size}"/>`;
+        continue;
+      }
+
+      if (obj.kind === "text"){
+        const m = textMetrics(obj);
+        const cx = obj.x + m.w/2;
+        const cy = obj.y + m.h/2;
+        const ang = (obj.rot || 0) * 180/Math.PI;
+        const t = `translate(${cx.toFixed(3)} ${cy.toFixed(3)}) rotate(${ang.toFixed(6)}) translate(${(-m.w/2).toFixed(3)} ${(-m.h/2).toFixed(3)})`;
+        currentLayer += `<text x="0" y="0" transform="${t}" fill="${obj.color}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${m.fontSize}">${svgEscape(obj.text||"")}</text>`;
+        continue;
+      }
+
+      const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
+      const w = x2 - x1, h = y2 - y1;
+
+      if (obj.kind === "line"){
+        currentLayer += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
+        continue;
+      }
+
+      if (obj.kind === "arrow"){
+        const ang = Math.atan2(y2-y1, x2-x1);
+        const headLen = Math.max(10, obj.size * 3);
+        const a1 = ang + Math.PI * 0.85;
+        const a2 = ang - Math.PI * 0.85;
+        const hx1 = x2 + Math.cos(a1)*headLen;
+        const hy1 = y2 + Math.sin(a1)*headLen;
+        const hx2 = x2 + Math.cos(a2)*headLen;
+        const hy2 = y2 + Math.sin(a2)*headLen;
+        currentLayer += `<path d="M ${x1} ${y1} L ${x2} ${y2} M ${x2} ${y2} L ${hx1} ${hy1} M ${x2} ${y2} L ${hx2} ${hy2}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" stroke-linejoin="round" />`;
+        continue;
+      }
+
+      if (obj.kind === "rect"){
+        const cx = (x1+x2)/2, cy=(y1+y2)/2;
+        const rw = Math.abs(w), rh=Math.abs(h);
+        const ang = (obj.rot || 0) * 180/Math.PI;
+        const t = `translate(${cx} ${cy}) rotate(${ang})`;
+        currentLayer += `<rect x="${-rw/2}" y="${-rh/2}" width="${rw}" height="${rh}" transform="${t}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
+        continue;
+      }
+
+      if (obj.kind === "circle"){
+        const cx = (x1+x2)/2, cy=(y1+y2)/2;
+        const rx = Math.abs(w)/2, ry=Math.abs(h)/2;
+        const ang = (obj.rot || 0) * 180/Math.PI;
+        const t = `translate(${cx} ${cy}) rotate(${ang})`;
+        currentLayer += `<ellipse cx="0" cy="0" rx="${rx}" ry="${ry}" transform="${t}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
+        continue;
+      }
+    }
+
+    const inkMarkup = pastLayer + currentLayer;
+
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>${defs}
+  </defs>
+  <rect x="0" y="0" width="${W}" height="${H}" fill="white"/>
+  <g transform="${cam}">
+    ${bgMarkup}
+    ${inkMarkup}
+  </g>
+</svg>`;
+
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.download = `whiteboard-${new Date().toISOString().slice(0,10)}.svg`;
+    a.href = url;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+
+// ---------- Export PNG (composite) ----------
+  exportSvgBtn?.addEventListener("click", () => {
+    exportSVG();
+  });
+
   exportBtn.addEventListener("click", async () => {
     const scale = dpr();
     const out = document.createElement("canvas");

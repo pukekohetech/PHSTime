@@ -279,3 +279,24 @@
   z-index:9999;
 }
 .toast.show{ opacity:1; }
+
+/* ===== Full available space layout tweaks ===== */
+html, body{ height:100%; }
+.page-whiteboard{
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+}
+.page-whiteboard .appNav{ flex:0 0 auto; }
+.wb{
+  flex:1 1 auto;
+  width: calc(100vw - 24px);
+  max-width: none;
+  margin: 12px auto;
+  min-height: 0;
+}
+.stageWrap{ min-height: 0; }
+.stage{
+  height: calc(100vh - 120px);
+  min-height: 420px;
+}
