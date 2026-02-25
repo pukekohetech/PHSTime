@@ -1114,35 +1114,63 @@
       return;
     }
 
-    // Background transforms (stable from snapshot)
+    // Background transforms (stable from snapshot, CENTER-based)
     if ((gesture.mode === "bgMove" || gesture.mode === "bgScale" || gesture.mode === "bgRotate") && gesture.bgStart && gesture.startWorld) {
+
       const start = gesture.startWorld;
+      const bg0 = gesture.bgStart;
 
+      const cx0 = bg0.x + (bg0.natW * bg0.scale) / 2;
+      const cy0 = bg0.y + (bg0.natH * bg0.scale) / 2;
+
+      // Move
       if (gesture.mode === "bgMove") {
-        state.bg = { ...gesture.bgStart };
-        state.bg.x = gesture.bgStart.x + (w.x - start.x);
-        state.bg.y = gesture.bgStart.y + (w.y - start.y);
+        state.bg = { ...bg0 };
+        state.bg.x = bg0.x + (w.x - start.x);
+        state.bg.y = bg0.y + (w.y - start.y);
         applyBgTransform();
         drawUI();
         drawInk();
         return;
       }
 
+      // Scale from center
       if (gesture.mode === "bgScale") {
-        state.bg = { ...gesture.bgStart };
-        const dy = (w.y - start.y);
-        const factor = 1 - dy * 0.02;
-        state.bg.scale = clamp(gesture.bgStart.scale * factor, 0.05, 10);
+        state.bg = { ...bg0 };
+
+        const v0 = { x: start.x - cx0, y: start.y - cy0 };
+        const v1 = { x: w.x - cx0, y: w.y - cy0 };
+
+        const l0 = Math.hypot(v0.x, v0.y) || 1;
+        const l1 = Math.hypot(v1.x, v1.y) || 1;
+
+        const factor = l1 / l0;
+        const newScale = clamp(bg0.scale * factor, 0.05, 10);
+
+        state.bg.scale = newScale;
+
+        // Keep center fixed
+        const newW = bg0.natW * newScale;
+        const newH = bg0.natH * newScale;
+        state.bg.x = cx0 - newW / 2;
+        state.bg.y = cy0 - newH / 2;
+
         applyBgTransform();
         drawUI();
         drawInk();
         return;
       }
 
+      // Rotate from center
       if (gesture.mode === "bgRotate") {
-        state.bg = { ...gesture.bgStart };
-        const dx = (w.x - start.x);
-        state.bg.rot = gesture.bgStart.rot + dx * 0.02;
+        state.bg = { ...bg0 };
+
+        const a0 = Math.atan2(start.y - cy0, start.x - cx0);
+        const a1 = Math.atan2(w.y - cy0, w.x - cx0);
+        const delta = a1 - a0;
+
+        state.bg.rot = bg0.rot + delta;
+
         applyBgTransform();
         drawUI();
         drawInk();
