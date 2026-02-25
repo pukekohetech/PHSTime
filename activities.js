@@ -36,6 +36,17 @@ const DEFAULT_DATA = {
       enabled: true
     },
     {
+  id: "random_fact",
+  name: "Random Fact",
+  type: "iframe",
+  url: "https://random-fact-generator-jade.vercel.app/",
+  tag: "",
+  seconds: null,
+  steps: [],
+  autoOpen: false,
+  enabled: true
+    },
+    {
       id: "wordle",
       name: "Wordle (Daily)",
       type: "iframe",
