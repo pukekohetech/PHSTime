@@ -1119,8 +1119,8 @@
       const start = gesture.startWorld;
       const bg0 = gesture.bgStart;
 
-      const cx0 = bg0.x + (bg0.natW * bg0.scale) / 2;
-      const cy0 = bg0.y + (bg0.natH * bg0.scale) / 2;
+      const cx0 = bg0.x + bg0.natW / 2;
+      const cy0 = bg0.y + bg0.natH / 2;
 
       // Move
       if (gesture.mode === "bgMove") {
@@ -1148,11 +1148,9 @@
 
         state.bg.scale = newScale;
 
-        // Keep center fixed
-        const newW = bg0.natW * newScale;
-        const newH = bg0.natH * newScale;
-        state.bg.x = cx0 - newW / 2;
-        state.bg.y = cy0 - newH / 2;
+        // Keep center fixed (bg.x/bg.y are UN-SCALED top-left)
+        state.bg.x = cx0 - bg0.natW / 2;
+        state.bg.y = cy0 - bg0.natH / 2;
 
         applyBgTransform();
         drawUI();
@@ -1308,11 +1306,10 @@
         const fit = Math.min(viewW / img.naturalWidth, viewH / img.naturalHeight);
         state.bg.scale = clamp(fit, 0.05, 10);
 
-        const w = img.naturalWidth * state.bg.scale;
-        const h = img.naturalHeight * state.bg.scale;
-
-        state.bg.x = viewCenter.x - w / 2;
-        state.bg.y = viewCenter.y - h / 2;
+        // NOTE: bg.x/bg.y are the UN-SCALED top-left in world coords.
+        // Because we rotate/scale about the image center, centering uses natural size.
+        state.bg.x = viewCenter.x - img.naturalWidth / 2;
+        state.bg.y = viewCenter.y - img.naturalHeight / 2;
         state.bg.rot = 0;
 
         applyBgTransform();
