@@ -404,15 +404,28 @@
     if (obj.kind === "line") {
       inkCtx.beginPath(); inkCtx.moveTo(x1, y1); inkCtx.lineTo(x2, y2); inkCtx.stroke();
     } else if (obj.kind === "rect") {
-      inkCtx.strokeRect(x1, y1, w, h);
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y2) / 2;
+      const rw = Math.abs(w);
+      const rh = Math.abs(h);
+      const ang = obj.rot || 0;
+      inkCtx.save();
+      inkCtx.translate(cx, cy);
+      if (ang) inkCtx.rotate(ang);
+      inkCtx.strokeRect(-rw/2, -rh/2, rw, rh);
+      inkCtx.restore();
     } else if (obj.kind === "circle") {
       const cx = (x1 + x2) / 2;
       const cy = (y1 + y2) / 2;
       const rx = Math.abs(w) / 2;
       const ry = Math.abs(h) / 2;
+      const ang = obj.rot || 0;
+      inkCtx.save();
+      inkCtx.translate(cx, cy);
       inkCtx.beginPath();
-      inkCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      inkCtx.ellipse(0, 0, rx, ry, ang, 0, Math.PI * 2);
       inkCtx.stroke();
+      inkCtx.restore();
     } else if (obj.kind === "arrow") {
       inkCtx.beginPath(); inkCtx.moveTo(x1, y1); inkCtx.lineTo(x2, y2); inkCtx.stroke();
       const ang = Math.atan2(y2 - y1, x2 - x1);
@@ -483,6 +496,57 @@
       const pad = (obj.size || 6) * 0.8;
       return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
     }
+
+    if (obj.kind === "rect") {
+      const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y2) / 2;
+      const rw = Math.abs(x2 - x1);
+      const rh = Math.abs(y2 - y1);
+      const ang = obj.rot || 0;
+
+      const corners = [
+        { x: -rw/2, y: -rh/2 },
+        { x:  rw/2, y: -rh/2 },
+        { x:  rw/2, y:  rh/2 },
+        { x: -rw/2, y:  rh/2 },
+      ].map(p => {
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        return { x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos };
+      });
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of corners) {
+        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+      }
+      const pad = (obj.size || 4) * 1.0;
+      return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+    }
+
+    if (obj.kind === "circle") {
+      const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y2) / 2;
+      const rx = Math.abs(x2 - x1) / 2;
+      const ry = Math.abs(y2 - y1) / 2;
+      const ang = obj.rot || 0;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      for (let i = 0; i < 16; i++) {
+        const t = (i / 16) * Math.PI * 2;
+        const ex = Math.cos(t) * rx;
+        const ey = Math.sin(t) * ry;
+        const px = cx + ex * cosA - ey * sinA;
+        const py = cy + ex * sinA + ey * cosA;
+        minX = Math.min(minX, px); minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px); maxY = Math.max(maxY, py);
+      }
+      const pad = (obj.size || 4) * 1.0;
+      return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+    }
+
     const minX = Math.min(obj.x1, obj.x2);
     const minY = Math.min(obj.y1, obj.y2);
     const maxX = Math.max(obj.x1, obj.x2);
@@ -522,8 +586,17 @@
     }
 
     if (obj.kind === "rect") {
-      const b = objectBounds(obj);
-      return wx >= b.minX && wx <= b.maxX && wy >= b.minY && wy <= b.maxY;
+      const cx = (obj.x1 + obj.x2) / 2;
+      const cy = (obj.y1 + obj.y2) / 2;
+      const rw = Math.abs(obj.x2 - obj.x1);
+      const rh = Math.abs(obj.y2 - obj.y1);
+      const ang = obj.rot || 0;
+
+      const cos = Math.cos(-ang), sin = Math.sin(-ang);
+      const lx = (wx - cx) * cos - (wy - cy) * sin;
+      const ly = (wx - cx) * sin + (wy - cy) * cos;
+
+      return Math.abs(lx) <= rw / 2 && Math.abs(ly) <= rh / 2;
     }
 
     if (obj.kind === "circle") {
@@ -532,8 +605,14 @@
       const rx = Math.abs(obj.x2 - obj.x1) / 2;
       const ry = Math.abs(obj.y2 - obj.y1) / 2;
       if (rx < 1 || ry < 1) return false;
-      const nx = (wx - cx) / rx;
-      const ny = (wy - cy) / ry;
+
+      const ang = obj.rot || 0;
+      const cos = Math.cos(-ang), sin = Math.sin(-ang);
+      const lx = (wx - cx) * cos - (wy - cy) * sin;
+      const ly = (wx - cx) * sin + (wy - cy) * cos;
+
+      const nx = lx / rx;
+      const ny = ly / ry;
       return (nx*nx + ny*ny) <= 1.2;
     }
 
@@ -604,6 +683,12 @@
     const cy = (b.minY + b.maxY) / 2;
 
     if (obj.kind === "text") {
+      obj.rot = (obj.rot || 0) + angle;
+      return;
+    }
+
+    // Rectangles + ellipses rotate by storing an angle; drawing uses that angle.
+    if (obj.kind === "rect" || obj.kind === "circle") {
       obj.rot = (obj.rot || 0) + angle;
       return;
     }
@@ -1025,7 +1110,7 @@
     }
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
-      const obj = { kind: state.tool, color: state.color, size: state.size, x1: w.x, y1: w.y, x2: w.x, y2: w.y };
+      const obj = { kind: state.tool, color: state.color, size: state.size, x1: w.x, y1: w.y, x2: w.x, y2: w.y, rot: 0 };
       state.objects.push(obj);
       gesture.activeObj = obj;
       gesture.mode = "drawShape";
