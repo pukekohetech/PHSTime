@@ -317,8 +317,7 @@
 
     bgImg.style.transform =
       `translate(${state.bg.x}px, ${state.bg.y}px) ` +
-      `translate(${cx}px, ${cy}px) rotate(${state.bg.rot}rad) translate(${-cx}px, ${-cy}px) ` +
-      `scale(${state.bg.scale})`;
+      `translate(${cx}px, ${cy}px) rotate(${state.bg.rot}rad) scale(${state.bg.scale}) translate(${-cx}px, ${-cy}px)`;
   }
 
   // ---------- Rendering ----------
@@ -1508,8 +1507,8 @@
       octx.translate(state.bg.x, state.bg.y);
       octx.translate(cx, cy);
       octx.rotate(state.bg.rot);
-      octx.translate(-cx, -cy);
       octx.scale(state.bg.scale, state.bg.scale);
+      octx.translate(-cx, -cy);
 
       octx.drawImage(img, 0, 0);
       octx.restore();
