@@ -1,5 +1,3 @@
-// activities.js
-
 const DEFAULT_DATA = {
   activities: [
     {
