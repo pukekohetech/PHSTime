@@ -1,4 +1,4 @@
-5// activities.js
+// activities.js
 
 const DEFAULT_DATA = {
   activities: [
