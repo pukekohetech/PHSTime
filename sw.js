@@ -42,23 +42,33 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
+  const url = new URL(req.url);
 
-      return fetch(req)
-        .then((res) => {
-          const url = new URL(req.url);
-          if (url.origin === self.location.origin && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+  // Only handle same-origin requests (your own files)
+  if (url.origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(req)
+      .then((networkRes) => {
+        // If network works, update cache
+        if (networkRes && networkRes.ok) {
+          const copy = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(req, copy);
+          });
+        }
+        return networkRes;
+      })
+      .catch(() => {
+        // If offline, fall back to cache
+        return caches.match(req).then((cached) => {
+          if (cached) return cached;
+
+          // Fallback for navigation
+          if (req.mode === "navigate") {
+            return caches.match("./index.html");
           }
-          return res;
-        })
-        .catch(() => {
-          if (req.mode === "navigate") return caches.match("./index.html");
-          return cached;
         });
-    })
+      })
   );
 });
