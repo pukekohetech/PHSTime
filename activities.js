@@ -60,7 +60,7 @@ const DEFAULT_DATA = {
     {
       id: "riddle",
       name: "Random Riddle",
-      type: "iframe",
+      type: "riddle",
       url: "https://randomgenerator.pro/random-riddle-generator/",
       tag: "",
       seconds: null,
@@ -68,6 +68,80 @@ const DEFAULT_DATA = {
       autoOpen: false,
       enabled: true
     },
+    
+    ,
+    {
+      id: "edquote",
+      name: "EdQuote (random quote)",
+      type: "iframe",
+      url: "https://www.hellam.net/edquote.phtml",
+      tag: "discussion",
+      seconds: null,
+      steps: [
+        "Read the quote.",
+        "Turn-and-talk: What does it mean in 1 sentence?",
+        "Share one takeaway."
+      ],
+      autoOpen: true,
+      enabled: true
+    },
+    {
+      id: "funny_jokes",
+      name: "Funny Jokes",
+      type: "iframe",
+      url: "https://funny-jokes.netlify.app/",
+      tag: "light",
+      seconds: null,
+      steps: [
+        "Read 2–3 jokes.",
+        "Vote: funniest one."
+      ],
+      autoOpen: true,
+      enabled: true
+    },
+    {
+      id: "yt_video",
+      name: "YouTube Video (paste link)",
+      type: "iframe",
+      url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      tag: "video",
+      seconds: null,
+      steps: [
+        "Teacher: paste any YouTube link into this activity to play it in-page."
+      ],
+      autoOpen: false,
+      enabled: true
+    },
+    {
+      id: "yt_random_kurzgesagt",
+      name: "Random Kurzgesagt",
+      type: "yt_random",
+      url: "UCsXVk37bltHxD1rDPwtNM8Q",
+      tag: "video",
+      seconds: null,
+      steps: [
+        "Watch a random recent Kurzgesagt video for 2–4 minutes.",
+        "Students: write one fact you learned."
+      ],
+      autoOpen: true,
+      enabled: true
+    },
+    {
+      id: "sequence_guess",
+      name: "Guess the next number",
+      type: "sequence",
+      url: "",
+      tag: "math",
+      seconds: null,
+      steps: [
+        "Work out the pattern.",
+        "Write the next number.",
+        "Reveal and explain."
+      ],
+      autoOpen: true,
+      enabled: true
+    }
+
     {
       id: "rps",
       name: "Rock • Paper • Scissors",
