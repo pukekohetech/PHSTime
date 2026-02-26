@@ -75,7 +75,6 @@
       <div class="stage" id="stage" aria-label="Whiteboard stage">
         <!-- Background is DOM (no zoom artefacts) -->
         <div id="bgLayer" aria-hidden="true">
-          <div class="svgLayer" id="svgLayer" aria-hidden="true"></div>
           <img id="bgImg" alt="" />
         </div>
 
@@ -83,12 +82,7 @@
         <canvas id="inkCanvas"></canvas>
         <canvas id="uiCanvas"></canvas>
 
-        
-        <div class="hud" aria-hidden="true">
-          <div class="hud__pill" id="hudStep">SVG: –</div>
-          <div class="hud__pill">←/→ step • Shift jump 5 • Home/End</div>
-        </div>
-<!-- floating gear -->
+        <!-- floating gear -->
         <button class="gearBtn" id="settingsBtn" type="button" aria-haspopup="true" aria-expanded="false" title="Settings">
           ⚙️
         </button>
@@ -136,19 +130,6 @@
 </div>
             </div>
           </div>
-        <div class="panel__group">
-          <div class="panel__label">SVG Reveal</div>
-          <div class="panel__help">Upload an SVG and reveal/hide its parts with arrow keys.</div>
-          <div class="panel__row">
-            <input class="panel__file" id="svgFile" type="file" accept=".svg,image/svg+xml" />
-          </div>
-          <div class="panel__row" style="gap:8px; flex-wrap:wrap;">
-            <button class="panel__btn" id="svgResetBtn" type="button">Reset to hidden</button>
-            <button class="panel__btn" id="svgShowAllBtn" type="button">Show all</button>
-            <button class="panel__btn" id="svgClearBtn" type="button">Remove SVG</button>
-          </div>
-        </div>
-
         </div>
       </div>
 
