@@ -1494,7 +1494,41 @@
     redrawAll();
   });
 
-  // Background import
+  
+  function setBackgroundFromDataURL(dataURL) {
+    const img = new Image();
+    img.onload = () => {
+      pushUndo(); clearRedo();
+      hardResetGesture();
+
+      state.bg.src = String(dataURL || "");
+      state.bg.natW = img.naturalWidth;
+      state.bg.natH = img.naturalHeight;
+
+      bgImg.src = state.bg.src;
+
+      const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+      const viewW = state.viewW / state.zoom;
+      const viewH = state.viewH / state.zoom;
+
+      const fit = Math.min(viewW / img.naturalWidth, viewH / img.naturalHeight);
+      state.bg.scale = clamp(fit, 0.05, 10);
+
+      // bg.x/bg.y are the UN-SCALED top-left in world coords.
+      // rotate/scale are about image center, so centering uses natural size.
+      state.bg.x = viewCenter.x - img.naturalWidth / 2;
+      state.bg.y = viewCenter.y - img.naturalHeight / 2;
+      state.bg.rot = 0;
+
+      applyBgTransform();
+      redrawAll();
+      showToast("Background loaded");
+    };
+    img.onerror = () => showToast("Paste failed");
+    img.src = String(dataURL || "");
+  }
+
+// Background import
   bgFile.addEventListener("change", () => {
     const file = bgFile.files && bgFile.files[0];
     if (!file) return;
@@ -1542,6 +1576,36 @@
     bgImg.removeAttribute("src");
     applyBgTransform();
     redrawAll();
+  });
+
+
+  // ---------- Clipboard paste images (Ctrl/Cmd+V) ----------
+  // Paste an image from clipboard to become the background image.
+  // (No new UI added; uses the existing background system.)
+  document.addEventListener("paste", (e) => {
+    try {
+      // ignore if typing in an input/textarea/select
+      const tag = (document.activeElement && document.activeElement.tagName) || "";
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      if (typing) return;
+
+      const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
+      if (!items.length) return;
+
+      const imgItem = items.find(it => it.type && it.type.startsWith("image/"));
+      if (!imgItem) return;
+
+      const file = imgItem.getAsFile();
+      if (!file) return;
+
+      e.preventDefault();
+
+      const reader = new FileReader();
+      reader.onload = () => setBackgroundFromDataURL(String(reader.result || ""));
+      reader.readAsDataURL(file);
+    } catch {
+      // no-op
+    }
   });
 
   // ---------- Keyboard ----------
