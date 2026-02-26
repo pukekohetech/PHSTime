@@ -21,11 +21,12 @@
          - "newtab" (opens URL in a new tab)
          - "riddle" (fetches random riddle from a page, or fallback)
          - "rps" (hard-coded Rock Paper Scissors modal with animation)
+         - "sequence" (built-in “guess the next number” generator)
 
-   Update included in this version:
-     ✅ Automatically converts YouTube "watch" / youtu.be links to embeddable URLs
-     ✅ Expands iframe allow permissions for YouTube playback
-     ✅ Optional chooser button support (if #chooseBtn exists in HTML)
+   Notes:
+     ✅ Teachers can paste any YouTube link into URL.
+        YouTube ALWAYS opens in a NEW TAB (reliable), and we do NOT rewrite the URL.
+     ✅ When adding a new activity, the default type is "iframe".
    ========================================================= */
 
 /* ================= HELPERS ================= */
@@ -62,26 +63,18 @@ function safeJsonParse(str, fallback=null){
   try { return JSON.parse(str); } catch(e){ return fallback; }
 }
 
+function isYouTubeUrl(url){
+  const u = String(url || "").trim();
+  return /(^|\/\/)(www\.)?(youtube\.com|youtu\.be)\//i.test(u) || /youtube\.com/i.test(u) || /youtu\.be/i.test(u);
+}
+
 /**
- * Converts common YouTube links into an iframe-safe embed URL.
- * - https://youtu.be/<id>                -> https://www.youtube-nocookie.com/embed/<id>
- * - https://www.youtube.com/watch?v=<id> -> https://www.youtube-nocookie.com/embed/<id>
- * Leaves other URLs untouched.
+ * For iframe URLs, we now ONLY trim/return the URL.
+ * (We intentionally do NOT convert YouTube URLs to embed URLs.)
  */
 function normalizeUrlForIframe(url){
   if (!url) return "";
-  let u = String(url).trim();
-
-  // Convert youtu.be/<id>
-  const m1 = u.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
-  if (m1) return `https://www.youtube-nocookie.com/embed/${m1[1]}`;
-
-  // Convert youtube.com/watch?v=<id>
-  const isWatch = u.includes("youtube.com/watch");
-  const m2 = u.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
-  if (isWatch && m2) return `https://www.youtube-nocookie.com/embed/${m2[1]}`;
-
-  return u;
+  return String(url).trim();
 }
 
 /* ================= OPTIONS MENU (simple) ================= */
@@ -184,7 +177,8 @@ function defaultActivities(){
   return withRps.map(a => ({
     id: a.id || uid("a"),
     name: a.name || "Untitled",
-    type: a.type || (a.url ? "newtab" : "quick"),
+    // If a default has a URL but no type, assume iframe (teacher-friendly default)
+    type: a.type || (a.url ? "iframe" : "quick"),
     url: a.url ? String(a.url) : "",
     mode: a.mode || "", // legacy
     tag: a.tag || "",
@@ -196,30 +190,34 @@ function defaultActivities(){
 }
 
 /* ================= LOAD / SAVE ACTIVITIES ================= */
+function normalizeActivity(a){
+  const type = a.type || (a.url ? "iframe" : "quick");
+  return {
+    id: a.id || uid("a"),
+    name: a.name || "Untitled",
+    type,
+    url: a.url ? String(a.url) : "",
+    tag: a.tag || "",
+    seconds: Number.isFinite(a.seconds) ? a.seconds : (type === "timed" ? 60 : null),
+    steps: Array.isArray(a.steps) ? a.steps : [],
+    autoOpen: !!a.autoOpen,
+    enabled: (a.enabled === undefined ? true : !!a.enabled),
+  };
+}
+
 function loadActivities(){
   if (CAN_STORE){
     const raw = localStorage.getItem(STORAGE.ACTIVITIES);
     const parsed = raw ? safeJsonParse(raw, null) : null;
     if (parsed && Array.isArray(parsed.activities)){
-    // If teacher previously saved an empty list, fall back to defaults
-    if (parsed.activities.length === 0){
-      activities = defaultActivities();
-      return;
-    }
+      // If teacher previously saved an empty list, fall back to defaults
+      if (parsed.activities.length === 0){
+        activities = defaultActivities();
+        return;
+      }
 
-      activities = parsed.activities;
-      // normalize
-      activities = activities.map(a => ({
-        id: a.id || uid("a"),
-        name: a.name || "Untitled",
-        type: a.type || (a.url ? "newtab" : "quick"),
-        url: a.url ? String(a.url) : "",
-        tag: a.tag || "",
-        seconds: Number.isFinite(a.seconds) ? a.seconds : (a.type === "timed" ? 60 : null),
-        steps: Array.isArray(a.steps) ? a.steps : [],
-        autoOpen: !!a.autoOpen,
-        enabled: (a.enabled === undefined ? true : !!a.enabled),
-      }));
+      activities = parsed.activities.map(normalizeActivity);
+
       // ensure RPS exists
       if (!activities.some(a => a.id === "rps")){
         activities.push({
@@ -333,40 +331,9 @@ document.addEventListener("keydown", (e)=>{
   }
 });
 
-
-/* --- EXTRA ACTIVITY TYPES: yt_random + sequence --------------------------- */
-/** Pick a random recent upload from a YouTube creator using RSS (no API key). */
-async function resolveYouTubeRandomUrl(creatorValue){
-  const raw = String(creatorValue || "").trim();
-  if (!raw) throw new Error("Missing channel id");
-  // Accept UC... channel id OR full /channel/UC... url OR UU... uploads playlist id
-  let channelId = "";
-  let uploadsPlaylist = "";
-
-  const mChannel = raw.match(/(UC[a-zA-Z0-9_-]{10,})/);
-  const mUploads = raw.match(/(UU[a-zA-Z0-9_-]{10,})/);
-
-  if (mUploads){
-    uploadsPlaylist = mUploads[1];
-  } else if (mChannel){
-    channelId = mChannel[1];
-    uploadsPlaylist = "UU" + channelId.slice(2);
-  } else {
-    throw new Error("Use a Channel ID like UC… (or Uploads playlist UU…).");
-  }
-
-  const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(uploadsPlaylist)}`;
-
-  // YouTube feeds generally allow CORS. If it fails in some environments, we fall back.
-  const res = await fetch(feedUrl, { mode: "cors" });
-  if (!res.ok) throw new Error("Feed fetch failed");
-  const xml = await res.text();
-
-  // Extract <yt:videoId>…</yt:videoId>
-  const ids = Array.from(xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)).map(m => m[1]);
-  if (!ids.length) throw new Error("No videos found");
-  const id = ids[Math.floor(Math.random() * ids.length)];
-  return `https://www.youtube-nocookie.com/embed/${id}`;
+/* ================= BUILT-IN: SEQUENCE ================= */
+function randInt(lo, hi){
+  return Math.floor(Math.random()*(hi-lo+1))+lo;
 }
 
 function launchSequence(act){
@@ -423,7 +390,6 @@ function launchSequence(act){
   answer.style.opacity = "0.95";
 
   function makeOne(){
-    // A small set of safe, classroom-friendly sequences
     const generators = [
       () => {
         const a = randInt(1, 9), d = randInt(1, 9), n = 5;
@@ -487,115 +453,6 @@ function launchSequence(act){
   renderNew();
 }
 
-function randInt(lo, hi){
-  return Math.floor(Math.random()*(hi-lo+1))+lo;
-}
-
-async async function launchYouTubeRandom(act){
-  const raw = String(act.url || "").trim();
-  const channelId = extractYouTubeChannelId(raw);
-
-  if (!channelId){
-    if (raw){
-      const url = raw.startsWith("@") ? `https://www.youtube.com/${raw}` : raw;
-      window.open(url, "_blank", "noopener,noreferrer");
-    } else {
-      alert("Missing YouTube Channel ID. Use a channel id like UC…");
-    }
-    alert("Random creator playback in-page needs a Channel ID (UC…). I opened the creator in a new tab.");
-    return;
-  }
-
-  const embed = buildYouTubeUploadsEmbed(channelId);
-  launchIframe({ ...act, url: embed });
-}
-/* ------------------------------------------------------------------------- */
-
-
-/* ================= YouTube helpers (bulletproof for GitHub Pages) =================
-   - Normal videos: convert common YouTube URLs to /embed/ (youtube-nocookie) so they play in-page.
-   - Random-from-creator: avoid RSS/fetch (often blocked by CORS). Use YouTube uploads embed:
-       https://www.youtube.com/embed?listType=user_uploads&list=CHANNEL_ID
-   This works reliably on static hosts like GitHub Pages.
-=================================================================================== */
-
-function parseYouTubeTimeToSeconds(t){
-  if (!t) return null;
-  if (/^\d+$/.test(t)) return parseInt(t, 10);
-  let s = 0;
-  const mh = t.match(/(\d+)\s*h/i); if (mh) s += parseInt(mh[1],10)*3600;
-  const mm = t.match(/(\d+)\s*m/i); if (mm) s += parseInt(mm[1],10)*60;
-  const ms = t.match(/(\d+)\s*s/i); if (ms) s += parseInt(ms[1],10);
-  return s || null;
-}
-
-function buildYouTubeEmbed(videoId, startSeconds){
-  const base = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
-  const params = new URLSearchParams();
-  if (startSeconds != null && Number.isFinite(startSeconds) && startSeconds > 0){
-    params.set("start", String(Math.floor(startSeconds)));
-  }
-  const qs = params.toString();
-  return qs ? `${base}?${qs}` : base;
-}
-
-function buildYouTubeUploadsEmbed(channelId){
-  const params = new URLSearchParams();
-  params.set("listType", "user_uploads");
-  params.set("list", channelId);
-  return `https://www.youtube-nocookie.com/embed?${params.toString()}`;
-}
-
-function extractYouTubeVideoId(u){
-  const url = String(u || "").trim();
-  if (!url) return null;
-
-  let m = url.match(/\/embed\/([a-zA-Z0-9_-]{6,})/);
-  if (m) return m[1];
-
-  m = url.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
-  if (m) return m[1];
-
-  m = url.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
-  if (m) return m[1];
-
-  m = url.match(/\/shorts\/([a-zA-Z0-9_-]{6,})/);
-  if (m) return m[1];
-
-  return null;
-}
-
-function normalizeYouTubeUrlToEmbed(u){
-  const url = String(u || "").trim();
-  const id = extractYouTubeVideoId(url);
-  if (!id) return null;
-
-  let start = null;
-  const tMatch = url.match(/[?&]t=([^&]+)/);
-  if (tMatch) start = parseYouTubeTimeToSeconds(decodeURIComponent(tMatch[1]));
-  const sMatch = url.match(/[?&]start=(\d+)/);
-  if (sMatch) start = parseInt(sMatch[1], 10);
-
-  return buildYouTubeEmbed(id, start);
-}
-
-function extractYouTubeChannelId(value){
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-
-  let m = raw.match(/(UC[a-zA-Z0-9_-]{10,})/);
-  if (m) return m[1];
-
-  m = raw.match(/(UU[a-zA-Z0-9_-]{10,})/);
-  if (m) return "UC" + m[1].slice(2);
-
-  // Handles (@...) can't be resolved reliably without calling YouTube; fall back to new tab.
-  if (raw.includes("/@") || raw.startsWith("@")) return null;
-
-  return null;
-}
-/* ================================================================================ */
-
 /* ================= ACTIVITY LAUNCHERS ================= */
 function launchNewTab(act){
   if (!act.url) return;
@@ -603,14 +460,14 @@ function launchNewTab(act){
 }
 
 function launchIframe(act){
-  let url = String(url || "").trim();
-  // Auto-convert YouTube links to embed URLs so they play in-page.
-  if (/youtube\.com|youtu\.be/i.test(url)){
-    const embed = normalizeYouTubeUrlToEmbed(url);
-    if (embed) url = embed;
-  }
-
+  let url = normalizeUrlForIframe(act.url);
   if (!url) return;
+
+  // Reliability rule: YouTube always opens in a new tab
+  if (isYouTubeUrl(url)){
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
 
   const overlay = makeOverlay();
 
@@ -637,17 +494,13 @@ function launchIframe(act){
   body.className = "actModalBody";
 
   const iframe = document.createElement("iframe");
-
-  // ✅ Auto-normalize YouTube links for iframe (extra safety)
-  iframe.src = normalizeUrlForIframe(url);
-
+  iframe.src = url;
   iframe.title = act.name || "Activity";
   iframe.loading = "lazy";
   iframe.referrerPolicy = "no-referrer";
 
-  // ✅ Expanded permissions for YouTube playback + fullscreen etc.
+  // Permissions (broad, but safe)
   iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen";
-
   iframe.className = "actIframe";
 
   body.appendChild(iframe);
@@ -665,22 +518,18 @@ async function fetchRandomRiddleFromPage(url){
   if (!res.ok) throw new Error("Fetch failed");
   const html = await res.text();
 
-  // Very forgiving: try to find a "Riddle" and "Answer" pair in text
-  // If site structure changes, fallback below handles it.
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ")
                    .replace(/<style[\s\S]*?<\/style>/gi, " ")
                    .replace(/<\/?[^>]+>/g, " ")
                    .replace(/\s+/g, " ")
                    .trim();
 
-  // heuristic: find "Answer" marker
   const idx = text.toLowerCase().indexOf("answer");
   if (idx > -1){
     const snippet = text.slice(Math.max(0, idx - 300), idx + 300);
     return { riddle: snippet.slice(0, 220).trim(), answer: "Tap reveal (if included on page)." };
   }
 
-  // If we can't parse, throw
   throw new Error("Parse failed");
 }
 
@@ -732,7 +581,6 @@ function launchRiddle(act){
   revealBtn.textContent = "Reveal answer";
 
   function setFallback(){
-    // solid built-in fallback so it always works
     const FALLBACK = [
       { r:"What has to be broken before you can use it?", a:"An egg." },
       { r:"I’m tall when I’m young, and I’m short when I’m old. What am I?", a:"A candle." },
@@ -752,7 +600,6 @@ function launchRiddle(act){
     try{
       if (act.url){
         const parsed = await fetchRandomRiddleFromPage(act.url);
-        // If the site blocks CORS, this will fail and fallback will be used.
         q.textContent = parsed.riddle || "Riddle loaded (could not parse clearly).";
         a.textContent = parsed.answer || "Answer not available from this source.";
       } else {
@@ -845,20 +692,17 @@ function launchRPS(){
     if (rolling) return;
     rolling = true;
 
-    // quick shuffle animation
     const spins = 10 + Math.floor(Math.random()*6);
     for (let i=0; i<spins; i++){
       const pick = RPS_ITEMS[i % RPS_ITEMS.length];
       big.textContent = pick.emoji;
       label.textContent = pick.name;
       big.classList.add("rpsPulse");
-      // small jitter
       big.style.transform = `translateY(${(i%2? -2:2)}px) rotate(${(i%3-1)*3}deg)`;
       await new Promise(r => setTimeout(r, 60));
       big.classList.remove("rpsPulse");
     }
 
-    // final pick
     const final = RPS_ITEMS[Math.floor(Math.random()*RPS_ITEMS.length)];
     big.textContent = final.emoji;
     label.textContent = final.name;
@@ -892,10 +736,16 @@ function launchRPS(){
 function openCurrentActivity(){
   if (!current) return;
 
+  // Reliability rule: any YouTube URL opens in a new tab, regardless of chosen type.
+  if (current.url && isYouTubeUrl(current.url)){
+    return launchNewTab(current);
+  }
+
   if (current.type === "newtab") return launchNewTab(current);
   if (current.type === "iframe") return launchIframe(current);
   if (current.type === "riddle") return launchRiddle(current);
   if (current.type === "rps") return launchRPS();
+  if (current.type === "sequence") return launchSequence(current);
 
   // For quick/timed breaks, nothing to open
 }
@@ -942,7 +792,6 @@ function openChooserModal(){
   list.style.display = "grid";
   list.style.gap = "8px";
 
-  // Show enabled only (most teachers expect this)
   const pool = enabledPool();
 
   function render(filterText=""){
@@ -1023,11 +872,9 @@ function setUI(){
     ? (current.steps && current.steps.length ? current.steps.join("\n") : "No instructions.")
     : "Click “Pick random” or press N";
 
-  // timer
   const hasTimer = !!(current && current.seconds);
   timeLeft.textContent = hasTimer ? mmss(remainingSec) : "--:--";
 
-  // state chip
   let chip = "READY";
   if (!current) chip = "READY";
   else if (running) chip = "RUNNING";
@@ -1036,19 +883,15 @@ function setUI(){
   else chip = hasTimer ? "READY" : "OPEN / QUICK";
   stateChip.textContent = chip;
 
-  // progress bar
   const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 0;
   progressFill.style.width = `${clamp(pctDone * 100, 0, 100)}%`;
 
-  // start button (timer-only by design)
   startPauseBtn.disabled = !hasTimer;
   startPauseBtn.textContent = running ? "Pause" : (hasTimer && remainingSec === 0 ? "Restart" : "Start");
 
-  // open button for openable activities
-  const openable = !!current && ["newtab","iframe","riddle","rps"].includes(current.type);
+  const openable = !!current && ["newtab","iframe","riddle","rps","sequence"].includes(current.type);
   openBtn.classList.toggle("hidden", !openable);
 
-  // background vibe
   if (!current) {
     document.body.style.backgroundColor = "var(--bgGrey)";
   } else if (running) {
@@ -1070,11 +913,10 @@ function setCurrent(act){
 
   setUI();
 
-  // Auto-open support
-  if (act && act.autoOpen && ["iframe","riddle","rps"].includes(act.type)){
+  // Auto-open support (including newtab + sequence)
+  if (act && act.autoOpen && ["iframe","riddle","rps","newtab","sequence"].includes(act.type)){
     openCurrentActivity();
   }
-  // Auto-start timers
   if (act && act.seconds && act.autoOpen){
     start();
   }
@@ -1174,7 +1016,6 @@ function renderTeacherPanel(){
 
   wrap.appendChild(topRow);
 
-  // Table/editor
   const table = document.createElement("div");
   table.className = "teacherTable";
 
@@ -1263,7 +1104,7 @@ function renderTeacherPanel(){
   const note = document.createElement("div");
   note.className = "smallNote";
   note.textContent =
-    "Tip: ‘iframe’ opens inside the page. ‘newtab’ opens a new tab. ‘riddle’ always works (has a fallback). RPS is built-in. YouTube links pasted into URL will be auto-converted for iframe embedding.";
+    "Tip: ‘iframe’ opens inside the page. ‘newtab’ opens a new tab. YouTube links always open in a new tab (most reliable). ‘riddle’ always works (has a fallback). ‘sequence’ is built-in. RPS is built-in.";
 
   wrap.appendChild(note);
 
@@ -1272,7 +1113,7 @@ function renderTeacherPanel(){
     const a = {
       id: uid("a"),
       name: "New activity",
-      type: "quick",
+      type: "iframe",         // ✅ default to iframe
       url: "",
       seconds: null,
       steps: ["Write instructions here…"],
@@ -1309,18 +1150,7 @@ function renderTeacherPanel(){
           alert("Invalid JSON. Expected { activities: [...] }");
           return;
         }
-        // normalize + keep RPS
-        let imported = parsed.activities.map(a => ({
-          id: a.id || uid("a"),
-          name: a.name || "Untitled",
-          type: a.type || (a.url ? "newtab" : "quick"),
-          url: a.url ? String(a.url) : "",
-          seconds: Number.isFinite(a.seconds) ? a.seconds : (a.type === "timed" ? 60 : null),
-          steps: Array.isArray(a.steps) ? a.steps : [],
-          autoOpen: !!a.autoOpen,
-          enabled: (a.enabled === undefined ? true : !!a.enabled),
-          tag: a.tag || ""
-        }));
+        let imported = parsed.activities.map(normalizeActivity);
         if (!imported.some(a => a.id === "rps")){
           imported.push({
             id:"rps", name:"Rock • Paper • Scissors", type:"rps", url:"",
@@ -1372,7 +1202,7 @@ function renderTeacherPanel(){
         localStorage.setItem(STORAGE.TEACHER_CSS_TEXT, String(reader.result || ""));
         localStorage.setItem(STORAGE.TEACHER_CSS_ENABLED, "1");
         applyTeacherCssIfEnabled();
-        renderTeacherPanel(); // refresh checkbox state
+        renderTeacherPanel();
       };
       reader.readAsText(file);
     });
@@ -1417,6 +1247,7 @@ function openEditModal(act){
     ["iframe","iframe (open inside page)"],
     ["newtab","newtab (open URL)"],
     ["riddle","riddle (random + fallback)"],
+    ["sequence","sequence (guess the next number)"],
     ["rps","rps (built-in game)"]
   ]);
   const urlIn = makeFieldText("URL (for iframe/newtab/riddle)", act.url || "");
@@ -1425,16 +1256,19 @@ function openEditModal(act){
   const enabledIn = makeFieldCheckbox("Enabled in random picker", act.enabled !== false);
   const stepsIn = makeFieldTextarea("Steps / instructions (one per line)", (act.steps || []).join("\n"));
 
-  // disable RPS edits that don't make sense
   if (act.id === "rps"){
     urlIn.input.disabled = true;
     secondsIn.input.disabled = true;
   }
+  if (act.type === "sequence"){
+    urlIn.input.disabled = true;
+    secondsIn.input.disabled = true;
+  }
 
-  // show/hide seconds based on type
   function refreshVisibility(){
     const t = typeIn.select.value;
     secondsIn.wrap.classList.toggle("hidden", t !== "timed");
+    urlIn.wrap.classList.toggle("hidden", (t === "quick" || t === "timed" || t === "rps" || t === "sequence"));
   }
   typeIn.select.addEventListener("change", refreshVisibility);
   refreshVisibility();
@@ -1459,10 +1293,8 @@ function openEditModal(act){
     act.name = nameIn.input.value.trim() || "Untitled";
     act.type = typeIn.select.value;
 
-    // ✅ Auto-convert YouTube links for iframe embedding
-    // (We only convert for iframe type; for newtab/riddle we keep pasted URL as-is)
     const rawUrl = urlIn.input.value.trim();
-    act.url = (act.type === "iframe") ? normalizeUrlForIframe(rawUrl) : rawUrl;
+    act.url = rawUrl; // ✅ keep pasted URL as-is (including YouTube)
 
     act.enabled = enabledIn.input.checked;
     act.autoOpen = autoOpenIn.input.checked;
@@ -1482,7 +1314,6 @@ function openEditModal(act){
     saveActivities();
     renderAllPanels();
 
-    // Update current display if editing current
     if (current && current.id === act.id){
       setCurrent(act);
     }
@@ -1585,20 +1416,11 @@ function renderAllPanels(){
 
 /* ================= WIRING ================= */
 pickBtn?.addEventListener("click", nextRandom);
-
 chooseBtn?.addEventListener("click", openChooserModal);
 
-breakBtn?.addEventListener("click", ()=> {
-  // tap big button = pick next
-  nextRandom();
-});
-
+breakBtn?.addEventListener("click", ()=> { nextRandom(); });
 startPauseBtn?.addEventListener("click", toggleStartPause);
-
-openBtn?.addEventListener("click", ()=>{
-  openCurrentActivity();
-});
-
+openBtn?.addEventListener("click", ()=>{ openCurrentActivity(); });
 resetBtn?.addEventListener("click", resetTimer);
 
 resetAllBtn?.addEventListener("click", ()=>{
@@ -1632,14 +1454,12 @@ document.addEventListener("keydown", (e)=>{
     nextRandom();
   }
   if (e.key.toLowerCase() === "l"){
-    // L = list/chooser (if button exists)
     if (chooseBtn){
       e.preventDefault();
       openChooserModal();
     }
   }
   if (e.key === " "){
-    // if any overlay open, space triggers roll (for RPS) by clicking first button if present
     const overlay = modalHost.querySelector(".actModalOverlay");
     if (overlay){
       e.preventDefault();
@@ -1662,16 +1482,10 @@ document.addEventListener("keydown", (e)=>{
 
 /* ================= INIT ================= */
 function init(){
-  // teacher CSS
   applyTeacherCssIfEnabled();
-
-  // activities
   loadActivities();
-
-  // render panels
   renderAllPanels();
 
-  // initial UI
   current = null;
   durationSec = 0;
   remainingSec = 0;
