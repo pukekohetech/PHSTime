@@ -491,18 +491,110 @@ function randInt(lo, hi){
   return Math.floor(Math.random()*(hi-lo+1))+lo;
 }
 
-async function launchYouTubeRandom(act){
-  try{
-    const embed = await resolveYouTubeRandomUrl(act.url);
-    launchIframe({ ...act, url: embed });
-  }catch(e){
-    // fall back to new tab on failure
-    const q = encodeURIComponent(act.url || "");
-    window.open(`https://www.youtube.com/results?search_query=${q}`, "_blank", "noopener,noreferrer");
-    alert("Couldn’t load a random video in-page. I opened YouTube search in a new tab instead.");
+async async function launchYouTubeRandom(act){
+  const raw = String(act.url || "").trim();
+  const channelId = extractYouTubeChannelId(raw);
+
+  if (!channelId){
+    if (raw){
+      const url = raw.startsWith("@") ? `https://www.youtube.com/${raw}` : raw;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      alert("Missing YouTube Channel ID. Use a channel id like UC…");
+    }
+    alert("Random creator playback in-page needs a Channel ID (UC…). I opened the creator in a new tab.");
+    return;
   }
+
+  const embed = buildYouTubeUploadsEmbed(channelId);
+  launchIframe({ ...act, url: embed });
 }
 /* ------------------------------------------------------------------------- */
+
+
+/* ================= YouTube helpers (bulletproof for GitHub Pages) =================
+   - Normal videos: convert common YouTube URLs to /embed/ (youtube-nocookie) so they play in-page.
+   - Random-from-creator: avoid RSS/fetch (often blocked by CORS). Use YouTube uploads embed:
+       https://www.youtube.com/embed?listType=user_uploads&list=CHANNEL_ID
+   This works reliably on static hosts like GitHub Pages.
+=================================================================================== */
+
+function parseYouTubeTimeToSeconds(t){
+  if (!t) return null;
+  if (/^\d+$/.test(t)) return parseInt(t, 10);
+  let s = 0;
+  const mh = t.match(/(\d+)\s*h/i); if (mh) s += parseInt(mh[1],10)*3600;
+  const mm = t.match(/(\d+)\s*m/i); if (mm) s += parseInt(mm[1],10)*60;
+  const ms = t.match(/(\d+)\s*s/i); if (ms) s += parseInt(ms[1],10);
+  return s || null;
+}
+
+function buildYouTubeEmbed(videoId, startSeconds){
+  const base = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
+  const params = new URLSearchParams();
+  if (startSeconds != null && Number.isFinite(startSeconds) && startSeconds > 0){
+    params.set("start", String(Math.floor(startSeconds)));
+  }
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+function buildYouTubeUploadsEmbed(channelId){
+  const params = new URLSearchParams();
+  params.set("listType", "user_uploads");
+  params.set("list", channelId);
+  return `https://www.youtube-nocookie.com/embed?${params.toString()}`;
+}
+
+function extractYouTubeVideoId(u){
+  const url = String(u || "").trim();
+  if (!url) return null;
+
+  let m = url.match(/\/embed\/([a-zA-Z0-9_-]{6,})/);
+  if (m) return m[1];
+
+  m = url.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
+  if (m) return m[1];
+
+  m = url.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
+  if (m) return m[1];
+
+  m = url.match(/\/shorts\/([a-zA-Z0-9_-]{6,})/);
+  if (m) return m[1];
+
+  return null;
+}
+
+function normalizeYouTubeUrlToEmbed(u){
+  const url = String(u || "").trim();
+  const id = extractYouTubeVideoId(url);
+  if (!id) return null;
+
+  let start = null;
+  const tMatch = url.match(/[?&]t=([^&]+)/);
+  if (tMatch) start = parseYouTubeTimeToSeconds(decodeURIComponent(tMatch[1]));
+  const sMatch = url.match(/[?&]start=(\d+)/);
+  if (sMatch) start = parseInt(sMatch[1], 10);
+
+  return buildYouTubeEmbed(id, start);
+}
+
+function extractYouTubeChannelId(value){
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  let m = raw.match(/(UC[a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+
+  m = raw.match(/(UU[a-zA-Z0-9_-]{10,})/);
+  if (m) return "UC" + m[1].slice(2);
+
+  // Handles (@...) can't be resolved reliably without calling YouTube; fall back to new tab.
+  if (raw.includes("/@") || raw.startsWith("@")) return null;
+
+  return null;
+}
+/* ================================================================================ */
 
 /* ================= ACTIVITY LAUNCHERS ================= */
 function launchNewTab(act){
@@ -511,7 +603,14 @@ function launchNewTab(act){
 }
 
 function launchIframe(act){
-  if (!act.url) return;
+  let url = String(url || "").trim();
+  // Auto-convert YouTube links to embed URLs so they play in-page.
+  if (/youtube\.com|youtu\.be/i.test(url)){
+    const embed = normalizeYouTubeUrlToEmbed(url);
+    if (embed) url = embed;
+  }
+
+  if (!url) return;
 
   const overlay = makeOverlay();
 
@@ -540,7 +639,7 @@ function launchIframe(act){
   const iframe = document.createElement("iframe");
 
   // ✅ Auto-normalize YouTube links for iframe (extra safety)
-  iframe.src = normalizeUrlForIframe(act.url);
+  iframe.src = normalizeUrlForIframe(url);
 
   iframe.title = act.name || "Activity";
   iframe.loading = "lazy";
