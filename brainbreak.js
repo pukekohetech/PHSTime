@@ -70,19 +70,73 @@ function safeJsonParse(str, fallback=null){
  */
 function normalizeUrlForIframe(url){
   if (!url) return "";
-  let u = String(url).trim();
+  const raw = String(url).trim();
 
-  // Convert youtu.be/<id>
-  const m1 = u.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
-  if (m1) return `https://www.youtube-nocookie.com/embed/${m1[1]}`;
+  // If already an embed URL, keep it (but prefer nocookie when possible)
+  if (/youtube(-nocookie)?\.com\/embed\//i.test(raw)){
+    return raw.replace("www.youtube.com/embed/","www.youtube-nocookie.com/embed/");
+  }
 
-  // Convert youtube.com/watch?v=<id>
-  const isWatch = u.includes("youtube.com/watch");
-  const m2 = u.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
-  if (isWatch && m2) return `https://www.youtube-nocookie.com/embed/${m2[1]}`;
+  // Helper to pull a query param from a URL-ish string
+  function getParam(str, key){
+    try{
+      const u = new URL(str);
+      return u.searchParams.get(key);
+    } catch(e){
+      return null;
+    }
+  }
 
-  return u;
+  // ---------- YouTube normalisation ----------
+  // Supported:
+  // - https://youtu.be/<id>
+  // - https://www.youtube.com/watch?v=<id>
+  // - https://www.youtube.com/shorts/<id>
+  // - https://m.youtube.com/watch?v=<id>
+  // Keeps start time (t/start) and playlist (list) where possible.
+  const ytIdFromYoutuBe = raw.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/i);
+  const ytIdFromShorts = raw.match(/^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{6,})/i);
+
+  const isWatch = /youtube\.com\/watch/i.test(raw);
+  const ytIdFromWatch = isWatch ? (raw.match(/[?&]v=([a-zA-Z0-9_-]{6,})/i) || [])[1] : null;
+
+  const videoId = (ytIdFromYoutuBe && ytIdFromYoutuBe[1]) || (ytIdFromShorts && ytIdFromShorts[1]) || ytIdFromWatch;
+
+  const isYoutube = videoId && /youtu\.be|youtube\.com/i.test(raw);
+
+  if (isYoutube){
+    // start time (supports t=90, t=1m30s, start=90)
+    const t = getParam(raw, "t") || getParam(raw, "start");
+    const list = getParam(raw, "list");
+
+    let embed = `https://www.youtube-nocookie.com/embed/${videoId}`;
+
+    const params = [];
+    if (list) params.push(`list=${encodeURIComponent(list)}`);
+
+    // Parse time formats
+    if (t){
+      let seconds = 0;
+      const m = String(t).match(/^(\d+)(s)?$/i);
+      const hms = String(t).match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/i);
+      if (m){
+        seconds = parseInt(m[1], 10) || 0;
+      } else if (hms){
+        const h = parseInt(hms[1] || "0", 10) || 0;
+        const mi = parseInt(hms[2] || "0", 10) || 0;
+        const s = parseInt(hms[3] || "0", 10) || 0;
+        seconds = h*3600 + mi*60 + s;
+      }
+      if (seconds > 0) params.push(`start=${seconds}`);
+    }
+
+    if (params.length) embed += `?${params.join("&")}`;
+    return embed;
+  }
+
+  return raw;
 }
+
 
 /* ================= OPTIONS MENU (simple) ================= */
 const optionsBtn = $("optionsBtn");
@@ -371,10 +425,24 @@ function launchIframe(act){
 
   // ✅ Expanded permissions for YouTube playback + fullscreen etc.
   iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen";
+  iframe.allowFullscreen = true;
 
   iframe.className = "actIframe";
 
   body.appendChild(iframe);
+
+  const tip = document.createElement("div");
+  tip.className = "smallNote";
+  tip.style.marginTop = "10px";
+  tip.innerHTML = `If the video/site shows a “refused to connect” message, it is blocking embedding. Use <b>Open in new tab</b> instead.`;
+  const openLink = document.createElement("button");
+  openLink.type = "button";
+  openLink.textContent = "Open in new tab";
+  openLink.style.marginTop = "8px";
+  openLink.addEventListener("click", ()=> launchNewTab(act));
+  tip.appendChild(openLink);
+
+  body.appendChild(tip);
 
   card.appendChild(header);
   card.appendChild(body);
@@ -768,9 +836,25 @@ function setUI(){
   startPauseBtn.disabled = !hasTimer;
   startPauseBtn.textContent = running ? "Pause" : (hasTimer && remainingSec === 0 ? "Restart" : "Start");
 
-  // open button for openable activities
+  // open button (always visible, but disabled when not relevant)
   const openable = !!current && ["newtab","iframe","riddle","rps"].includes(current.type);
-  openBtn.classList.toggle("hidden", !openable);
+
+  if (openBtn){
+    openBtn.classList.remove("hidden");
+    openBtn.disabled = !openable;
+
+    let label = "Open";
+    if (current){
+      if (current.type === "iframe") label = "Open (in page)";
+      else if (current.type === "newtab") label = "Open (new tab)";
+      else if (current.type === "riddle") label = "Open riddle";
+      else if (current.type === "rps") label = "Open game";
+    }
+    openBtn.textContent = label;
+    openBtn.title = openable
+      ? "Open this activity"
+      : "This activity has nothing to open (it’s just instructions / timer).";
+  }
 
   // background vibe
   if (!current) {
@@ -795,7 +879,7 @@ function setCurrent(act){
   setUI();
 
   // Auto-open support
-  if (act && act.autoOpen && ["iframe","riddle","rps"].includes(act.type)){
+  if (act && act.autoOpen && ["iframe","newtab","riddle","rps"].includes(act.type)){
     openCurrentActivity();
   }
   // Auto-start timers
