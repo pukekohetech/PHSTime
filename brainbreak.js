@@ -138,6 +138,40 @@ function normalizeUrlForIframe(url){
 }
 
 
+/* ================= YOUTUBE RANDOM (creator feed) =================
+   Teachers can paste:
+   - Channel ID: UCxxxxxxxxxxxxxxxxxxxxxx
+   - Channel URL that contains /channel/UC...
+   We store the resolved channel_id if we can; otherwise keep the original text.
+*/
+function normalizeCreatorInput(input){
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+
+  // direct channel id
+  if (/^UC[a-zA-Z0-9_-]{20,}$/i.test(raw)) return raw;
+
+  // URL containing /channel/UC...
+  const m = raw.match(/\/channel\/(UC[a-zA-Z0-9_-]{20,})/i);
+  if (m) return m[1];
+
+  // Some folks paste the uploads playlist (starts with UU...)
+  if (/^UU[a-zA-Z0-9_-]{20,}$/i.test(raw)) return raw;
+
+  return raw; // keep whatever they pasted (we’ll try a best-effort fallback)
+}
+
+// Turn channel id or uploads playlist id into a YouTube RSS feed URL
+function youtubeFeedUrlFromCreatorToken(token){
+  const t = String(token || "").trim();
+  if (!t) return null;
+  if (/^UC/i.test(t)) return `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(t)}`;
+  if (/^UU/i.test(t)) return `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(t)}`;
+  // If they pasted a full feeds URL already
+  if (/feeds\/videos\.xml\?/i.test(t)) return t;
+  return null;
+}
+
 /* ================= OPTIONS MENU (simple) ================= */
 const optionsBtn = $("optionsBtn");
 const optionsMenu = $("optionsMenu");
@@ -451,6 +485,140 @@ function launchIframe(act){
   openModal(overlay);
 }
 
+
+/* ================= YOUTUBE RANDOM LAUNCHER =================
+   Picks a random recent upload (RSS feed usually provides the latest ~15).
+   If embedding is blocked or feed fetch is blocked, we fall back to opening YouTube in a new tab.
+*/
+async function launchYouTubeRandom(act){
+  const token = act.url || "";
+  const feedUrl = youtubeFeedUrlFromCreatorToken(token);
+
+  // If teacher pasted something we can't turn into a feed, just open it as a normal YouTube page
+  if (!feedUrl){
+    toast("Tip: For ‘YouTube (random)’, paste a Channel ID (starts with UC…) or an Uploads playlist ID (starts with UU…). Opening in a new tab…");
+    return launchNewTab({ ...act, type:"newtab", url: token || "https://www.youtube.com" });
+  }
+
+  // Lightweight loading modal (reuse iframe modal once we have a video)
+  const overlay = makeOverlay();
+  const card = document.createElement("div");
+  card.className = "actModalCard";
+
+  const header = document.createElement("div");
+  header.className = "actModalHeader";
+
+  const title = document.createElement("div");
+  title.className = "actModalTitle";
+  title.textContent = `${act.name || "YouTube"} (random)`;
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "actModalClose";
+  closeBtn.type = "button";
+  closeBtn.textContent = "✕";
+  closeBtn.addEventListener("click", closeAllOverlays);
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "actModalBody";
+
+  const msg = document.createElement("div");
+  msg.className = "smallNote";
+  msg.style.padding = "10px 2px";
+  msg.textContent = "Loading a random video…";
+
+  body.appendChild(msg);
+
+  card.appendChild(header);
+  card.appendChild(body);
+  overlay.appendChild(card);
+  openModal(overlay);
+
+  try{
+    // Fetch the RSS feed and pick a random entry
+    const res = await fetch(feedUrl, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Feed HTTP ${res.status}`);
+    const xmlText = await res.text();
+
+    const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+    const ids = Array.from(xml.getElementsByTagName("yt:videoId"))
+      .map(n => (n.textContent || "").trim())
+      .filter(Boolean);
+
+    if (!ids.length) throw new Error("No videos found in feed.");
+
+    const picked = ids[Math.floor(Math.random()*ids.length)];
+
+    // Swap loader for iframe
+    body.innerHTML = "";
+
+    const tip = document.createElement("div");
+    tip.className = "smallNote";
+    tip.style.marginBottom = "10px";
+    tip.textContent = "If you ever see ‘refused to connect’, that site blocks embedding — use Open (new tab).";
+
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("allowfullscreen", "");
+    iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    iframe.loading = "lazy";
+    iframe.style.width = "100%";
+    iframe.style.aspectRatio = "16 / 9";
+    iframe.style.border = "0";
+    iframe.style.borderRadius = "14px";
+
+    const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(picked)}?autoplay=1&rel=0`;
+    iframe.src = src;
+
+    // Handy “Open in new tab” button (teacher proof)
+    const openRow = document.createElement("div");
+    openRow.style.display = "flex";
+    openRow.style.gap = "10px";
+    openRow.style.marginTop = "12px";
+    openRow.style.flexWrap = "wrap";
+
+    const openTab = document.createElement("button");
+    openTab.type = "button";
+    openTab.className = "pillBtn";
+    openTab.textContent = "Open on YouTube ↗";
+    openTab.addEventListener("click", ()=>{
+      window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(picked)}`, "_blank", "noopener");
+    });
+
+    const again = document.createElement("button");
+    again.type = "button";
+    again.className = "pillBtn";
+    again.textContent = "Another random video";
+    again.addEventListener("click", ()=>{
+      // Close this modal then re-run selection (simple + reliable)
+      closeAllOverlays();
+      launchYouTubeRandom(act);
+    });
+
+    openRow.appendChild(openTab);
+    openRow.appendChild(again);
+
+    body.appendChild(tip);
+    body.appendChild(iframe);
+    body.appendChild(openRow);
+
+  } catch(err){
+    console.warn("YouTube random failed:", err);
+    toast("Couldn’t load the channel feed (embedding/CORS). Opening YouTube in a new tab…");
+    closeAllOverlays();
+
+    // Fallback: open channel page
+    if (/^UC/i.test(token)){
+      return launchNewTab({ ...act, type:"newtab", url: `https://www.youtube.com/channel/${token}/videos` });
+    }
+    if (/^UU/i.test(token)){
+      return launchNewTab({ ...act, type:"newtab", url: `https://www.youtube.com/playlist?list=${token}` });
+    }
+    return launchNewTab({ ...act, type:"newtab", url: "https://www.youtube.com" });
+  }
+}
 async function fetchRandomRiddleFromPage(url){
   // NOTE: Many sites block CORS. We'll try, then fall back.
   const res = await fetch(url, { mode: "cors" });
@@ -680,14 +848,203 @@ function launchRPS(){
   animateRoll();
 }
 
+/* ================= SEQUENCE (BUILT-IN) =================
+   Generates a simple number pattern and asks students to guess the next term.
+*/
+function launchSequence(act){
+  const overlay = makeOverlay();
+
+  const card = document.createElement("div");
+  card.className = "actModalCard";
+
+  const header = document.createElement("div");
+  header.className = "actModalHeader";
+
+  const title = document.createElement("div");
+  title.className = "actModalTitle";
+  title.textContent = act?.name || "Guess the next number";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "actModalClose";
+  closeBtn.type = "button";
+  closeBtn.textContent = "✕";
+  closeBtn.addEventListener("click", closeAllOverlays);
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "actModalBody";
+
+  const box = document.createElement("div");
+  box.style.display = "grid";
+  box.style.gap = "12px";
+
+  const seqLine = document.createElement("div");
+  seqLine.style.fontSize = "20px";
+  seqLine.style.fontWeight = "700";
+  seqLine.style.letterSpacing = "0.2px";
+
+  const hint = document.createElement("div");
+  hint.className = "smallNote";
+  hint.textContent = "Work with a partner: figure out the pattern, then write the next number.";
+
+  const inputRow = document.createElement("div");
+  inputRow.style.display = "flex";
+  inputRow.style.gap = "8px";
+  inputRow.style.flexWrap = "wrap";
+  inputRow.style.alignItems = "center";
+
+  const guessIn = document.createElement("input");
+  guessIn.type = "number";
+  guessIn.placeholder = "Your guess…";
+  guessIn.style.padding = "10px 12px";
+  guessIn.style.borderRadius = "12px";
+  guessIn.style.border = "1px solid rgba(0,0,0,0.15)";
+  guessIn.style.minWidth = "180px";
+
+  const checkBtn = document.createElement("button");
+  checkBtn.type = "button";
+  checkBtn.textContent = "Check";
+
+  const revealBtn = document.createElement("button");
+  revealBtn.type = "button";
+  revealBtn.textContent = "Reveal";
+
+  const newBtn = document.createElement("button");
+  newBtn.type = "button";
+  newBtn.textContent = "New sequence";
+
+  inputRow.appendChild(guessIn);
+  inputRow.appendChild(checkBtn);
+  inputRow.appendChild(revealBtn);
+  inputRow.appendChild(newBtn);
+
+  const result = document.createElement("div");
+  result.className = "smallNote";
+
+  const explain = document.createElement("div");
+  explain.className = "smallNote";
+  explain.style.whiteSpace = "pre-wrap";
+
+  box.appendChild(seqLine);
+  box.appendChild(hint);
+  box.appendChild(inputRow);
+  box.appendChild(result);
+  box.appendChild(explain);
+
+  body.appendChild(box);
+  card.appendChild(header);
+  card.appendChild(body);
+  overlay.appendChild(card);
+  openModal(overlay);
+
+  function randInt(a,b){
+    return Math.floor(Math.random()*(b-a+1))+a;
+  }
+
+  function makePattern(){
+    const pick = randInt(1,5);
+    if (pick === 1){
+      // arithmetic
+      const start = randInt(-10, 30);
+      const step = randInt(2, 12) * (Math.random() < 0.25 ? -1 : 1);
+      const n = 5;
+      const seq = Array.from({length:n}, (_,i)=> start + step*i);
+      return { seq, answer: start + step*n, expl: `Arithmetic sequence (add ${step} each time).` };
+    }
+    if (pick === 2){
+      // geometric (integer)
+      const start = randInt(1, 12) * (Math.random() < 0.2 ? -1 : 1);
+      const mult = randInt(2, 5) * (Math.random() < 0.15 ? -1 : 1);
+      const n = 5;
+      const seq = Array.from({length:n}, (_,i)=> start * Math.pow(mult, i));
+      return { seq, answer: start * Math.pow(mult, n), expl: `Geometric sequence (× ${mult} each time).` };
+    }
+    if (pick === 3){
+      // fibonacci-like
+      let a = randInt(1, 12);
+      let b = randInt(1, 12);
+      const seq = [a,b];
+      while (seq.length < 6){
+        seq.push(seq[seq.length-1] + seq[seq.length-2]);
+      }
+      return { seq: seq.slice(0,5), answer: seq[5], expl: "Fibonacci-style (each term = previous two added)." };
+    }
+    if (pick === 4){
+      // alternating +x, -y
+      const start = randInt(0, 30);
+      const add = randInt(5, 15);
+      const sub = randInt(2, 12);
+      const seq = [start];
+      for (let i=1;i<6;i++){
+        const prev = seq[i-1];
+        seq.push(i%2===1 ? prev + add : prev - sub);
+      }
+      return { seq: seq.slice(0,5), answer: seq[5], expl: `Alternating pattern (+${add}, -${sub}, +${add}, -${sub}…).` };
+    }
+    // squares with offset
+    const offset = randInt(-10, 20);
+    const startN = randInt(1, 4);
+    const seq = [];
+    for (let i=0;i<5;i++){
+      const n = startN + i;
+      seq.push(n*n + offset);
+    }
+    const next = (startN+5)*(startN+5) + offset;
+    return { seq, answer: next, expl: `Square numbers with an offset (${offset >= 0 ? "+" : ""}${offset}).` };
+  }
+
+  function renderNew(){
+    const p = makePattern();
+    launchSequence._current = p;
+    seqLine.textContent = p.seq.join(", ") + ",  ?";
+    result.textContent = "";
+    explain.textContent = "";
+    guessIn.value = "";
+    guessIn.focus();
+  }
+
+  function showAnswer(mode){
+    const p = launchSequence._current;
+    if (!p) return;
+    const guess = guessIn.value === "" ? null : Number(guessIn.value);
+    if (mode === "check"){
+      if (guess === null || Number.isNaN(guess)){
+        result.textContent = "Type a number first.";
+        return;
+      }
+      result.textContent = (guess === p.answer) ? "✅ Correct!" : `❌ Not quite. Try again (or Reveal).`;
+      if (guess === p.answer){
+        explain.textContent = p.expl;
+      }
+    } else {
+      result.textContent = `Answer: ${p.answer}`;
+      explain.textContent = p.expl;
+    }
+  }
+
+  checkBtn.addEventListener("click", ()=> showAnswer("check"));
+  revealBtn.addEventListener("click", ()=> showAnswer("reveal"));
+  newBtn.addEventListener("click", renderNew);
+  guessIn.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter") showAnswer("check");
+  });
+
+  renderNew();
+}
+
+
 /* ================= DISPATCH ================= */
 function openCurrentActivity(){
   if (!current) return;
 
   if (current.type === "newtab") return launchNewTab(current);
   if (current.type === "iframe") return launchIframe(current);
+  if (current.type === "yt_random") return launchYouTubeRandom(current);
   if (current.type === "riddle") return launchRiddle(current);
   if (current.type === "rps") return launchRPS();
+  if (current.type === "sequence") return launchSequence(current);
 
   // For quick/timed breaks, nothing to open
 }
@@ -837,7 +1194,7 @@ function setUI(){
   startPauseBtn.textContent = running ? "Pause" : (hasTimer && remainingSec === 0 ? "Restart" : "Start");
 
   // open button (always visible, but disabled when not relevant)
-  const openable = !!current && ["newtab","iframe","riddle","rps"].includes(current.type);
+  const openable = !!current && ["newtab","iframe","yt_random","riddle","rps","sequence"].includes(current.type);
 
   if (openBtn){
     openBtn.classList.remove("hidden");
@@ -847,8 +1204,10 @@ function setUI(){
     if (current){
       if (current.type === "iframe") label = "Open (in page)";
       else if (current.type === "newtab") label = "Open (new tab)";
+      else if (current.type === "yt_random") label = "Random video";
       else if (current.type === "riddle") label = "Open riddle";
       else if (current.type === "rps") label = "Open game";
+      else if (current.type === "sequence") label = "Open sequence";
     }
     openBtn.textContent = label;
     openBtn.title = openable
@@ -879,7 +1238,7 @@ function setCurrent(act){
   setUI();
 
   // Auto-open support
-  if (act && act.autoOpen && ["iframe","newtab","riddle","rps"].includes(act.type)){
+  if (act && act.autoOpen && ["iframe","yt_random","newtab","riddle","rps","sequence"].includes(act.type)){
     openCurrentActivity();
   }
   // Auto-start timers
@@ -1071,7 +1430,7 @@ function renderTeacherPanel(){
   const note = document.createElement("div");
   note.className = "smallNote";
   note.textContent =
-    "Tip: ‘iframe’ opens inside the page. ‘newtab’ opens a new tab. ‘riddle’ always works (has a fallback). RPS is built-in. YouTube links pasted into URL will be auto-converted for iframe embedding.";
+    "Tip: ‘iframe’ opens inside the page. ‘sequence’ is a built-in number pattern game. ‘YouTube (random)’ picks a random upload from a creator (paste a Channel ID that starts with UC…). ‘newtab’ opens a new tab. ‘riddle’ always works (has a fallback). RPS is built-in. YouTube links pasted into URL will be auto-converted for iframe embedding.";
 
   wrap.appendChild(note);
 
@@ -1223,11 +1582,13 @@ function openEditModal(act){
     ["quick","quick (no timer)"],
     ["timed","timed (with seconds)"],
     ["iframe","iframe (open inside page)"],
+    ["yt_random","YouTube (random from creator)"],
     ["newtab","newtab (open URL)"],
     ["riddle","riddle (random + fallback)"],
-    ["rps","rps (built-in game)"]
+    ["rps","rps (built-in game)"],
+    ["sequence","sequence (guess the next number)"]
   ]);
-  const urlIn = makeFieldText("URL (for iframe/newtab/riddle)", act.url || "");
+  const urlIn = makeFieldText("URL (for iframe/newtab/riddle/YouTube)", act.url || "");
   const secondsIn = makeFieldNumber("Seconds (for timed)", act.seconds || 60);
   const autoOpenIn = makeFieldCheckbox("Auto-open when selected", !!act.autoOpen);
   const enabledIn = makeFieldCheckbox("Enabled in random picker", act.enabled !== false);
@@ -1270,7 +1631,14 @@ function openEditModal(act){
     // ✅ Auto-convert YouTube links for iframe embedding
     // (We only convert for iframe type; for newtab/riddle we keep pasted URL as-is)
     const rawUrl = urlIn.input.value.trim();
-    act.url = (act.type === "iframe") ? normalizeUrlForIframe(rawUrl) : rawUrl;
+
+    if (act.type === "iframe"){
+      act.url = normalizeUrlForIframe(rawUrl);
+    } else if (act.type === "yt_random"){
+      act.url = normalizeCreatorInput(rawUrl);
+    } else {
+      act.url = rawUrl;
+    }
 
     act.enabled = enabledIn.input.checked;
     act.autoOpen = autoOpenIn.input.checked;
