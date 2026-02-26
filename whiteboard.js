@@ -22,6 +22,8 @@
   // Background DOM layer
   const bgLayer = document.getElementById("bgLayer");
   const bgImg = document.getElementById("bgImg");
+  const svgLayer = document.getElementById("svgLayer");
+  const hudStep = document.getElementById("hudStep");
 
   // Canvases
   const inkCanvas = document.getElementById("inkCanvas");
@@ -55,6 +57,12 @@
   const bgFile = document.getElementById("bgFile");
   const clearBgBtn = document.getElementById("clearBgBtn");
 
+  // SVG Reveal controls
+  const svgFile = document.getElementById("svgFile");
+  const svgResetBtn = document.getElementById("svgResetBtn");
+  const svgShowAllBtn = document.getElementById("svgShowAllBtn");
+  const svgClearBtn = document.getElementById("svgClearBtn");
+
   const boardSelect = document.getElementById("boardSelect");
   const newBoardBtn = document.getElementById("newBoardBtn");
   const saveBoardBtn = document.getElementById("saveBoardBtn");
@@ -79,6 +87,18 @@
 
     // UI title
     title: "",
+
+    // SVG Reveal layer (world coords)
+    svg: {
+      src: "",
+      x: 0,
+      y: 0,
+      scale: 1,
+      rot: 0,
+      viewBox: "",
+      step: -1,
+      total: 0
+    },
 
     // Background (world coords)
     bg: {
@@ -250,6 +270,9 @@
     state.title = snap.title || "";
     titleInput.value = state.title;
 
+    const svg = snap.svg || { src:"", x:0, y:0, scale:1, rot:0, viewBox:"", step:-1, total:0 };
+    state.svg = { ...svg };
+
     const bg = snap.bg || { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
     state.bg = { ...bg };
 
@@ -321,7 +344,29 @@
       `translate(${cx}px, ${cy}px) rotate(${state.bg.rot}rad) scale(${state.bg.scale}) translate(${-cx}px, ${-cy}px)`;
   }
 
-  // ---------- Rendering ----------
+  
+  // ---------- SVG Reveal DOM transform ----------
+  function applySvgTransform() {
+    if (!svgLayer) return;
+    const svgEl = svgLayer.querySelector("svg");
+    if (!svgEl) {
+      if (hudStep) hudStep.textContent = "SVG: –";
+      return;
+    }
+
+    const vb = state.svg.viewBox || svgEl.getAttribute("viewBox") || "";
+    if (vb) svgEl.setAttribute("viewBox", vb);
+
+    const t = `translate(${state.svg.x}px, ${state.svg.y}px) rotate(${state.svg.rot}rad) scale(${state.svg.scale})`;
+    svgEl.style.transformOrigin = "0 0";
+    svgEl.style.transform = t;
+
+    const total = state.svg.total || 0;
+    const step = state.svg.step;
+    if (hudStep) hudStep.textContent = total ? `SVG: ${Math.max(0, step+1)}/${total}` : "SVG: –";
+  }
+
+// ---------- Rendering ----------
   function clearCtx(ctx, canvas) {
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -916,6 +961,7 @@
 
   function redrawAll() {
     applyBgTransform();
+    applySvgTransform();
     drawInk();
     drawUI();
   }
@@ -1544,6 +1590,129 @@
     redrawAll();
   });
 
+
+  // ---------- SVG Reveal import + stepper ----------
+  let svgNodes = [];
+
+  function isIgnorableSvgNode(el){
+    const tag = (el.tagName || "").toLowerCase();
+    return ["defs","style","title","desc","metadata","clipPath","mask","linearGradient","radialGradient","pattern","symbol"].includes(tag);
+  }
+
+  function collectRevealNodes(rootSvg){
+    const all = Array.from(rootSvg.querySelectorAll("*"));
+    const nodes = [];
+    for (const el of all){
+      if (!(el instanceof Element)) continue;
+      if (isIgnorableSvgNode(el)) continue;
+
+      const tag = (el.tagName || "").toLowerCase();
+      const drawable = ["path","rect","circle","ellipse","line","polyline","polygon","text","image","use"].includes(tag);
+      const isGroup = tag === "g";
+
+      if (drawable) nodes.push(el);
+      else if (isGroup) {
+        const hasDrawableDesc = el.querySelector("path,rect,circle,ellipse,line,polyline,polygon,text,image,use");
+        if (hasDrawableDesc) nodes.push(el);
+      }
+    }
+    return nodes;
+  }
+
+  function setSvgHiddenAll(){
+    svgNodes.forEach(n => n.style.visibility = "hidden");
+    state.svg.step = -1;
+    applySvgTransform();
+  }
+
+  function setSvgVisibleAll(){
+    svgNodes.forEach(n => n.style.visibility = "visible");
+    state.svg.step = svgNodes.length - 1;
+    applySvgTransform();
+  }
+
+  function revealSvgTo(step){
+    const s = Math.max(-1, Math.min(svgNodes.length - 1, step));
+    for (let i = 0; i < svgNodes.length; i++){
+      svgNodes[i].style.visibility = (i <= s) ? "visible" : "hidden";
+    }
+    state.svg.step = s;
+    applySvgTransform();
+  }
+
+  function loadSvgText(svgText){
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const root = doc.querySelector("svg");
+    if (!root) { showToast("Invalid SVG"); return; }
+
+    root.removeAttribute("width");
+    root.removeAttribute("height");
+    root.setAttribute("preserveAspectRatio", "xMinYMin meet");
+
+    const vb = root.getAttribute("viewBox") || "";
+    state.svg.viewBox = vb;
+    state.svg.src = svgText;
+
+    svgLayer.innerHTML = "";
+    svgLayer.appendChild(root);
+
+    svgNodes = collectRevealNodes(root);
+    state.svg.total = svgNodes.length;
+
+    // Place near center of current view
+    const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+    state.svg.x = viewCenter.x - 200;
+    state.svg.y = viewCenter.y - 200;
+    state.svg.scale = 1;
+    state.svg.rot = 0;
+
+    setSvgHiddenAll();
+    redrawAll();
+    showToast(`SVG loaded (${svgNodes.length} parts)`);
+  }
+
+  svgFile?.addEventListener("change", () => {
+    const file = svgFile.files && svgFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      pushUndo(); clearRedo();
+      hardResetGesture();
+      loadSvgText(String(reader.result || ""));
+    };
+    reader.readAsText(file);
+    svgFile.value = "";
+  });
+
+  svgResetBtn?.addEventListener("click", () => {
+    if (!svgNodes.length) return;
+    pushUndo(); clearRedo();
+    setSvgHiddenAll();
+    redrawAll();
+    showToast("SVG reset");
+  });
+
+  svgShowAllBtn?.addEventListener("click", () => {
+    if (!svgNodes.length) return;
+    pushUndo(); clearRedo();
+    setSvgVisibleAll();
+    redrawAll();
+    showToast("SVG shown");
+  });
+
+  svgClearBtn?.addEventListener("click", () => {
+    if (!svgNodes.length && !state.svg.src) return;
+    pushUndo(); clearRedo();
+    svgLayer.innerHTML = "";
+    svgNodes = [];
+    state.svg = { src:"", x:0, y:0, scale:1, rot:0, viewBox:"", step:-1, total:0 };
+    applySvgTransform();
+    redrawAll();
+    showToast("SVG removed");
+  });
+
+
   // ---------- Keyboard ----------
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -1559,6 +1728,14 @@
 
     const tag = (document.activeElement && document.activeElement.tagName) || "";
     const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    // SVG reveal stepping (arrow keys) when an SVG is loaded
+    if (!typing && svgNodes && svgNodes.length) {
+      const jump = e.shiftKey ? 5 : 1;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); revealSvgTo(state.svg.step + jump); }
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); revealSvgTo(state.svg.step - jump); }
+      else if (e.key === "Home") { e.preventDefault(); revealSvgTo(-1); }
+      else if (e.key === "End") { e.preventDefault(); revealSvgTo(svgNodes.length - 1); }
+    }
 
     // Delete removes selection (when not typing)
     if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
@@ -1643,6 +1820,14 @@
 
     applySnapshot(data);
 
+    // Restore SVG DOM
+    svgLayer.innerHTML = "";
+    svgNodes = [];
+    if (state.svg && state.svg.src) {
+      loadSvgText(state.svg.src);
+      revealSvgTo(state.svg.step ?? -1);
+    }
+
     if (state.bg && state.bg.src) {
       bgImg.src = state.bg.src;
     } else {
@@ -1716,6 +1901,19 @@
     const H = state.viewH;
 
     const cam = `translate(${state.panX.toFixed(3)} ${state.panY.toFixed(3)}) scale(${state.zoom.toFixed(6)})`;
+
+    let svgMarkup = "";
+    if (state.svg && state.svg.src) {
+      const root = svgLayer?.querySelector("svg");
+      if (root) {
+        const clone = root.cloneNode(true);
+        clone.removeAttribute("style");
+        const vb = state.svg.viewBox || clone.getAttribute("viewBox") || "";
+        if (vb) clone.setAttribute("viewBox", vb);
+        const t = `translate(${state.svg.x.toFixed(3)} ${state.svg.y.toFixed(3)}) rotate(${(state.svg.rot*180/Math.PI).toFixed(6)}) scale(${state.svg.scale.toFixed(6)})`;
+        svgMarkup = `<g transform=\"${t}\">${clone.innerHTML}</g>`;
+      }
+    }
 
     let bgMarkup = "";
     if (state.bg.src){
@@ -1827,6 +2025,7 @@
   <rect x="0" y="0" width="${W}" height="${H}" fill="white"/>
   <g transform="${cam}">
     ${bgMarkup}
+    ${svgMarkup}
     ${inkMarkup}
   </g>
 </svg>`;
