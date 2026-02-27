@@ -308,3 +308,8 @@ html, body{ height:100%; }
 .panel__btn--danger:hover{
   background: rgba(231,76,60,0.16);
 }
+.danger{
+  background:#e74c3c;
+  color:#fff;
+}
+.danger:hover{ filter: brightness(0.95); }
