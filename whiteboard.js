@@ -1813,53 +1813,32 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
     }
 
     // Drawing
-
 if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   const ctrlHeld = e.ctrlKey || e.metaKey;
 
   const cx = gesture.arcCenter.cx;
   const cy = gesture.arcCenter.cy;
 
-  // Pointer in world, with snapping rules:
-  // - default: snap pointer to whole-mm grid
-  // - Ctrl/Cmd: prefer snapping to endpoints/intersections; if none, fall back to whole-mm grid
+  // pointer in world with same snapping rules as before
   let p = w;
-  let snappedHit = null;
-
   if (ctrlHeld) {
-    snappedHit = snapPointWithCtrl(p);
-    p = snappedHit || snapToMmGridWorld(p);
+    const hit = snapPointWithCtrl(p);
+    p = hit || snapToMmGridWorld(p);
   } else {
     p = snapToMmGridWorld(p);
   }
 
-  // Radius snapping (whole mm), BUT if we snapped to a real feature point (endpoint/intersection),
-  // try to keep the arc end landing on that feature:
-  //   - If the whole-mm snapped radius keeps the end within the snap radius, use it.
-  //   - Otherwise, keep the exact radius so the end stays on the feature point.
+  // ✅ Angle follows pointer, radius stays fixed at arc start
   const a2 = Math.atan2(p.y - cy, p.x - cx);
-  const rExact = Math.hypot(p.x - cx, p.y - cy);
-
-  let rMm = Math.max(1, Math.round(rExact / PX_PER_MM) * PX_PER_MM);
-
-  if (snappedHit) {
-    const ex = cx + Math.cos(a2) * rMm;
-    const ey = cy + Math.sin(a2) * rMm;
-
-    const tolWorld = SNAP_RADIUS_PX / (state.zoom || 1);
-    const d = Math.hypot(ex - snappedHit.x, ey - snappedHit.y);
-
-    // If rounding would pull the endpoint too far off the snapped feature, keep the exact radius.
-    if (d > tolWorld) rMm = Math.max(1, rExact);
-  }
+  const rFixed = Math.max(1, gesture.arcR || 1);
 
   gesture.activeObj.cx = cx;
   gesture.activeObj.cy = cy;
-  gesture.activeObj.r = rMm;
+  gesture.activeObj.r  = rFixed;
   gesture.activeObj.a1 = gesture.arcA1;
   gesture.activeObj.a2 = a2;
 
-  showMeasureTip(sx, sy, `R ${Math.round(rMm / PX_PER_MM)} mm`);
+  showMeasureTip(sx, sy, `R ${Math.round(rFixed / PX_PER_MM)} mm`);
   redrawAll();
   return;
 }
@@ -1999,8 +1978,17 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   });
 
   // ---------- Tool buttons ----------
-  dockBtns.forEach(b => b.addEventListener("click", () => setActiveTool(b.dataset.tool)));
+dockBtns.forEach(b => b.addEventListener("click", () => {
+  const t = b.dataset.tool;
 
+  // ✅ If Arc is already active, clicking it again arms a new center pick
+  if (t === "arc" && state.tool === "arc") {
+    arcDraft.hasCenter = false;
+    showToast("Click to set arc center");
+  }
+
+  setActiveTool(t);
+}));
   clearBtn.addEventListener("click", () => {
     pushUndo(); clearRedo();
     hardResetGesture();
