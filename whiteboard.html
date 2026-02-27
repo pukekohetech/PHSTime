@@ -1,147 +1,29 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PHS Whiteboard</title>
+deleteBoardBtn?.addEventListener("click", () => {
+  const name = boardSelect.value;
+  if (!name) {
+    showToast("Select a board");
+    return;
+  }
 
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="whiteboard.css" />
-</head>
+  const ok = confirm(`Delete board "${name}"?\n\nThis cannot be undone.`);
+  if (!ok) return;
 
- <nav class="appNav" aria-label="PHS Classroom Tools">
-    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
-     <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
-    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
-    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
-    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
-    <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
-      
-  </nav>
+  const index = loadBoardsIndex();
+  if (!index[name]) {
+    showToast("Board not found");
+    refreshBoardSelect();
+    boardSelect.value = "";
+    return;
+  }
 
+  delete index[name];
+  saveBoardsIndex(index);
 
-  <div class="toast" id="toast" aria-live="polite">Saved</div>
+  refreshBoardSelect();
+  boardSelect.value = "";
 
-  <main class="wb">
-    <!-- LEFT TOOL DOCK -->
-    <aside class="dock" aria-label="Tools">
-      <!-- COLOUR (top icon) + brush size popover -->
-      <div class="dockPopWrap">
-        <button class="dockBtn dockBtn--swatch" id="colorBtn" title="Colour + Brush size">
-          <span class="swatchLive" id="swatchLive" aria-hidden="true"></span>
-        </button>
+  // Optional: if you want deleting to also clear the current board from screen, uncomment:
+  // newBoardBtn.click();
 
-        <div class="dockPop is-hidden" id="colorPop" role="dialog" aria-label="Colour and brush size">
-          <div class="dockPop__row">
-            <label class="dockPop__label" for="colorInput">Colour</label>
-            <input id="colorInput" type="color" value="#111111" class="dockPop__color" />
-          </div>
-
-          <div class="dockPop__row">
-            <label class="dockPop__label" for="brushSize">Brush size</label>
-            <input id="brushSize" type="range" min="1" max="40" value="5" class="dockPop__range" />
-            <span id="brushOut" class="dockPop__pill">5</span>
-          </div>
-
-          <div class="dockPop__note">Shift: uniform scale • Shift (rotate): snap 15° • Delete: remove selected</div>
-        </div>
-      </div>
-
-      <div class="dockSep"></div>
-
-      <button class="dockBtn" data-tool="select" title="Select / Move (V)">🖱️</button>
-
-      <div class="dockSep"></div>
-
-      <button class="dockBtn is-active" data-tool="pen" title="Freehand (P)">✏️</button>
-      <button class="dockBtn" data-tool="line" title="Line (L)">／</button>
-      <button class="dockBtn" data-tool="rect" title="Rectangle (R)">▭</button>
-      <button class="dockBtn" data-tool="circle" title="Circle (C)">◯</button>
-      <button class="dockBtn" data-tool="arrow" title="Arrow (A)">➤</button>
-      <button class="dockBtn" data-tool="text" title="Text (T)">T</button>
-      <button class="dockBtn" data-tool="eraser" title="Eraser (E)">🧽</button>
-
-      <div class="dockSep"></div>
-
-      <!-- These act on selection if something is selected; otherwise they act on background -->
-      <button class="dockBtn" data-tool="bgMove" title="Move selection / background">↔</button>
-      <button class="dockBtn" data-tool="bgScale" title="Scale selection / background">⤡</button>
-      <button class="dockBtn" data-tool="bgRotate" title="Rotate selection / background">⟲</button>
-
-      <div class="dockSep"></div>
-
-      <button class="dockBtn dockBtn--danger" id="clearBtn" title="Clear ink (returns to Pen)">🗑</button>
-    </aside>
-
-    <!-- STAGE -->
-    <section class="stageWrap">
-      <div class="stage" id="stage" aria-label="Whiteboard stage">
-        <!-- Background is DOM (no zoom artefacts) -->
-        <div id="bgLayer" aria-hidden="true">
-          <img id="bgImg" alt="" />
-        </div>
-
-        <!-- Ink + UI canvases -->
-        <canvas id="inkCanvas"></canvas>
-        <canvas id="uiCanvas"></canvas>
-
-        <!-- floating gear -->
-        <button class="gearBtn" id="settingsBtn" type="button" aria-haspopup="true" aria-expanded="false" title="Settings">
-          ⚙️
-        </button>
-
-        <!-- settings panel -->
-        <div class="panel is-hidden" id="settingsPanel" role="dialog" aria-label="Whiteboard settings">
-          <div class="panel__top">
-            <div class="panel__title">Board Settings</div>
-            <button class="panel__close" id="settingsCloseBtn" type="button" title="Close">✕</button>
-          </div>
-
-          <div class="panel__grid">
-            <div class="panel__group panel__group--wide">
-              <label class="panel__label" for="titleInput">Top annotation</label>
-              <div class="panel__row">
-                <input id="titleInput" class="panel__input" type="text" placeholder="Heading across the top…" />
-                <button id="applyTitleBtn" class="panel__btn" type="button">Apply</button>
-              </div>
-            </div>
-
-            <div class="panel__group panel__group--wide">
-              <label class="panel__label" for="bgFile">Background image</label>
-              <div class="panel__row">
-                <input id="bgFile" type="file" accept="image/*" class="panel__file" />
-                <button id="clearBgBtn" class="panel__btn" type="button">Clear</button>
-              </div>
-              <div class="panel__note">Use ↔ ⤡ ⟲ on the left (acts on selection if one is selected).</div>
-            </div>
-
-            <div class="panel__group panel__group--wide">
-              <label class="panel__label">Boards</label>
-              <div class="panel__row panel__row--wrap">
-                <select id="boardSelect" class="panel__select"></select>
-                <button id="newBoardBtn" class="panel__btn" type="button">New</button>
-                <button id="saveBoardBtn" class="panel__btn" type="button">Save</button>
-                <button id="loadBoardBtn" class="panel__btn" type="button">Load</button>
-              </div>
-            </div>
-
-            <div class="panel__group panel__group--wide">
-              <label class="panel__label">Export</label>
-              <div class="panel__row" style="gap:8px; flex-wrap:wrap;">
-  <button id="exportBtn" class="panel__btn panel__btn--primary" type="button">Download PNG</button>
-  <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">Download SVG</button>
-</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="hint">
-        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected
-      </div>
-    </section>
-  </main>
-
-  <script src="whiteboard.js"></script>
-</body>
-</html>
+  showToast("Board deleted");
+});
