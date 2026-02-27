@@ -157,6 +157,40 @@ Mana Award"></textarea>
 
         <div class="divider"></div>
 
+        <!-- ✅ Group maker -->
+        <details>
+          <summary>Group maker (random groups + print)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Group size</div>
+          <div class="smallNote u-mt-8">Choose a size, then “Spin to make groups”. Remainders are balanced (some groups get +1).</div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow" style="gap:8px;">
+            <input id="groupSize" type="number" min="2" max="20" value="4" class="u-minw-180" style="box-shadow:none;" />
+            <span class="pillBtn" title="Only students currently included on the wheel">
+              <input id="groupUseIncluded" type="checkbox" checked />
+              <label for="groupUseIncluded">Use included only</label>
+            </span>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="makeGroupsBtn" type="button">Spin to make groups</button>
+            <button id="printGroupsBtn" type="button" disabled>Print groups</button>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Preview</div>
+          <div class="smallNote u-mt-8" id="groupPreviewHint">No groups yet.</div>
+          <div class="u-h-8"></div>
+          <div id="groupPreview" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
         <!-- ✅ Backup / Restore (Export + Import) -->
         <div>
           <div class="miniLabel">Backup / Restore</div>
@@ -275,13 +309,14 @@ Mana Award"></textarea>
    - delete warning + restore individually (trash)
    - quick add field
    - FIX: spacebar spins only when NOT typing + Options closed
-   - ✅ NEW: Export/Import full wheel backup (JSON)
+   - ✅ Export/Import full wheel backup (JSON)
+   - ✅ Group maker: choose size → spin animation → random groups → print
    ========================================================= */
 
 const $ = (id) => document.getElementById(id);
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const safeText = (s) => (s ?? "").toString().trim();
-const stripBOM = (s) => (s ?? "").toString().replace(/^\uFEFF/, "");
+const stripBOM = (s) => (s ?? "").toString().replace(/^\\uFEFF/, "");
 
 function storageOK(){
   try{
@@ -539,18 +574,18 @@ function createDefaultSetIfNone(){
 function normHeader(h){
   return (h||"")
     .toString()
-    .replace(/^\uFEFF/, "")
+    .replace(/^\\uFEFF/, "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g," ")
-    .replace(/[^\w ]/g,"");
+    .replace(/\\s+/g," ")
+    .replace(/[^\\w ]/g,"");
 }
 function detectDelimiter(firstLine){
   const line=firstLine||"";
-  const tab=(line.match(/\t/g)||[]).length;
+  const tab=(line.match(/\\t/g)||[]).length;
   const comma=(line.match(/,/g)||[]).length;
   const semi=(line.match(/;/g)||[]).length;
-  if (tab>0) return "\t";
+  if (tab>0) return "\\t";
   if (semi>comma) return ";";
   return ",";
 }
@@ -565,20 +600,20 @@ function parseCSVWithQuotes(text){
       continue;
     }
     if (!inQ && ch === ','){ row.push(cur); cur=""; continue; }
-    if (!inQ && ch === '\n'){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
-    if (ch !== '\r') cur += ch;
+    if (!inQ && ch === '\\n'){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
+    if (ch !== '\\r') cur += ch;
   }
   if (cur.length || row.length){ row.push(cur); rows.push(row); }
   return rows;
 }
 function parseDelimited(text){
-  text = stripBOM(text).replace(/\r/g,"");
-  const lines=text.split("\n").filter(l=>l.trim()!=="");
+  text = stripBOM(text).replace(/\\r/g,"");
+  const lines=text.split("\\n").filter(l=>l.trim()!=="");
   if (!lines.length) return { rows:[], delim:"," };
 
   const delim=detectDelimiter(lines[0]);
   let rows=[];
-  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\n"));
+  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\\n"));
   else rows = lines.map(l => l.split(delim));
 
   rows = rows.filter(r=>r.some(c=>safeText(c)!==""));
@@ -619,7 +654,7 @@ function splitNameSmart(s){
     const [a,b] = s.split(",").map(x=>safeText(x));
     return { first:b||"", last:a||"" };
   }
-  const parts = s.split(/\s+/).filter(Boolean);
+  const parts = s.split(/\\s+/).filter(Boolean);
   if (parts.length===1) return { first:parts[0], last:"" };
   return { first:parts.slice(0,-1).join(" "), last:parts.slice(-1).join("") };
 }
@@ -715,7 +750,7 @@ function parseStudentsFlexible(text, setId){
 }
 
 /* ================= Add / Restore helpers ================= */
-function safeName(s){ return safeText(s).replace(/\s+/g," ").trim(); }
+function safeName(s){ return safeText(s).replace(/\\s+/g," ").trim(); }
 
 function makeNewEntry(name, setId){
   const base = safeName(name);
@@ -727,7 +762,7 @@ function addTextEntriesToSet(set, rawText){
   const text = safeText(rawText);
   if (!text) return 0;
 
-  const lines = text.split(/\r?\n/).map(safeName).filter(Boolean);
+  const lines = text.split(/\\r?\\n/).map(safeName).filter(Boolean);
   if (!lines.length) return 0;
 
   const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
@@ -811,6 +846,9 @@ function renderSetButtons(){
       setActiveSet(s.id);
       displayPool=null;
       pendingExcludeId=null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
       renderSetButtons();
       renderSetManager();
       refreshAll();
@@ -848,6 +886,8 @@ function renderSetManager(){
       renderSetButtons();
       setStatus();
       saveSetsDebounced();
+      // update print header if preview exists
+      if (lastGroups) renderGroupPreview(lastGroups);
     });
 
     const use=document.createElement("button");
@@ -858,6 +898,9 @@ function renderSetManager(){
       setActiveSet(s.id);
       displayPool=null;
       pendingExcludeId=null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
       renderSetButtons();
       refreshAll();
       renderTrashList();
@@ -873,6 +916,9 @@ function renderSetManager(){
       sets=sets.filter(x=>x.id!==s.id);
       if (activeSetId===s.id) setActiveSet(sets[0]?.id || null);
       saveSets();
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
       renderSetButtons();
       renderSetManager();
       displayPool=null;
@@ -1026,7 +1072,7 @@ function renderTrashList(){
   }
 
   normalizeSet(set);
-  let items = (set.trash || []).slice().reverse();
+  let items = (set.trash || []).slice().reverse(); // newest first
   if (q) items = items.filter(x => (x.name||"").toLowerCase().includes(q));
 
   if (!set.trash.length){
@@ -1261,6 +1307,7 @@ $("dedupeSetBtn").addEventListener("click", ()=>{
   }
   set.students = next;
 
+  // clean excluded ids
   const validIds = new Set(set.students.map(s => s.id));
   const ex = set.excludedIds || {};
   for (const id of Object.keys(ex)){
@@ -1295,7 +1342,7 @@ $("quickAddInput").addEventListener("keydown", (e)=>{
   if (e.key === "Enter"){ e.preventDefault(); quickAdd(); }
 });
 
-/* ================= Spin logic ================= */
+/* ================= Spin logic (single winner) ================= */
 let spinning=false;
 let spinPool=null;
 let pendingExcludeId=null;
@@ -1455,7 +1502,10 @@ function isTypingTarget(el){
 document.addEventListener("keydown",(e)=>{
   if (e.key !== " ") return;
 
+  // Options open? let space type normally.
   if (!optionsMenu.classList.contains("hidden")) return;
+
+  // Typing in a field? let space type normally.
   if (isTypingTarget(document.activeElement)) return;
 
   e.preventDefault();
@@ -1476,6 +1526,9 @@ function createSetFromStudents(name, students){
   saveSets();
   displayPool=null;
   pendingExcludeId=null;
+  lastGroups = null;
+  $("printGroupsBtn").disabled = true;
+  renderGroupPreview(null);
   renderSetButtons();
   renderSetManager();
   refreshAll();
@@ -1519,6 +1572,9 @@ $("clearSetsBtn").addEventListener("click", ()=>{
   saveSets();
   displayPool=null;
   pendingExcludeId=null;
+  lastGroups = null;
+  $("printGroupsBtn").disabled = true;
+  renderGroupPreview(null);
   renderSetButtons();
   renderSetManager();
   refreshAll();
@@ -1600,6 +1656,9 @@ $("importWheelFile").addEventListener("change", (e)=>{
 
       displayPool = null;
       pendingExcludeId = null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
 
       renderSetButtons();
       renderSetManager();
@@ -1614,6 +1673,378 @@ $("importWheelFile").addEventListener("change", (e)=>{
     }
   };
   reader.readAsText(file);
+});
+
+/* ================= Group maker ================= */
+let lastGroups = null;
+
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i=a.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Balanced grouping:
+ * - Base size = groupSize
+ * - Remainder distributed: first R groups get +1
+ */
+function makeBalancedGroups(items, groupSize){
+  const n = items.length;
+  if (n === 0) return [];
+
+  const size = clamp(Number(groupSize)||2, 2, 50);
+  const baseGroupCount = Math.max(1, Math.floor(n / size));
+  const rem = n - (baseGroupCount * size);
+
+  // If size > n, just one group
+  if (baseGroupCount === 0) return [items.slice()];
+
+  const groups = [];
+  let idx = 0;
+
+  // Build groups with base size, distribute remainder as +1 to first rem groups
+  for (let g=0; g<baseGroupCount; g++){
+    const extra = g < rem ? 1 : 0;
+    const take = size + extra;
+    groups.push(items.slice(idx, idx+take));
+    idx += take;
+  }
+
+  // Safety: if anything left (shouldn't), append to last group
+  if (idx < n){
+    groups[groups.length-1].push(...items.slice(idx));
+  }
+
+  // If we ended up with a tiny last group (e.g. size 5, n 6 -> baseGroupCount=1 rem=1 => group of 6 ok)
+  return groups.filter(g => g.length);
+}
+
+function renderGroupPreview(groups){
+  const wrap = $("groupPreview");
+  const hint = $("groupPreviewHint");
+  wrap.innerHTML = "";
+
+  const set = getActiveSet();
+  const setName = set?.name || "No set loaded";
+
+  if (!groups || !groups.length){
+    hint.textContent = "No groups yet.";
+    return;
+  }
+
+  const total = groups.reduce((a,g)=>a+g.length, 0);
+  const sizes = groups.map(g=>g.length);
+  const minS = Math.min(...sizes);
+  const maxS = Math.max(...sizes);
+
+  hint.textContent = `${setName} • ${groups.length} group${groups.length===1?"":"s"} • ${total} student${total===1?"":"s"} (size ${minS}${minS===maxS?"":("–"+maxS)})`;
+
+  for (let i=0; i<groups.length; i++){
+    const card = document.createElement("div");
+    card.style.background = "rgba(255,255,255,0.86)";
+    card.style.borderRadius = "14px";
+    card.style.padding = "10px 12px";
+    card.style.boxShadow = "0 10px 26px rgba(0,0,0,0.10)";
+    card.style.display = "grid";
+    card.style.gap = "8px";
+
+    const head = document.createElement("div");
+    head.style.display = "flex";
+    head.style.justifyContent = "space-between";
+    head.style.alignItems = "center";
+
+    const title = document.createElement("div");
+    title.textContent = `Group ${i+1}`;
+    title.style.fontWeight = "1000";
+    title.style.letterSpacing = "0.2px";
+
+    const pill = document.createElement("span");
+    pill.className = "valuePill";
+    pill.textContent = `${groups[i].length}`;
+
+    head.appendChild(title);
+    head.appendChild(pill);
+
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gridTemplateColumns = "1fr 1fr";
+    list.style.gap = "6px 12px";
+
+    const sorted = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    for (const name of sorted){
+      const item = document.createElement("div");
+      item.textContent = name;
+      item.style.fontWeight = "800";
+      item.style.opacity = "0.92";
+      list.appendChild(item);
+    }
+
+    card.appendChild(head);
+    card.appendChild(list);
+    wrap.appendChild(card);
+  }
+}
+
+function getGroupPool(){
+  const set = getActiveSet();
+  if (!set) return [];
+  const useIncluded = $("groupUseIncluded").checked;
+  normalizeSet(set);
+  if (useIncluded) return includedStudents(set);
+  return set.students.slice();
+}
+
+/* A short "spin effect" for group making (no winner) */
+function spinAnimation(pool, ms=1200){
+  return new Promise((resolve)=>{
+    const startRot = rot;
+    const extraTurns = 2 + Math.random()*2;
+    const endRot = startRot + (Math.PI*2*extraTurns);
+    const startTime = performance.now();
+
+    lastTickIndex = angleToIndex(rot, pool);
+
+    function frame(t){
+      const p = clamp((t-startTime)/ms, 0, 1);
+      const eased = easeOutCubic(p);
+      rot = startRot + (endRot-startRot)*eased;
+
+      const idx = angleToIndex(rot, pool);
+      if ($("tickSoundOn").checked && idx !== null && idx !== lastTickIndex){
+        tick();
+        lastTickIndex = idx;
+      }
+
+      drawWheel(rot, pool);
+
+      if (p < 1) requestAnimationFrame(frame);
+      else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+$("makeGroupsBtn").addEventListener("click", async ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){
+    toast("No set loaded");
+    return;
+  }
+
+  const size = clamp(Number($("groupSize").value)||4, 2, 20);
+
+  // Apply "exclude winner next spin" pending state before groups
+  applyPendingExclude();
+
+  const pool = getGroupPool();
+  if (pool.length < 2){
+    toast("Need at least 2 students");
+    return;
+  }
+  if (pool.length < size){
+    // allow: one group with all
+    // still ok
+  }
+
+  spinning = true;
+  setBg("spinning");
+  $("spinBtn").disabled = true;
+  $("makeGroupsBtn").disabled = true;
+  $("winnerBox").textContent = "Making groups…";
+  $("hintLine").textContent = "Randomising 🍀";
+
+  // Keep wheel showing the pool used for groups
+  displayPool = pool.slice();
+
+  await spinAnimation(displayPool, clamp(1400 - (Number($("spinSpeed").value)||20)*25, 650, 1400));
+
+  const shuffled = shuffle(pool);
+  const groups = makeBalancedGroups(shuffled, size);
+
+  spinning = false;
+  setBg("idle");
+  $("spinBtn").disabled = false;
+  $("makeGroupsBtn").disabled = false;
+
+  lastGroups = groups;
+  $("printGroupsBtn").disabled = !lastGroups.length;
+
+  // nice feedback
+  $("winnerBox").textContent = `Groups made ✅ (${groups.length} group${groups.length===1?"":"s"})`;
+  $("hintLine").innerHTML = `Open Options (⚙️) → Group maker → <b>Print groups</b>`;
+
+  renderGroupPreview(groups);
+
+  // redraw wheel in whatever state it was (keep pool shown)
+  drawWheel(rot, displayPool);
+  toast("Groups created");
+});
+
+function buildPrintHTML(groups){
+  const set = getActiveSet();
+  const setName = (set?.name || "Class Groups").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const when = new Date().toLocaleString();
+
+  // Build columns that flow nicely when printed
+  let body = "";
+  for (let i=0; i<groups.length; i++){
+    const names = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    const lis = names.map(n => `<li>${escapeHTML(n)}</li>`).join("");
+    body += `
+      <section class="card">
+        <div class="cardHead">
+          <div class="groupTitle">Group ${i+1}</div>
+          <div class="pill">${names.length}</div>
+        </div>
+        <ol class="names">${lis}</ol>
+      </section>
+    `;
+  }
+
+  return `<!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${setName} — Groups</title>
+    <style>
+      :root{
+        --ink:#111;
+        --muted:#666;
+        --card:#ffffff;
+        --line:#e7e7e7;
+      }
+      html,body{ margin:0; padding:0; color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      .page{ padding: 24px; }
+      .header{
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-end;
+        gap:16px;
+        border-bottom: 2px solid var(--line);
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+      .title{
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: .2px;
+      }
+      .sub{
+        color:var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .meta{
+        text-align:right;
+        color:var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .grid{
+        display:grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card{
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 14px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        background: var(--card);
+      }
+      .cardHead{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom: 10px;
+      }
+      .groupTitle{
+        font-weight: 1000;
+        font-size: 16px;
+      }
+      .pill{
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-weight: 900;
+        font-size: 12px;
+        color: #222;
+      }
+      .names{
+        margin: 0;
+        padding-left: 18px;
+        columns: 2;
+        column-gap: 18px;
+      }
+      .names li{
+        margin: 4px 0;
+        font-weight: 800;
+        font-size: 13px;
+        break-inside: avoid;
+      }
+      @media print{
+        .page{ padding: 0; }
+        .grid{ gap: 10px; }
+        .card{ border-color: #ddd; }
+      }
+      @page{ margin: 12mm; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header">
+        <div>
+          <div class="title">${setName} — Random Groups</div>
+          <div class="sub">Made with PHS Wheel • Balanced sizes • Sorted names</div>
+        </div>
+        <div class="meta">
+          ${escapeHTML(when)}<br/>
+          ${groups.length} group${groups.length===1?"":"s"} • ${groups.reduce((a,g)=>a+g.length,0)} student${groups.reduce((a,g)=>a+g.length,0)===1?"":"s"}
+        </div>
+      </div>
+      <div class="grid">
+        ${body}
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
+function escapeHTML(s){
+  return String(s ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+$("printGroupsBtn").addEventListener("click", ()=>{
+  if (!lastGroups || !lastGroups.length){
+    toast("No groups to print");
+    return;
+  }
+  const win = window.open("", "_blank");
+  if (!win){
+    alert("Pop-up blocked. Allow pop-ups for printing.");
+    return;
+  }
+  win.document.open();
+  win.document.write(buildPrintHTML(lastGroups));
+  win.document.close();
+
+  // Try to print automatically after load
+  win.onload = ()=>{
+    try{ win.focus(); win.print(); }catch(e){}
+  };
 });
 
 /* ================= Refresh all ================= */
@@ -1652,11 +2083,6 @@ function refreshAll(){
 
 /* ================= Init ================= */
 function init(){
-  if (!storageOK()){
-    // NOTE: wheel.html in your upload doesn't include #subLabel, so we won't touch it.
-    // If you add it later, you can show the warning there.
-  }
-
   loadPrefs();
   savePrefs();
 
@@ -1670,6 +2096,10 @@ function init(){
     activeSetId = sets[0]?.id || null;
     saveActiveSet(activeSetId);
   }
+
+  // init group preview area
+  renderGroupPreview(null);
+  $("printGroupsBtn").disabled = true;
 
   renderSetButtons();
   renderSetManager();
