@@ -2074,28 +2074,31 @@
 
 if (deleteBoardBtn) {
   deleteBoardBtn.addEventListener("click", function () {
-  const name = boardSelect.value;
-  if (!name) {
-    showToast("Select a board");
-    return;
-  }
+    const name = boardSelect.value;
+    if (!name) {
+      toast("Select a board");
+      return;
+    }
 
-  const ok = confirm(`Delete board "${name}"? This cannot be undone.`);
-  if (!ok) return;
+    const ok = confirm(`Delete board "${name}"?\n\nThis cannot be undone.`);
+    if (!ok) return;
 
-  const index = loadBoardsIndex();
-  if (!index[name]) {
-    showToast("Board not found");
-    return;
-  }
+    const index = loadBoardsIndex();
+    if (!index[name]) {
+      toast("Board not found");
+      refreshBoardSelect();
+      boardSelect.value = "";
+      return;
+    }
 
-  delete index[name];
-  saveBoardsIndex(index);
+    delete index[name];
+    saveBoardsIndex(index);
 
-  refreshBoardSelect();
-  boardSelect.value = "";
-  showToast("Board deleted");
-});
+    refreshBoardSelect();
+    boardSelect.value = "";
+
+    toast("Board deleted");
+  });
 }
 
   refreshBoardSelect();
