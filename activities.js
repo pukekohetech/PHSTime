@@ -3,97 +3,98 @@
 
 window.PHS_ACTIVITIES_DEFAULTS = {
   "activities": [
+
+    /* ================= ONLINE / INTERACTIVE ================= */
+
     {
-      "id": "a_757d80b1bbff519c9ddb7c8c",
+      "id": "charades",
       "name": "Charades",
       "type": "newtab",
       "url": "https://randomwordgenerator.com/charades.php",
-      "tag": "",
+      "tag": "game",
       "seconds": null,
       "steps": [
-        "Two players face away from the board while therivteams try to get them to guess the word"
+        "Two players face away from the board.",
+        "Teams describe the word without saying it."
       ],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "a_feacac1eade64819c9dc28b7f",
+      "id": "scatogories",
       "name": "Scatogories",
       "type": "newtab",
       "url": "https://swellgarfo.com/scattergories/",
-      "tag": "",
+      "tag": "game",
       "seconds": null,
       "steps": [
-        "Be the first to name something for each category starting with the letter"
+        "Be the first to name something for each category using the letter."
       ],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "a_ae1b07ebae574819c9d9d2026",
-      "name": "Discovery puzzle makers",
+      "id": "discovery_puzzle",
+      "name": "Discovery Puzzle Maker",
       "type": "newtab",
       "url": "https://puzzlemaker.discoveryeducation.com/",
-      "tag": "",
+      "tag": "learning",
       "seconds": null,
-      "steps": [
-        "Write instructions here…"
-      ],
+      "steps": [],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "a_d1def90b9aae0819c9d96c6ed",
+      "id": "natgeo_kids",
       "name": "National Geographic Kids",
       "type": "iframe",
       "url": "https://kids.nationalgeographic.com/games/puzzles/",
-      "tag": "",
+      "tag": "learning",
       "seconds": null,
-      "steps": [
-        "Puzzles and learning"
-      ],
+      "steps": ["Explore puzzles and learning games."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "a_431155b35d9da819c9d912ea4",
-      "name": "Open guesser",
+      "id": "openguessr",
+      "name": "Open Guessr",
       "type": "iframe",
       "url": "https://openguessr.com/",
-      "tag": "",
+      "tag": "geography",
       "seconds": null,
-      "steps": [
-        "Guess the location"
-      ],
+      "steps": ["Guess the location."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "a_8887af5ad883e19c9d7f911e",
+      "id": "random_quiz",
       "name": "Random Quiz",
       "type": "iframe",
       "url": "https://www.randomtriviagenerator.com/quizzes",
-      "tag": "",
+      "tag": "quiz",
       "seconds": null,
-      "steps": [
-        "Pick a quiz"
-      ],
+      "steps": ["Pick a quiz."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "edquote",
-      "name": "EdQuote (random quote)",
+      "name": "EdQuote",
       "type": "iframe",
       "url": "https://www.hellam.net/edquote.phtml",
       "tag": "teacher",
       "seconds": null,
-      "steps": [
-        "Click for a new quote. Discuss: Do you agree? Why/why not?"
-      ],
+      "steps": ["Click for a quote. Discuss meaning."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "funny_jokes",
       "name": "Funny Jokes",
@@ -101,131 +102,160 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "url": "https://funny-jokes.netlify.app/",
       "tag": "light",
       "seconds": null,
-      "steps": [
-        "Pick one joke. Deliver it with confidence. Rate it 1–5 😄"
-      ],
+      "steps": ["Deliver the joke confidently."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "yt_video",
       "name": "YouTube Video",
       "type": "newtab",
-      "url": "https://youtu.be/oHg5SJYRHA0?si=V-eRjU8mdrLS8Np5",
+      "url": "https://www.youtube.com/",
       "tag": "video",
       "seconds": null,
-      "steps": [
-        "Teacher: edit this activity and paste any YouTube link."
-      ],
+      "steps": ["Teacher: paste any YouTube link."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "yt_random_kurzgesagt",
-      "name": "Random Kurzgesagt video",
+      "name": "Random Kurzgesagt Video",
       "type": "newtab",
-      "url": "https://youtube.com/@kurzgesagt?si=SKKHGl3YNNyOKsFi",
+      "url": "https://www.youtube.com/@kurzgesagt",
       "tag": "video",
       "seconds": null,
-      "steps": [
-        "Watch 2–4 minutes. Share one interesting fact you heard."
-      ],
+      "steps": ["Watch 2–4 minutes. Share one interesting fact."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "sequence_guess",
-      "name": "Guess the next number (sequence)",
+      "name": "Guess the Next Number",
       "type": "sequence",
       "url": "",
       "tag": "math",
       "seconds": null,
-      "steps": [
-        "Students guess the next number. Reveal and explain the rule."
-      ],
+      "steps": ["Students guess the next number. Reveal rule."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "a_b23224d8e7c5619c83d38cd8",
+      "id": "fermi_problem",
       "name": "Fermi Problem",
       "type": "iframe",
       "url": "https://fermi-questions.andrechek.com/",
-      "tag": "",
+      "tag": "thinking",
       "seconds": null,
-      "steps": [
-        "Make an educated guess at the amount of zeros…"
-      ],
+      "steps": ["Make an educated estimate."],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "photo_guess",
       "name": "Photo Guess",
       "type": "newtab",
       "url": "https://www.braingle.com/trivia/photo.php",
-      "tag": "",
+      "tag": "visual",
       "seconds": null,
       "steps": [],
       "autoOpen": false,
       "enabled": true
     },
+
     {
-      "id": "Rando_Question",
+      "id": "random_question",
       "name": "Random Question",
       "type": "iframe",
       "url": "https://faculty.washington.edu/ejslager/random-generator/index.html",
-      "tag": "",
+      "tag": "discussion",
       "seconds": null,
-      "steps": [
-        "look at thr title"
-      ],
+      "steps": [],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "random_fact",
       "name": "Random Fact",
       "type": "iframe",
       "url": "https://random-fact-generator-jade.vercel.app/",
-      "tag": "",
+      "tag": "learning",
       "seconds": null,
       "steps": [],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "wordle",
       "name": "Wordle (Daily)",
       "type": "iframe",
       "url": "https://powerlanguage-wordle.github.io/",
-      "tag": "",
+      "tag": "word",
       "seconds": null,
       "steps": [],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "riddle",
       "name": "Random Riddle",
       "type": "iframe",
       "url": "https://fungenerators.com/random/text/riddle/",
-      "tag": "",
+      "tag": "thinking",
       "seconds": null,
       "steps": [],
       "autoOpen": false,
       "enabled": true
     },
+
     {
       "id": "rps",
       "name": "Rock • Paper • Scissors",
       "type": "rps",
       "url": "",
-      "tag": "",
+      "tag": "game",
       "seconds": null,
       "steps": [],
       "autoOpen": false,
       "enabled": true
-    }
+    },
+
+    /* ================= HARDCODED TIMED ACTIVITIES ================= */
+
+    { "id":"power_pose","name":"30s Power Pose","type":"timed","url":"","tag":"calm","seconds":30,"steps":["Stand up.","Power pose.","Big breath in and out."],"autoOpen":false,"enabled":true },
+
+    { "id":"silent_statue","name":"Silent Statue Challenge","type":"timed","url":"","tag":"fun","seconds":45,"steps":["Freeze.","No moving.","Teacher tries to make you laugh."],"autoOpen":false,"enabled":true },
+
+    { "id":"speed_stretch","name":"60s Speed Stretch","type":"timed","url":"","tag":"movement","seconds":60,"steps":["Touch toes.","Reach up.","Roll shoulders.","Shake out."],"autoOpen":false,"enabled":true },
+
+    { "id":"desk_workout","name":"Desk Workout","type":"timed","url":"","tag":"movement","seconds":60,"steps":["10 jumping jacks.","10 squats.","10 high knees."],"autoOpen":false,"enabled":true },
+
+    { "id":"dance_party","name":"90s Dance Party","type":"timed","url":"","tag":"energy","seconds":90,"steps":["Stand up.","Dance freely."],"autoOpen":false,"enabled":true },
+
+    { "id":"walk_talk","name":"2-Min Walk & Talk","type":"timed","url":"","tag":"social","seconds":120,"steps":["Walk around.","Share a win.","Switch partner halfway."],"autoOpen":false,"enabled":true },
+
+    { "id":"category_blitz","name":"60s Category Blitz","type":"timed","url":"","tag":"thinking","seconds":60,"steps":["Teacher picks category.","List as many as possible."],"autoOpen":false,"enabled":true },
+
+    { "id":"alphabet_race","name":"Alphabet Race","type":"timed","url":"","tag":"thinking","seconds":90,"steps":["Pick a theme.","Go A–Z."],"autoOpen":false,"enabled":true },
+
+    { "id":"gratitude","name":"2-Min Gratitude","type":"timed","url":"","tag":"calm","seconds":120,"steps":["Write 3 things you’re grateful for."],"autoOpen":false,"enabled":true },
+
+    { "id":"box_breathing","name":"Box Breathing","type":"timed","url":"","tag":"calm","seconds":60,"steps":["Inhale 4.","Hold 4.","Exhale 4.","Hold 4."],"autoOpen":false,"enabled":true },
+
+    { "id":"deep_focus","name":"90s Deep Focus","type":"timed","url":"","tag":"focus","seconds":90,"steps":["Sit still.","Close eyes.","Focus on breathing."],"autoOpen":false,"enabled":true },
+
+    { "id":"drawing_challenge","name":"60s Drawing Challenge","type":"timed","url":"","tag":"creative","seconds":60,"steps":["Draw without lifting pen."],"autoOpen":false,"enabled":true },
+
+    { "id":"memory_recall","name":"Memory Recall","type":"timed","url":"","tag":"revision","seconds":60,"steps":["Write 5 things from last lesson."],"autoOpen":false,"enabled":true },
+
+    { "id":"count_backwards","name":"Count Backwards by 7s","type":"timed","url":"","tag":"math","seconds":45,"steps":["Start at 100.","Count down by 7."],"autoOpen":false,"enabled":true }
+
   ]
 };
