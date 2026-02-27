@@ -31,9 +31,9 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     },
     {
       "id": "yt_video",
-      "name": "YouTube Video (paste link)",
+      "name": "YouTube Video",
       "type": "newtab",
-      "url": "https://www.youtube.com/watch?v=3sQhJEUjS4w",
+      "url": "https://youtu.be/oHg5SJYRHA0?si=V-eRjU8mdrLS8Np5",
       "tag": "video",
       "seconds": null,
       "steps": [
