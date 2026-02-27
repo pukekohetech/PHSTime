@@ -4,6 +4,84 @@
 window.PHS_ACTIVITIES_DEFAULTS = {
   "activities": [
     {
+      "id": "a_757d80b1bbff519c9ddb7c8c",
+      "name": "Charades",
+      "type": "newtab",
+      "url": "https://randomwordgenerator.com/charades.php",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Two players face away from the board while therivteams try to get them to guess the word"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
+      "id": "a_feacac1eade64819c9dc28b7f",
+      "name": "Scatogories",
+      "type": "newtab",
+      "url": "https://swellgarfo.com/scattergories/",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Be the first to name something for each category starting with the letter"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
+      "id": "a_ae1b07ebae574819c9d9d2026",
+      "name": "Discovery puzzle makers",
+      "type": "newtab",
+      "url": "https://puzzlemaker.discoveryeducation.com/",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Write instructions here…"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
+      "id": "a_d1def90b9aae0819c9d96c6ed",
+      "name": "National Geographic Kids",
+      "type": "iframe",
+      "url": "https://kids.nationalgeographic.com/games/puzzles/",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Puzzles and learning"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
+      "id": "a_431155b35d9da819c9d912ea4",
+      "name": "Open guesser",
+      "type": "iframe",
+      "url": "https://openguessr.com/",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Guess the location"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
+      "id": "a_8887af5ad883e19c9d7f911e",
+      "name": "Random Quiz",
+      "type": "iframe",
+      "url": "https://www.randomtriviagenerator.com/quizzes",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Pick a quiz"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+    {
       "id": "edquote",
       "name": "EdQuote (random quote)",
       "type": "iframe",
@@ -24,7 +102,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "tag": "light",
       "seconds": null,
       "steps": [
-        "Pick one joke. Deliver it with confidence. Rate it 1\u20135 \ud83d\ude04"
+        "Pick one joke. Deliver it with confidence. Rate it 1–5 😄"
       ],
       "autoOpen": false,
       "enabled": true
@@ -50,7 +128,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "tag": "video",
       "seconds": null,
       "steps": [
-        "Watch 2\u20134 minutes. Share one interesting fact you heard."
+        "Watch 2–4 minutes. Share one interesting fact you heard."
       ],
       "autoOpen": false,
       "enabled": true
@@ -76,7 +154,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "tag": "",
       "seconds": null,
       "steps": [
-        "Make an educated guess at the amount of zeros\u2026"
+        "Make an educated guess at the amount of zeros…"
       ],
       "autoOpen": false,
       "enabled": true
@@ -99,7 +177,9 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "url": "https://faculty.washington.edu/ejslager/random-generator/index.html",
       "tag": "",
       "seconds": null,
-      "steps":["look at thr title" ],
+      "steps": [
+        "look at thr title"
+      ],
       "autoOpen": false,
       "enabled": true
     },
@@ -138,7 +218,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     },
     {
       "id": "rps",
-      "name": "Rock \u2022 Paper \u2022 Scissors",
+      "name": "Rock • Paper • Scissors",
       "type": "rps",
       "url": "",
       "tag": "",
@@ -148,4 +228,5 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "enabled": true
     }
   ]
+    }
 };
