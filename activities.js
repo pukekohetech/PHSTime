@@ -76,7 +76,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "tag": "",
       "seconds": null,
       "steps": [
-        "Write instructions here\u2026"
+        "Make an educated guess at the amount of zeros\u2026"
       ],
       "autoOpen": false,
       "enabled": true
@@ -99,7 +99,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "url": "https://faculty.washington.edu/ejslager/random-generator/index.html",
       "tag": "",
       "seconds": null,
-      "steps": [],
+      "steps":["look at thr title" ],
       "autoOpen": false,
       "enabled": true
     },
