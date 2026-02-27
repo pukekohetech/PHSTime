@@ -45,7 +45,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     {
       "id": "yt_random_kurzgesagt",
       "name": "Random Kurzgesagt video",
-      "type": "yt_random",
+      "type": "iframe",
       "url": "UCsXVk37bltHxD1rDPwtNM8Q",
       "tag": "video",
       "seconds": null,
