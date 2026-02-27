@@ -32,7 +32,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     {
       "id": "yt_video",
       "name": "YouTube Video (paste link)",
-      "type": "iframe",
+      "type": "newtab",
       "url": "https://www.youtube.com/watch?v=3sQhJEUjS4w",
       "tag": "video",
       "seconds": null,
@@ -45,7 +45,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     {
       "id": "yt_random_kurzgesagt",
       "name": "Random Kurzgesagt video",
-      "type": "iframe",
+      "type": "newtab",
       "url": "https://youtube.com/@kurzgesagt?si=SKKHGl3YNNyOKsFi",
       "tag": "video",
       "seconds": null,
