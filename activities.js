@@ -129,7 +129,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "id": "riddle",
       "name": "Random Riddle",
       "type": "iframe",
-      "url": "https://randomgenerator.pro/random-riddle-generator/",
+      "url": "https://fungenerators.com/random/text/riddle/",
       "tag": "",
       "seconds": null,
       "steps": [],
