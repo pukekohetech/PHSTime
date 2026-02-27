@@ -228,5 +228,4 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "enabled": true
     }
   ]
-    }
 };
