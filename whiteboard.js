@@ -216,7 +216,9 @@
   const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
 
   function mmStepWorld() {
-    return PX_PER_MM / (state.zoom || 1);
+    // World coords are already de-zoomed (screen -> world divides by zoom),
+    // so 1mm is a constant PX_PER_MM in world space.
+    return PX_PER_MM;
   }
 
   function snapToMmGridWorld(pt) {
