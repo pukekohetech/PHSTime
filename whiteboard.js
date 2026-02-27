@@ -1817,31 +1817,49 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
 if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   const ctrlHeld = e.ctrlKey || e.metaKey;
 
+  const cx = gesture.arcCenter.cx;
+  const cy = gesture.arcCenter.cy;
+
+  // Pointer in world, with snapping rules:
+  // - default: snap pointer to whole-mm grid
+  // - Ctrl/Cmd: prefer snapping to endpoints/intersections; if none, fall back to whole-mm grid
   let p = w;
+  let snappedHit = null;
+
   if (ctrlHeld) {
-    const hit = snapPointWithCtrl(p);
-    p = hit || snapToMmGridWorld(p);
+    snappedHit = snapPointWithCtrl(p);
+    p = snappedHit || snapToMmGridWorld(p);
   } else {
     p = snapToMmGridWorld(p);
   }
 
-  const cx = gesture.arcCenter.cx;
-  const cy = gesture.arcCenter.cy;
-
-  // radius snaps to whole mm; keep original radius unless snapping changes it a lot
-  let r = Math.hypot(p.x - cx, p.y - cy);
-  r = Math.max(1, Math.round(r / PX_PER_MM) * PX_PER_MM);
-
+  // Radius snapping (whole mm), BUT if we snapped to a real feature point (endpoint/intersection),
+  // try to keep the arc end landing on that feature:
+  //   - If the whole-mm snapped radius keeps the end within the snap radius, use it.
+  //   - Otherwise, keep the exact radius so the end stays on the feature point.
   const a2 = Math.atan2(p.y - cy, p.x - cx);
+  const rExact = Math.hypot(p.x - cx, p.y - cy);
+
+  let rMm = Math.max(1, Math.round(rExact / PX_PER_MM) * PX_PER_MM);
+
+  if (snappedHit) {
+    const ex = cx + Math.cos(a2) * rMm;
+    const ey = cy + Math.sin(a2) * rMm;
+
+    const tolWorld = SNAP_RADIUS_PX / (state.zoom || 1);
+    const d = Math.hypot(ex - snappedHit.x, ey - snappedHit.y);
+
+    // If rounding would pull the endpoint too far off the snapped feature, keep the exact radius.
+    if (d > tolWorld) rMm = Math.max(1, rExact);
+  }
 
   gesture.activeObj.cx = cx;
   gesture.activeObj.cy = cy;
-  gesture.activeObj.r = r;
+  gesture.activeObj.r = rMm;
   gesture.activeObj.a1 = gesture.arcA1;
   gesture.activeObj.a2 = a2;
 
-  const mm = Math.round(r / PX_PER_MM);
-  showMeasureTip(sx, sy, `R ${mm} mm`);
+  showMeasureTip(sx, sy, `R ${Math.round(rMm / PX_PER_MM)} mm`);
   redrawAll();
   return;
 }
