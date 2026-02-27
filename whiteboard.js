@@ -263,6 +263,47 @@ const svgReveal = {
     return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c };
   }
 
+// --- Arc helpers ---
+function normAngle(a){
+  let x = a % (Math.PI * 2);
+  if (x < 0) x += Math.PI * 2;
+  return x;
+}
+function arcDelta(a1, a2){
+  let d = normAngle(a2) - normAngle(a1);
+  if (d < 0) d += Math.PI * 2;
+  return d;
+}
+function pointOnArc(obj, which){
+  const a = (which === "start") ? obj.a1 : obj.a2;
+  return { x: obj.cx + Math.cos(a) * obj.r, y: obj.cy + Math.sin(a) * obj.r };
+}
+function isAngleOnArc(a, a1, a2){
+  const aa = normAngle(a);
+  const s = normAngle(a1);
+  const e = normAngle(a2);
+  if (s <= e) return aa >= s && aa <= e;
+  return aa >= s || aa <= e; // wrap
+}
+function arcBounds(obj){
+  const pts = [];
+  const steps = 48;
+  const d = arcDelta(obj.a1, obj.a2);
+  const n = Math.max(6, Math.min(steps, Math.ceil(steps * (d / (Math.PI * 2)))));
+  for (let i=0;i<=n;i++){
+    const t = obj.a1 + (d * (i / n));
+    pts.push({ x: obj.cx + Math.cos(t) * obj.r, y: obj.cy + Math.sin(t) * obj.r });
+  }
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for (const p of pts){
+    minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
+    maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y);
+  }
+  const pad = (obj.size || 4) * 1.0;
+  return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+}
+
+
   function rectEdges(obj) {
     const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
@@ -293,6 +334,13 @@ const svgReveal = {
       if (obj.kind === "line" || obj.kind === "arrow") {
         pts.push({ x: obj.x1, y: obj.y1 });
         pts.push({ x: obj.x2, y: obj.y2 });
+        continue;
+      }
+
+      if (obj.kind === "arc") {
+        const s = pointOnArc(obj, "start");
+        const e = pointOnArc(obj, "end");
+        pts.push(s, e);
         continue;
       }
 
@@ -337,6 +385,17 @@ const svgReveal = {
 
       if (obj.kind === "line" || obj.kind === "arrow") {
         segs.push({ x1: obj.x1, y1: obj.y1, x2: obj.x2, y2: obj.y2 });
+      } else if (obj.kind === "arc") {
+        const d = arcDelta(obj.a1, obj.a2);
+        const steps = Math.max(6, Math.min(36, Math.ceil(36 * (d / (Math.PI * 2)))));
+        let prev = { x: obj.cx + Math.cos(obj.a1) * obj.r, y: obj.cy + Math.sin(obj.a1) * obj.r };
+        for (let i=1;i<=steps;i++){
+          const t = obj.a1 + d * (i/steps);
+          const cur = { x: obj.cx + Math.cos(t) * obj.r, y: obj.cy + Math.sin(t) * obj.r };
+          segs.push({ x1: prev.x, y1: prev.y, x2: cur.x, y2: cur.y });
+          prev = cur;
+          if (segs.length >= maxSegs) return segs;
+        }
       } else if (obj.kind === "rect") {
         segs.push(...rectEdges(obj));
       } else if (obj.kind === "stroke" || obj.kind === "erase") {
@@ -424,6 +483,7 @@ const svgReveal = {
     state.tool = tool;
     dockBtns.forEach(b => b.classList.toggle("is-active", b.dataset.tool === tool));
     updateCursorFromTool();
+    if (tool !== "arc") arcDraft.hasCenter = false;
   }
 
   // Screen <-> World (screen coords are CSS px)
@@ -658,6 +718,14 @@ const svgReveal = {
       inkCtx.ellipse(0, 0, rx, ry, ang, 0, Math.PI * 2);
       inkCtx.stroke();
       inkCtx.restore();
+
+} else if (obj.kind === "arc") {
+  const { cx, cy, r, a1, a2 } = obj;
+  inkCtx.save();
+  inkCtx.beginPath();
+  inkCtx.arc(cx, cy, Math.max(0.5, r || 0), a1 || 0, a2 || 0, false);
+  inkCtx.stroke();
+  inkCtx.restore();
     } else if (obj.kind === "arrow") {
       inkCtx.beginPath(); inkCtx.moveTo(x1, y1); inkCtx.lineTo(x2, y2); inkCtx.stroke();
       const ang = Math.atan2(y2 - y1, x2 - x1);
@@ -779,6 +847,10 @@ const svgReveal = {
       return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
     }
 
+    if (obj.kind === "arc") {
+      return arcBounds(obj);
+    }
+
     const minX = Math.min(obj.x1, obj.x2);
     const minY = Math.min(obj.y1, obj.y2);
     const maxX = Math.max(obj.x1, obj.x2);
@@ -848,6 +920,16 @@ const svgReveal = {
       return (nx*nx + ny*ny) <= 1.2;
     }
 
+    if (obj.kind === "arc") {
+      const tolR = tol;
+      const dx = wx - obj.cx;
+      const dy = wy - obj.cy;
+      const dist = Math.hypot(dx, dy);
+      if (Math.abs(dist - obj.r) > tolR) return false;
+      const a = Math.atan2(dy, dx);
+      return isAngleOnArc(a, obj.a1, obj.a2);
+    }
+
     return false;
   }
 
@@ -861,6 +943,7 @@ const svgReveal = {
 
   function moveObject(obj, dx, dy) {
     if (obj.kind === "text") { obj.x += dx; obj.y += dy; return; }
+    if (obj.kind === "arc") { obj.cx += dx; obj.cy += dy; return; }
     if (obj.kind === "stroke" || obj.kind === "erase") {
       (obj.points || []).forEach(p => { p.x += dx; p.y += dy; });
       return;
@@ -890,6 +973,14 @@ const svgReveal = {
         p.x = ax + (p.x - ax) * fx;
         p.y = ay + (p.y - ay) * fy;
       });
+      return;
+    }
+
+    if (obj.kind === "arc") {
+      const uni = (Math.abs(fx) + Math.abs(fy)) / 2;
+      obj.cx = ax + (obj.cx - ax) * fx;
+      obj.cy = ay + (obj.cy - ay) * fy;
+      obj.r = Math.max(0.5, (obj.r || 0) * uni);
       return;
     }
 
@@ -923,6 +1014,12 @@ const svgReveal = {
     // Rectangles + ellipses rotate by storing an angle; drawing uses that angle.
     if (obj.kind === "rect" || obj.kind === "circle") {
       obj.rot = (obj.rot || 0) + angle;
+      return;
+    }
+
+    if (obj.kind === "arc") {
+      obj.a1 = (obj.a1 || 0) + angle;
+      obj.a2 = (obj.a2 || 0) + angle;
       return;
     }
 
@@ -1153,6 +1250,10 @@ const svgReveal = {
   }
 
   // ---------- Gesture state ----------
+
+// Arc tool draft state (two-stage: pick center, then drag to create arc)
+const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
+
   const gesture = {
     active: false,
     pointerId: null,
@@ -1171,7 +1272,12 @@ const svgReveal = {
     selStartAngle: 0,
 
     // Background stable start
-    bgStart: null
+    bgStart: null,
+
+    // Arc drawing cached values
+    arcCenter: null,
+    arcR: 0,
+    arcA1: 0
   };
 
   let spacePanning = false;
@@ -1194,11 +1300,14 @@ const svgReveal = {
     gesture.selStartAngle = 0;
 
     gesture.bgStart = null;
+    gesture.arcCenter = null;
+    gesture.arcR = 0;
+    gesture.arcA1 = 0;
   }
 
   // ---------- Cursor UX ----------
   function updateCursorFromTool() {
-    if (state.tool === "pen" || state.tool === "line" || state.tool === "rect" || state.tool === "circle" || state.tool === "arrow") {
+    if (state.tool === "pen" || state.tool === "line" || state.tool === "rect" || state.tool === "circle" || state.tool === "arc" || state.tool === "arrow") {
       inkCanvas.style.cursor = "crosshair";
       return;
     }
@@ -1395,6 +1504,63 @@ const svgReveal = {
     // Background/transform tools (act on selection if selected)
     if (state.tool === "bgMove" || state.tool === "bgScale" || state.tool === "bgRotate") {
       beginToolTransformForSelectionOrBg(state.tool, w);
+      return;
+    }
+
+    // Arc tool (two-stage): click to set center, then click+drag to draw (Ctrl/Cmd enables snap-to endpoints/intersections)
+    if (state.tool === "arc") {
+      const ctrlHeld = e.ctrlKey || e.metaKey;
+
+      if (!arcDraft.hasCenter) {
+        let c = w;
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl(c);
+          c = hit || snapToMmGridWorld(c);
+        } else {
+          c = snapToMmGridWorld(c);
+        }
+        arcDraft.hasCenter = true;
+        arcDraft.cx = c.x;
+        arcDraft.cy = c.y;
+
+        try { inkCanvas.releasePointerCapture(e.pointerId); } catch {}
+        gesture.active = false;
+        gesture.mode = "none";
+
+        showToast("Arc center set");
+        showMeasureTip(sx, sy, "Center");
+        redrawAll();
+        return;
+      }
+
+      // start arc
+      pushUndo(); clearRedo();
+      state.selectionIndex = -1;
+
+      let p1 = w;
+      if (ctrlHeld) {
+        const hit = snapPointWithCtrl(p1);
+        p1 = hit || snapToMmGridWorld(p1);
+      } else {
+        p1 = snapToMmGridWorld(p1);
+      }
+
+      const cx = arcDraft.cx;
+      const cy = arcDraft.cy;
+      const a1 = Math.atan2(p1.y - cy, p1.x - cx);
+      let r = Math.hypot(p1.x - cx, p1.y - cy);
+      r = Math.max(1, Math.round(r / PX_PER_MM) * PX_PER_MM);
+
+      const obj = { kind: "arc", color: state.color, size: state.size, cx, cy, r, a1, a2: a1 };
+      state.objects.push(obj);
+      gesture.activeObj = obj;
+      gesture.mode = "drawArc";
+      gesture.arcCenter = { cx, cy };
+      gesture.arcR = r;
+      gesture.arcA1 = a1;
+
+      showMeasureTip(sx, sy, `R ${Math.round(r / PX_PER_MM)} mm`);
+      redrawAll();
       return;
     }
 
@@ -1647,6 +1813,39 @@ const svgReveal = {
     }
 
     // Drawing
+
+if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
+  const ctrlHeld = e.ctrlKey || e.metaKey;
+
+  let p = w;
+  if (ctrlHeld) {
+    const hit = snapPointWithCtrl(p);
+    p = hit || snapToMmGridWorld(p);
+  } else {
+    p = snapToMmGridWorld(p);
+  }
+
+  const cx = gesture.arcCenter.cx;
+  const cy = gesture.arcCenter.cy;
+
+  // radius snaps to whole mm; keep original radius unless snapping changes it a lot
+  let r = Math.hypot(p.x - cx, p.y - cy);
+  r = Math.max(1, Math.round(r / PX_PER_MM) * PX_PER_MM);
+
+  const a2 = Math.atan2(p.y - cy, p.x - cx);
+
+  gesture.activeObj.cx = cx;
+  gesture.activeObj.cy = cy;
+  gesture.activeObj.r = r;
+  gesture.activeObj.a1 = gesture.arcA1;
+  gesture.activeObj.a2 = a2;
+
+  const mm = Math.round(r / PX_PER_MM);
+  showMeasureTip(sx, sy, `R ${mm} mm`);
+  redrawAll();
+  return;
+}
+
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
       gesture.activeObj.points.push(w);
       redrawAll();
@@ -2209,6 +2408,8 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
     if (e.key === "Escape") {
       openSettings(false);
       toggleColorPop(false);
+      arcDraft.hasCenter = false;
+      hideMeasureTip();
     }
 
     if (e.code === "Space") {
@@ -2269,6 +2470,7 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
       if (k === "l") setActiveTool("line");
       if (k === "r") setActiveTool("rect");
       if (k === "c") setActiveTool("circle");
+      if (k === "g") setActiveTool("arc");
       if (k === "a") setActiveTool("arrow");
       if (k === "t") setActiveTool("text");
       if (k === "e") setActiveTool("eraser");
@@ -2505,6 +2707,21 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
         currentLayer += `<ellipse cx="0" cy="0" rx="${rx}" ry="${ry}" transform="${t}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
         continue;
       }
+
+if (obj.kind === "arc"){
+  const a1 = obj.a1 || 0;
+  const a2 = obj.a2 || 0;
+  const d = arcDelta(a1, a2);
+  const largeArc = d > Math.PI ? 1 : 0;
+  const sweep = 1; // matches canvas default direction used here
+  const sxp = obj.cx + Math.cos(a1) * obj.r;
+  const syp = obj.cy + Math.sin(a1) * obj.r;
+  const exp = obj.cx + Math.cos(a2) * obj.r;
+  const eyp = obj.cy + Math.sin(a2) * obj.r;
+  currentLayer += `<path d="M ${sxp} ${syp} A ${obj.r} ${obj.r} 0 ${largeArc} ${sweep} ${exp} ${eyp}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
+  continue;
+}
+
     }
 
     const inkMarkup = pastLayer + currentLayer;
