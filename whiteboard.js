@@ -1686,8 +1686,6 @@
           const mm = snapToMmGridWorld({ x: x2, y: y2 });
           x2 = mm.x; y2 = mm.y;
         }
-      }
-
       } else if (k === "circle") {
         // Circle/Oval precision snapping (same rules as Rectangle):
         //   - default: snap drag corner to nearest whole millimetre grid
