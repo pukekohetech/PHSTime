@@ -70,6 +70,7 @@
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsPanel = document.getElementById("settingsPanel");
   const settingsCloseBtn = document.getElementById("settingsCloseBtn");
+   const deleteBoardBtn = document.getElementById("deleteBoardBtn");
 
   // Panel controls
   const titleInput = document.getElementById("titleInput");
@@ -2070,6 +2071,30 @@
     await applyBoard(index[name]);
     showToast("Board loaded");
   });
+
+   deleteBoardBtn?.addEventListener("click", () => {
+  const name = boardSelect.value;
+  if (!name) {
+    showToast("Select a board");
+    return;
+  }
+
+  const ok = confirm(`Delete board "${name}"? This cannot be undone.`);
+  if (!ok) return;
+
+  const index = loadBoardsIndex();
+  if (!index[name]) {
+    showToast("Board not found");
+    return;
+  }
+
+  delete index[name];
+  saveBoardsIndex(index);
+
+  refreshBoardSelect();
+  boardSelect.value = "";
+  showToast("Board deleted");
+});
 
   refreshBoardSelect();
 
