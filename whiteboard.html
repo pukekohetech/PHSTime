@@ -9,15 +9,16 @@
   <link rel="stylesheet" href="whiteboard.css" />
 </head>
 
-<body class="page-whiteboard">
-  <nav class="appNav" aria-label="PHS Classroom Tools">
+ <nav class="appNav" aria-label="PHS Classroom Tools">
     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
-    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+     <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
     <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
     <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
     <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
+      
   </nav>
+
 
   <div class="toast" id="toast" aria-live="polite">Saved</div>
 
@@ -26,7 +27,7 @@
     <aside class="dock" aria-label="Tools">
       <!-- COLOUR (top icon) + brush size popover -->
       <div class="dockPopWrap">
-        <button class="dockBtn dockBtn--swatch" id="colorBtn" title="Colour + Brush size" type="button">
+        <button class="dockBtn dockBtn--swatch" id="colorBtn" title="Colour + Brush size">
           <span class="swatchLive" id="swatchLive" aria-hidden="true"></span>
         </button>
 
@@ -48,29 +49,28 @@
 
       <div class="dockSep"></div>
 
-      <button class="dockBtn" data-tool="select" title="Select / Move (V)" type="button">🖱️</button>
+      <button class="dockBtn" data-tool="select" title="Select / Move (V)">🖱️</button>
 
       <div class="dockSep"></div>
 
-      <button class="dockBtn is-active" data-tool="pen" title="Freehand (P)" type="button">✏️</button>
-      <button class="dockBtn" data-tool="line" title="Line (L)" type="button">／</button>
-      <button class="dockBtn" data-tool="rect" title="Rectangle (R)" type="button">▭</button>
-      <button class="dockBtn" data-tool="circle" title="Circle (C)" type="button">◯</button>
-      <button class="dockBtn" data-tool="arc" title="Arc (G)" type="button">⌒</button>
-      <button class="dockBtn" data-tool="arrow" title="Arrow (A)" type="button">➤</button>
-      <button class="dockBtn" data-tool="text" title="Text (T)" type="button">T</button>
-      <button class="dockBtn" data-tool="eraser" title="Eraser (E)" type="button">🧽</button>
+      <button class="dockBtn is-active" data-tool="pen" title="Freehand (P)">✏️</button>
+      <button class="dockBtn" data-tool="line" title="Line (L)">／</button>
+      <button class="dockBtn" data-tool="rect" title="Rectangle (R)">▭</button>
+      <button class="dockBtn" data-tool="circle" title="Circle (C)">◯</button>
+      <button class="dockBtn" data-tool="arrow" title="Arrow (A)">➤</button>
+      <button class="dockBtn" data-tool="text" title="Text (T)">T</button>
+      <button class="dockBtn" data-tool="eraser" title="Eraser (E)">🧽</button>
 
       <div class="dockSep"></div>
 
       <!-- These act on selection if something is selected; otherwise they act on background -->
-      <button class="dockBtn" data-tool="bgMove" title="Move selection / background" type="button">↔</button>
-      <button class="dockBtn" data-tool="bgScale" title="Scale selection / background" type="button">⤡</button>
-      <button class="dockBtn" data-tool="bgRotate" title="Rotate selection / background" type="button">⟲</button>
+      <button class="dockBtn" data-tool="bgMove" title="Move selection / background">↔</button>
+      <button class="dockBtn" data-tool="bgScale" title="Scale selection / background">⤡</button>
+      <button class="dockBtn" data-tool="bgRotate" title="Rotate selection / background">⟲</button>
 
       <div class="dockSep"></div>
 
-      <button class="dockBtn dockBtn--danger" id="clearBtn" title="Clear ink (returns to Pen)" type="button">🗑</button>
+      <button class="dockBtn dockBtn--danger" id="clearBtn" title="Clear ink (returns to Pen)">🗑</button>
     </aside>
 
     <!-- STAGE -->
@@ -115,16 +115,6 @@
               <div class="panel__note">Use ↔ ⤡ ⟲ on the left (acts on selection if one is selected).</div>
             </div>
 
-<div class="panel__group panel__group--wide">
-  <label class="panel__label" for="svgInkFile">Import SVG (ink)</label>
-  <div class="panel__row">
-    <input id="svgInkFile" type="file" accept=".svg,image/svg+xml" class="panel__file" />
-    <button id="clearSvgInkBtn" class="panel__btn" type="button">Clear SVG</button>
-  </div>
-  <div class="panel__note">After importing: press → to reveal the next line, ← to hide the previous line.</div>
-</div>
-
-
             <div class="panel__group panel__group--wide">
               <label class="panel__label">Boards</label>
               <div class="panel__row panel__row--wrap">
@@ -132,31 +122,26 @@
                 <button id="newBoardBtn" class="panel__btn" type="button">New</button>
                 <button id="saveBoardBtn" class="panel__btn" type="button">Save</button>
                 <button id="loadBoardBtn" class="panel__btn" type="button">Load</button>
-
-                <!-- ✅ ADDED (missing before) -->
-                <button id="deleteBoardBtn" class="panel__btn" type="button">Delete</button>
               </div>
             </div>
 
             <div class="panel__group panel__group--wide">
               <label class="panel__label">Export</label>
               <div class="panel__row" style="gap:8px; flex-wrap:wrap;">
-                <button id="exportBtn" class="panel__btn panel__btn--primary" type="button">Download PNG</button>
-                <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">Download SVG</button>
-              </div>
+  <button id="exportBtn" class="panel__btn panel__btn--primary" type="button">Download PNG</button>
+  <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">Download SVG</button>
+</div>
             </div>
-
           </div>
         </div>
       </div>
 
       <div class="hint">
-        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected • SVG: → reveal, ← hide
+        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected
       </div>
     </section>
   </main>
 
-  <!-- ✅ Ensure JS runs after the DOM exists -->
-  <script src="whiteboard_arc_fixed.js"></script>
+  <script src="whiteboard.js"></script>
 </body>
 </html>
