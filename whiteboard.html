@@ -9,16 +9,15 @@
   <link rel="stylesheet" href="whiteboard.css" />
 </head>
 
- <nav class="appNav" aria-label="PHS Classroom Tools">
+<body>
+  <nav class="appNav" aria-label="PHS Classroom Tools">
     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
-     <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
     <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
     <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
     <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
-      
   </nav>
-
 
   <div class="toast" id="toast" aria-live="polite">Saved</div>
 
@@ -57,6 +56,8 @@
       <button class="dockBtn" data-tool="line" title="Line (L)">／</button>
       <button class="dockBtn" data-tool="rect" title="Rectangle (R)">▭</button>
       <button class="dockBtn" data-tool="circle" title="Circle (C)">◯</button>
+      <!-- NEW: ARC TOOL -->
+      <button class="dockBtn" data-tool="arc" title="Arc (G)">⌒</button>
       <button class="dockBtn" data-tool="arrow" title="Arrow (A)">➤</button>
       <button class="dockBtn" data-tool="text" title="Text (T)">T</button>
       <button class="dockBtn" data-tool="eraser" title="Eraser (E)">🧽</button>
@@ -115,6 +116,16 @@
               <div class="panel__note">Use ↔ ⤡ ⟲ on the left (acts on selection if one is selected).</div>
             </div>
 
+            <!-- Optional (supported by whiteboard_arc_fixed.js): import SVG as editable "ink" -->
+            <div class="panel__group panel__group--wide">
+              <label class="panel__label" for="svgInkFile">Import SVG (ink)</label>
+              <div class="panel__row" style="gap:8px; flex-wrap:wrap;">
+                <input id="svgInkFile" type="file" accept="image/svg+xml,.svg" class="panel__file" />
+                <button id="clearSvgInkBtn" class="panel__btn" type="button">Clear SVG</button>
+              </div>
+              <div class="panel__note">Tip: after importing, use ← / → to hide/unhide SVG paths one-by-one (if enabled in your JS).</div>
+            </div>
+
             <div class="panel__group panel__group--wide">
               <label class="panel__label">Boards</label>
               <div class="panel__row panel__row--wrap">
@@ -128,20 +139,21 @@
             <div class="panel__group panel__group--wide">
               <label class="panel__label">Export</label>
               <div class="panel__row" style="gap:8px; flex-wrap:wrap;">
-  <button id="exportBtn" class="panel__btn panel__btn--primary" type="button">Download PNG</button>
-  <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">Download SVG</button>
-</div>
+                <button id="exportBtn" class="panel__btn panel__btn--primary" type="button">Download PNG</button>
+                <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">Download SVG</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="hint">
-        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected
+        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd snaps (varies by tool) • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected
       </div>
     </section>
   </main>
 
-  <script src="whiteboard.js"></script>
+  <!-- IMPORTANT: load the ARC-enabled JS -->
+  <script src="whiteboard_arc_fixed.js"></script>
 </body>
 </html>
