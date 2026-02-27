@@ -2801,17 +2801,26 @@ if (obj.kind === "arc"){
   });
 
   // ---------- Init + resize ----------
-  function init() {
-    setColor(colorInput.value);
-    setBrushSize(brushSize.value);
-    setActiveTool("pen");
+function init() {
+  setColor(colorInput.value);
+  setBrushSize(brushSize.value);
+  setActiveTool("pen");
 
-    applyBgTransform();
-    updateSwatch();
+  applyBgTransform();
+  updateSwatch();
 
-    resizeAll();
-    requestAnimationFrame(resizeAll);
-  }
+  resizeAll();
+
+  // ✅ start zoomed right out
+  requestAnimationFrame(() => {
+    resizeAll();               // ensure viewW/viewH are correct
+    state.zoom = 0.25;         // pick how far out you want (0.25 = 25%)
+    // center the world origin nicely
+    state.panX = (state.viewW / 2);
+    state.panY = (state.viewH / 2);
+    redrawAll();
+  });
+}
 
   const ro = new ResizeObserver(() => resizeAll());
   ro.observe(stage);
