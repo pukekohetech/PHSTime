@@ -10,8 +10,9 @@
      ✅ Delete key removes selected object
 
    Existing:
-     + Angle snap for line/arrow when holding Ctrl (or Cmd on Mac)
-       Snaps to: 0, ±30, ±45, ±60, ±90 (and opposites)
+     + Line/Arrow precision snapping:
+       - Default: end point snaps to nearest millimetre grid
+       - Ctrl/Cmd: snaps to nearby endpoints/intersections; if none nearby, angle-snaps (0/30/45/60/90 etc.)
      ✅ DPR-safe transforms & pointer mapping using inkCanvas rect
    ========================================================= */
 
@@ -171,6 +172,186 @@
       x2: x1 + Math.cos(snapped) * len,
       y2: y1 + Math.sin(snapped) * len
     };
+  }
+
+  // --- Precision snapping (requested) ---
+  // World units are in CSS pixels at zoom=1. We approximate 1mm in CSS pixels using 96dpi.
+  const PX_PER_MM = 96 / 25.4;         // ≈3.7795 px per mm
+  const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
+
+  function mmStepWorld() {
+    return PX_PER_MM / (state.zoom || 1);
+  }
+
+  function snapToMmGridWorld(pt) {
+    const step = mmStepWorld();
+    return {
+      x: Math.round(pt.x / step) * step,
+      y: Math.round(pt.y / step) * step
+    };
+  }
+
+  function segIntersection(a, b) {
+    // Segment intersection (including touching endpoints).
+    const x1 = a.x1, y1 = a.y1, x2 = a.x2, y2 = a.y2;
+    const x3 = b.x1, y3 = b.y1, x4 = b.x2, y4 = b.y2;
+
+    const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(den) < 1e-12) return null; // parallel/collinear
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+    const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / den;
+
+    if (t < -1e-6 || t > 1 + 1e-6 || u < -1e-6 || u > 1 + 1e-6) return null;
+
+    return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
+  }
+
+  function rotateAround(x, y, cx, cy, ang) {
+    const dx = x - cx, dy = y - cy;
+    const c = Math.cos(ang), s = Math.sin(ang);
+    return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c };
+  }
+
+  function rectEdges(obj) {
+    const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
+    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+    const ang = obj.rot || 0;
+
+    const pts = [
+      { x: cx - w/2, y: cy - h/2 }, // nw
+      { x: cx + w/2, y: cy - h/2 }, // ne
+      { x: cx + w/2, y: cy + h/2 }, // se
+      { x: cx - w/2, y: cy + h/2 }, // sw
+    ].map(p => ang ? rotateAround(p.x, p.y, cx, cy, ang) : p);
+
+    return [
+      { x1: pts[0].x, y1: pts[0].y, x2: pts[1].x, y2: pts[1].y },
+      { x1: pts[1].x, y1: pts[1].y, x2: pts[2].x, y2: pts[2].y },
+      { x1: pts[2].x, y1: pts[2].y, x2: pts[3].x, y2: pts[3].y },
+      { x1: pts[3].x, y1: pts[3].y, x2: pts[0].x, y2: pts[0].y },
+    ];
+  }
+
+  function collectSnapEndpoints() {
+    const pts = [];
+
+    for (const obj of state.objects) {
+      if (!obj) continue;
+
+      if (obj.kind === "line" || obj.kind === "arrow") {
+        pts.push({ x: obj.x1, y: obj.y1 });
+        pts.push({ x: obj.x2, y: obj.y2 });
+        continue;
+      }
+
+      if (obj.kind === "rect") {
+        const edges = rectEdges(obj);
+        for (const e of edges) pts.push({ x: e.x1, y: e.y1 });
+        continue;
+      }
+
+      if (obj.kind === "stroke" || obj.kind === "erase") {
+        const p = obj.points || [];
+        if (p.length) {
+          pts.push({ x: p[0].x, y: p[0].y });
+          pts.push({ x: p[p.length - 1].x, y: p[p.length - 1].y });
+        }
+        continue;
+      }
+
+      if (obj.kind === "text") {
+        const m = textMetrics(obj);
+        const cx = obj.x + m.w/2, cy = obj.y + m.h/2;
+        const ang = obj.rot || 0;
+        const corners = [
+          { x: obj.x,       y: obj.y },
+          { x: obj.x+m.w,   y: obj.y },
+          { x: obj.x+m.w,   y: obj.y+m.h },
+          { x: obj.x,       y: obj.y+m.h },
+        ].map(p => ang ? rotateAround(p.x, p.y, cx, cy, ang) : p);
+        pts.push(...corners);
+        continue;
+      }
+    }
+
+    return pts;
+  }
+
+  function collectSnapSegments(maxSegs = 240) {
+    const segs = [];
+
+    for (const obj of state.objects) {
+      if (!obj) continue;
+
+      if (obj.kind === "line" || obj.kind === "arrow") {
+        segs.push({ x1: obj.x1, y1: obj.y1, x2: obj.x2, y2: obj.y2 });
+      } else if (obj.kind === "rect") {
+        segs.push(...rectEdges(obj));
+      } else if (obj.kind === "stroke" || obj.kind === "erase") {
+        const pts = obj.points || [];
+        // downsample long strokes for intersection finding
+        const stride = Math.max(1, Math.floor(pts.length / 60));
+        for (let i = stride; i < pts.length; i += stride) {
+          const p0 = pts[i - stride];
+          const p1 = pts[i];
+          if (p0 && p1) segs.push({ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y });
+          if (segs.length >= maxSegs) return segs;
+        }
+      }
+
+      if (segs.length >= maxSegs) return segs;
+    }
+
+    return segs;
+  }
+
+  function collectSnapIntersections(maxPairs = 6000) {
+    const segs = collectSnapSegments();
+    const pts = [];
+    let pairs = 0;
+
+    for (let i = 0; i < segs.length; i++) {
+      for (let j = i + 1; j < segs.length; j++) {
+        pairs++;
+        if (pairs > maxPairs) return pts;
+
+        const p = segIntersection(segs[i], segs[j]);
+        if (p) pts.push(p);
+      }
+    }
+    return pts;
+  }
+
+  function snapToNearest(pt, candidates, radiusWorld) {
+    let best = null;
+    let bestD = radiusWorld;
+
+    for (const c of candidates) {
+      const d = Math.hypot(pt.x - c.x, pt.y - c.y);
+      if (d <= bestD) { bestD = d; best = c; }
+    }
+    return best ? { x: best.x, y: best.y } : null;
+  }
+
+  function snapPointWithCtrl(pt) {
+    // Snap to endpoints + intersections (within a screen-space radius).
+    const radiusWorld = SNAP_RADIUS_PX / (state.zoom || 1);
+
+    const endpoints = collectSnapEndpoints();
+    const intersections = collectSnapIntersections();
+
+    const hit1 = snapToNearest(pt, endpoints, radiusWorld);
+    const hit2 = snapToNearest(pt, intersections, radiusWorld);
+
+    if (!hit1) return hit2;
+    if (!hit2) return hit1;
+
+    // pick closer
+    const d1 = Math.hypot(pt.x - hit1.x, pt.y - hit1.y);
+    const d2 = Math.hypot(pt.x - hit2.x, pt.y - hit2.y);
+    return d2 < d1 ? hit2 : hit1;
   }
 
   function updateSwatch() {
@@ -1187,7 +1368,23 @@
     }
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
-      const obj = { kind: state.tool, color: state.color, size: state.size, x1: w.x, y1: w.y, x2: w.x, y2: w.y, rot: 0 };
+      let p0 = w;
+      const isLineLike = (state.tool === "line" || state.tool === "arrow");
+      const ctrlHeld = e.ctrlKey || e.metaKey;
+
+      // Start point snapping for line/arrow:
+      //   - default: snap to nearest mm grid
+      //   - Ctrl/Cmd: snap to nearby endpoints/intersections (if any)
+      if (isLineLike) {
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl(p0);
+          if (hit) p0 = hit;
+        } else {
+          p0 = snapToMmGridWorld(p0);
+        }
+      }
+
+      const obj = { kind: state.tool, color: state.color, size: state.size, x1: p0.x, y1: p0.y, x2: p0.x, y2: p0.y, rot: 0 };
       state.objects.push(obj);
       gesture.activeObj = obj;
       gesture.mode = "drawShape";
@@ -1399,17 +1596,29 @@
       let x2 = w.x;
       let y2 = w.y;
 
-      // Ctrl/Cmd snaps angles for line + arrow
-      const snapHeld = e.ctrlKey || e.metaKey;
       const k = gesture.activeObj.kind;
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      if (snapHeld && (k === "line" || k === "arrow")) {
-        const snapped = snapEndpointToAngles(
-          gesture.activeObj.x1, gesture.activeObj.y1,
-          x2, y2
-        );
-        x2 = snapped.x2;
-        y2 = snapped.y2;
+      // Line / Arrow precision snapping:
+      //   - default: snap end point to nearest millimetre grid
+      //   - Ctrl/Cmd: snap to nearby intersections/endpoints (if any). If none nearby, keep the existing angle-snap behaviour.
+      if (k === "line" || k === "arrow") {
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl({ x: x2, y: y2 });
+          if (hit) {
+            x2 = hit.x; y2 = hit.y;
+          } else {
+            const snapped = snapEndpointToAngles(
+              gesture.activeObj.x1, gesture.activeObj.y1,
+              x2, y2
+            );
+            x2 = snapped.x2;
+            y2 = snapped.y2;
+          }
+        } else {
+          const mm = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = mm.x; y2 = mm.y;
+        }
       }
 
       gesture.activeObj.x2 = x2;
