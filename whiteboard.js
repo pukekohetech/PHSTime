@@ -20,6 +20,23 @@
   // ---------- DOM ----------
   const stage = document.getElementById("stage");
 
+  // ---------- Measurement tooltip (Line tool) ----------
+  const measureTip = document.createElement("div");
+  measureTip.id = "measureTip";
+  measureTip.style.position = "absolute";
+  measureTip.style.zIndex = "50";
+  measureTip.style.pointerEvents = "none";
+  measureTip.style.padding = "4px 8px";
+  measureTip.style.borderRadius = "10px";
+  measureTip.style.background = "rgba(0,0,0,0.72)";
+  measureTip.style.color = "#fff";
+  measureTip.style.font = "12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  measureTip.style.boxShadow = "0 8px 20px rgba(0,0,0,0.22)";
+  measureTip.style.transform = "translate(10px, 10px)";
+  measureTip.style.display = "none";
+  stage.appendChild(measureTip);
+
+
   // Background DOM layer
   const bgLayer = document.getElementById("bgLayer");
   const bgImg = document.getElementById("bgImg");
@@ -135,6 +152,25 @@
     const r = canvasRect();
     return { sx: evt.clientX - r.left, sy: evt.clientY - r.top };
   }
+
+  function formatMm(mm) {
+    if (!isFinite(mm)) return "0 mm";
+    // Show 0 decimals when close to an integer (common with mm-grid snap); otherwise 1 decimal.
+    const nearInt = Math.abs(mm - Math.round(mm)) < 0.05;
+    return (nearInt ? Math.round(mm).toString() : mm.toFixed(1)) + " mm";
+  }
+
+  function showMeasureTip(sx, sy, text) {
+    measureTip.textContent = text;
+    measureTip.style.left = sx + "px";
+    measureTip.style.top = sy + "px";
+    measureTip.style.display = "block";
+  }
+
+  function hideMeasureTip() {
+    measureTip.style.display = "none";
+  }
+
 
   // --- Angle snapping helpers (Ctrl/Cmd) ---
   function snapAngleRad(angleRad) {
@@ -1134,6 +1170,7 @@
     gesture.lastWorld = null;
     gesture.lastScreen = null;
     gesture.activeObj = null;
+    hideMeasureTip();
 
     gesture.selIndex = -1;
     gesture.selStartObj = null;
@@ -1284,6 +1321,7 @@
     gesture.startWorld = w;
     gesture.lastWorld = w;
     gesture.activeObj = null;
+    hideMeasureTip();
 
     if (spacePanning) {
       gesture.mode = "pan";
@@ -1389,6 +1427,11 @@
       gesture.activeObj = obj;
       gesture.mode = "drawShape";
       redrawAll();
+
+      // Show measurement tooltip when starting a straight line
+      if (obj.kind === "line") {
+        showMeasureTip(sx, sy, "0 mm");
+      }
       return;
     }
 
@@ -1623,6 +1666,16 @@
 
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
+
+      // Live length indicator for Line tool
+      if (k === "line") {
+        const dx = x2 - gesture.activeObj.x1;
+        const dy = y2 - gesture.activeObj.y1;
+        const lenPx = Math.hypot(dx, dy);
+        const lenMm = lenPx / PX_PER_MM;
+        showMeasureTip(sx, sy, formatMm(lenMm));
+      }
+
       redrawAll();
       return;
     }
