@@ -1409,7 +1409,7 @@
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
       let p0 = w;
-      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect");
+      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle");
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
       // Start point snapping for line/arrow/rect:
@@ -1435,6 +1435,9 @@
         showMeasureTip(sx, sy, "0 mm");
       }
       if (obj.kind === "rect") {
+        showMeasureTip(sx, sy, "0 × 0 mm");
+      }
+      if (obj.kind === "circle") {
         showMeasureTip(sx, sy, "0 × 0 mm");
       }
       return;
@@ -1685,6 +1688,24 @@
         }
       }
 
+      } else if (k === "circle") {
+        // Circle/Oval precision snapping (same rules as Rectangle):
+        //   - default: snap drag corner to nearest whole millimetre grid
+        //   - Ctrl/Cmd: snap to nearby endpoints/intersections if close; otherwise fall back to whole-mm grid
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl({ x: x2, y: y2 });
+          if (hit) {
+            x2 = hit.x; y2 = hit.y;
+          } else {
+            const mm = snapToMmGridWorld({ x: x2, y: y2 });
+            x2 = mm.x; y2 = mm.y;
+          }
+        } else {
+          const mm = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = mm.x; y2 = mm.y;
+        }
+
+
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
 
@@ -1699,6 +1720,15 @@
 
       // Live size indicator for Rectangle tool (whole mm integers)
       if (k === "rect") {
+        const wPx = Math.abs(x2 - gesture.activeObj.x1);
+        const hPx = Math.abs(y2 - gesture.activeObj.y1);
+        const wMm = wPx / PX_PER_MM;
+        const hMm = hPx / PX_PER_MM;
+        showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
+      }
+
+      // Live size indicator for Circle/Oval tool (whole mm integers)
+      if (k === "circle") {
         const wPx = Math.abs(x2 - gesture.activeObj.x1);
         const hPx = Math.abs(y2 - gesture.activeObj.y1);
         const wMm = wPx / PX_PER_MM;
