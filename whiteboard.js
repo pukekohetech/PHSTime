@@ -14,13 +14,19 @@
        - Default: end point snaps to nearest millimetre grid
        - Ctrl/Cmd: snaps to nearby endpoints/intersections; if none nearby, angle-snaps (0/30/45/60/90 etc.)
      ✅ DPR-safe transforms & pointer mapping using inkCanvas rect
+
+   NEW FIXES (this request):
+     ✅ Circle tool: whole-mm snap + Ctrl endpoint/intersection snap (like rect)
+     ✅ Circle tool: live size tooltip (whole mm)
+     ✅ Line tool: ensure whole-mm display on tooltip
+     ✅ Circle start point snap like rect/line/arrow
    ========================================================= */
 
 (() => {
   // ---------- DOM ----------
   const stage = document.getElementById("stage");
 
-  // ---------- Measurement tooltip (Line tool) ----------
+  // ---------- Measurement tooltip (Line/Rect/Circle tools) ----------
   const measureTip = document.createElement("div");
   measureTip.id = "measureTip";
   measureTip.style.position = "absolute";
@@ -35,7 +41,6 @@
   measureTip.style.transform = "translate(10px, 10px)";
   measureTip.style.display = "none";
   stage.appendChild(measureTip);
-
 
   // Background DOM layer
   const bgLayer = document.getElementById("bgLayer");
@@ -155,7 +160,6 @@
 
   function formatMm(mm) {
     if (!isFinite(mm)) return "0 mm";
-    // Show 0 decimals when close to an integer (common with mm-grid snap); otherwise 1 decimal.
     const nearInt = Math.abs(mm - Math.round(mm)) < 0.05;
     return (nearInt ? Math.round(mm).toString() : mm.toFixed(1)) + " mm";
   }
@@ -170,7 +174,6 @@
   function hideMeasureTip() {
     measureTip.style.display = "none";
   }
-
 
   // --- Angle snapping helpers (Ctrl/Cmd) ---
   function snapAngleRad(angleRad) {
@@ -210,7 +213,7 @@
     };
   }
 
-  // --- Precision snapping (requested) ---
+  // --- Precision snapping ---
   // World units are in CSS pixels at zoom=1. We approximate 1mm in CSS pixels using 96dpi.
   const PX_PER_MM = 96 / 25.4;         // ≈3.7795 px per mm
   const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
@@ -674,7 +677,6 @@
     const h = fontSize * 1.25;
     return { w, h, fontSize };
   }
-
 
   function objectBounds(obj) {
     // NOTE: bounds are axis-aligned; rotated text will be approximate (good enough for handles)
@@ -1409,16 +1411,16 @@
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
       let p0 = w;
-      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect");
+
+      // ✅ Shapes that should snap their *start point* (whole-mm unless Ctrl snaps to endpoints/intersections)
+      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle");
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      // Start point snapping for line/arrow/rect:
-      //   - default: snap to nearest mm grid
-      //   - Ctrl/Cmd: snap to nearby endpoints/intersections (if any)
       if (isSnapShape) {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
           if (hit) p0 = hit;
+          else p0 = snapToMmGridWorld(p0);
         } else {
           p0 = snapToMmGridWorld(p0);
         }
@@ -1430,11 +1432,14 @@
       gesture.mode = "drawShape";
       redrawAll();
 
-      // Show measurement tooltip when starting a straight line or rectangle
+      // Show measurement tooltip when starting a straight line / rectangle / circle
       if (obj.kind === "line") {
         showMeasureTip(sx, sy, "0 mm");
       }
       if (obj.kind === "rect") {
+        showMeasureTip(sx, sy, "0 × 0 mm");
+      }
+      if (obj.kind === "circle") {
         showMeasureTip(sx, sy, "0 × 0 mm");
       }
       return;
@@ -1683,22 +1688,47 @@
           const mm = snapToMmGridWorld({ x: x2, y: y2 });
           x2 = mm.x; y2 = mm.y;
         }
+      } else if (k === "circle") {
+        // ✅ Circle precision snapping (match rect):
+        //   - default: snap drag corner to nearest whole millimetre grid
+        //   - Ctrl/Cmd: snap to nearby endpoints/intersections if close; otherwise fall back to whole-mm grid
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl({ x: x2, y: y2 });
+          if (hit) {
+            x2 = hit.x; y2 = hit.y;
+          } else {
+            const mm = snapToMmGridWorld({ x: x2, y: y2 });
+            x2 = mm.x; y2 = mm.y;
+          }
+        } else {
+          const mm = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = mm.x; y2 = mm.y;
+        }
       }
 
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
 
-      // Live length indicator for Line tool
+      // Live length indicator for Line tool (force whole mm)
       if (k === "line") {
         const dx = x2 - gesture.activeObj.x1;
         const dy = y2 - gesture.activeObj.y1;
         const lenPx = Math.hypot(dx, dy);
-        const lenMm = lenPx / PX_PER_MM;
-        showMeasureTip(sx, sy, formatMm(lenMm));
+        const lenMm = Math.round(lenPx / PX_PER_MM);
+        showMeasureTip(sx, sy, `${lenMm} mm`);
       }
 
       // Live size indicator for Rectangle tool (whole mm integers)
       if (k === "rect") {
+        const wPx = Math.abs(x2 - gesture.activeObj.x1);
+        const hPx = Math.abs(y2 - gesture.activeObj.y1);
+        const wMm = wPx / PX_PER_MM;
+        const hMm = hPx / PX_PER_MM;
+        showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
+      }
+
+      // ✅ Live size indicator for Circle tool (whole mm integers)
+      if (k === "circle") {
         const wPx = Math.abs(x2 - gesture.activeObj.x1);
         const hPx = Math.abs(y2 - gesture.activeObj.y1);
         const wMm = wPx / PX_PER_MM;
@@ -1786,7 +1816,6 @@
     redrawAll();
   });
 
-  
   function setBackgroundFromDataURL(dataURL) {
     const img = new Image();
     img.onload = () => {
@@ -1820,7 +1849,7 @@
     img.src = String(dataURL || "");
   }
 
-// Background import
+  // Background import
   bgFile.addEventListener("change", () => {
     const file = bgFile.files && bgFile.files[0];
     if (!file) return;
@@ -1870,10 +1899,7 @@
     redrawAll();
   });
 
-
   // ---------- Clipboard paste images (Ctrl/Cmd+V) ----------
-  // Paste an image from clipboard to become the background image.
-  // (No new UI added; uses the existing background system.)
   document.addEventListener("paste", (e) => {
     try {
       // ignore if typing in an input/textarea/select
@@ -2047,7 +2073,6 @@
 
   refreshBoardSelect();
 
-  
   // ---------- Export SVG (vector) ----------
   function svgEscape(s){
     return String(s)
@@ -2196,8 +2221,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-
-// ---------- Export PNG (composite) ----------
+  // ---------- Export PNG (composite) ----------
   exportSvgBtn?.addEventListener("click", () => {
     exportSVG();
   });
