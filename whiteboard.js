@@ -1407,13 +1407,13 @@
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
       let p0 = w;
-      const isLineLike = (state.tool === "line" || state.tool === "arrow");
+      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect");
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      // Start point snapping for line/arrow:
+      // Start point snapping for line/arrow/rect:
       //   - default: snap to nearest mm grid
       //   - Ctrl/Cmd: snap to nearby endpoints/intersections (if any)
-      if (isLineLike) {
+      if (isSnapShape) {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
           if (hit) p0 = hit;
@@ -1428,9 +1428,12 @@
       gesture.mode = "drawShape";
       redrawAll();
 
-      // Show measurement tooltip when starting a straight line
+      // Show measurement tooltip when starting a straight line or rectangle
       if (obj.kind === "line") {
         showMeasureTip(sx, sy, "0 mm");
+      }
+      if (obj.kind === "rect") {
+        showMeasureTip(sx, sy, "0 × 0 mm");
       }
       return;
     }
@@ -1662,6 +1665,22 @@
           const mm = snapToMmGridWorld({ x: x2, y: y2 });
           x2 = mm.x; y2 = mm.y;
         }
+      } else if (k === "rect") {
+        // Rectangle precision snapping:
+        //   - default: snap drag corner to nearest whole millimetre grid
+        //   - Ctrl/Cmd: snap to nearby endpoints/intersections if close; otherwise fall back to whole-mm grid
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl({ x: x2, y: y2 });
+          if (hit) {
+            x2 = hit.x; y2 = hit.y;
+          } else {
+            const mm = snapToMmGridWorld({ x: x2, y: y2 });
+            x2 = mm.x; y2 = mm.y;
+          }
+        } else {
+          const mm = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = mm.x; y2 = mm.y;
+        }
       }
 
       gesture.activeObj.x2 = x2;
@@ -1674,6 +1693,15 @@
         const lenPx = Math.hypot(dx, dy);
         const lenMm = lenPx / PX_PER_MM;
         showMeasureTip(sx, sy, formatMm(lenMm));
+      }
+
+      // Live size indicator for Rectangle tool (whole mm integers)
+      if (k === "rect") {
+        const wPx = Math.abs(x2 - gesture.activeObj.x1);
+        const hPx = Math.abs(y2 - gesture.activeObj.y1);
+        const wMm = wPx / PX_PER_MM;
+        const hMm = hPx / PX_PER_MM;
+        showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
       }
 
       redrawAll();
