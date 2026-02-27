@@ -2072,7 +2072,8 @@
     showToast("Board loaded");
   });
 
-   deleteBoardBtn?.addEventListener("click", () => {
+if (deleteBoardBtn) {
+  deleteBoardBtn.addEventListener("click", function () {
   const name = boardSelect.value;
   if (!name) {
     showToast("Select a board");
