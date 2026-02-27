@@ -14,19 +14,13 @@
        - Default: end point snaps to nearest millimetre grid
        - Ctrl/Cmd: snaps to nearby endpoints/intersections; if none nearby, angle-snaps (0/30/45/60/90 etc.)
      ✅ DPR-safe transforms & pointer mapping using inkCanvas rect
-
-   NEW FIXES (this request):
-     ✅ Circle tool: whole-mm snap + Ctrl endpoint/intersection snap (like rect)
-     ✅ Circle tool: live size tooltip (whole mm)
-     ✅ Line tool: ensure whole-mm display on tooltip
-     ✅ Circle start point snap like rect/line/arrow
    ========================================================= */
 
 (() => {
   // ---------- DOM ----------
   const stage = document.getElementById("stage");
 
-  // ---------- Measurement tooltip (Line/Rect/Circle tools) ----------
+  // ---------- Measurement tooltip (Line tool) ----------
   const measureTip = document.createElement("div");
   measureTip.id = "measureTip";
   measureTip.style.position = "absolute";
@@ -41,6 +35,7 @@
   measureTip.style.transform = "translate(10px, 10px)";
   measureTip.style.display = "none";
   stage.appendChild(measureTip);
+
 
   // Background DOM layer
   const bgLayer = document.getElementById("bgLayer");
@@ -70,7 +65,6 @@
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsPanel = document.getElementById("settingsPanel");
   const settingsCloseBtn = document.getElementById("settingsCloseBtn");
-   const deleteBoardBtn = document.getElementById("deleteBoardBtn");
 
   // Panel controls
   const titleInput = document.getElementById("titleInput");
@@ -78,6 +72,10 @@
 
   const bgFile = document.getElementById("bgFile");
   const clearBgBtn = document.getElementById("clearBgBtn");
+
+  // SVG ink import
+  const svgInkFile = document.getElementById("svgInkFile");
+  const clearSvgInkBtn = document.getElementById("clearSvgInkBtn");
 
   const boardSelect = document.getElementById("boardSelect");
   const newBoardBtn = document.getElementById("newBoardBtn");
@@ -128,6 +126,14 @@
     viewH: 0
   };
 
+// SVG step-reveal (ArrowRight reveal, ArrowLeft hide)
+const svgReveal = {
+  active: false,
+  groupId: null,
+  partIndices: [],
+  revealed: 0
+};
+
   // Handle geometry cached each redraw (screen coords)
   const uiHandles = {
     visible: false,
@@ -161,6 +167,7 @@
 
   function formatMm(mm) {
     if (!isFinite(mm)) return "0 mm";
+    // Show 0 decimals when close to an integer (common with mm-grid snap); otherwise 1 decimal.
     const nearInt = Math.abs(mm - Math.round(mm)) < 0.05;
     return (nearInt ? Math.round(mm).toString() : mm.toFixed(1)) + " mm";
   }
@@ -175,6 +182,7 @@
   function hideMeasureTip() {
     measureTip.style.display = "none";
   }
+
 
   // --- Angle snapping helpers (Ctrl/Cmd) ---
   function snapAngleRad(angleRad) {
@@ -214,7 +222,7 @@
     };
   }
 
-  // --- Precision snapping ---
+  // --- Precision snapping (requested) ---
   // World units are in CSS pixels at zoom=1. We approximate 1mm in CSS pixels using 96dpi.
   const PX_PER_MM = 96 / 25.4;         // ≈3.7795 px per mm
   const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
@@ -280,7 +288,7 @@
     const pts = [];
 
     for (const obj of state.objects) {
-      if (!obj) continue;
+      if (!obj || obj.hidden) continue;
 
       if (obj.kind === "line" || obj.kind === "arrow") {
         pts.push({ x: obj.x1, y: obj.y1 });
@@ -325,7 +333,7 @@
     const segs = [];
 
     for (const obj of state.objects) {
-      if (!obj) continue;
+      if (!obj || obj.hidden) continue;
 
       if (obj.kind === "line" || obj.kind === "arrow") {
         segs.push({ x1: obj.x1, y1: obj.y1, x2: obj.x2, y2: obj.y2 });
@@ -679,6 +687,7 @@
     return { w, h, fontSize };
   }
 
+
   function objectBounds(obj) {
     // NOTE: bounds are axis-aligned; rotated text will be approximate (good enough for handles)
     if (obj.kind === "text") {
@@ -844,7 +853,8 @@
 
   function findHit(wx, wy) {
     for (let i = state.objects.length - 1; i >= 0; i--) {
-      if (hitObject(state.objects[i], wx, wy)) return i;
+      const o = state.objects[i];
+      if (o && !o.hidden && hitObject(o, wx, wy)) return i;
     }
     return -1;
   }
@@ -932,7 +942,7 @@
 
   function drawInk() {
     clearCtx(inkCtx, inkCanvas);
-    for (const obj of state.objects) drawInkObject(obj);
+    for (const obj of state.objects) { if (obj && !obj.hidden) drawInkObject(obj); }
   }
 
   function computeHandles() {
@@ -1412,16 +1422,16 @@
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
       let p0 = w;
-
-      // ✅ Shapes that should snap their *start point* (whole-mm unless Ctrl snaps to endpoints/intersections)
-      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle");
+      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect");
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
+      // Start point snapping for line/arrow/rect:
+      //   - default: snap to nearest mm grid
+      //   - Ctrl/Cmd: snap to nearby endpoints/intersections (if any)
       if (isSnapShape) {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
           if (hit) p0 = hit;
-          else p0 = snapToMmGridWorld(p0);
         } else {
           p0 = snapToMmGridWorld(p0);
         }
@@ -1433,14 +1443,11 @@
       gesture.mode = "drawShape";
       redrawAll();
 
-      // Show measurement tooltip when starting a straight line / rectangle / circle
+      // Show measurement tooltip when starting a straight line or rectangle
       if (obj.kind === "line") {
         showMeasureTip(sx, sy, "0 mm");
       }
       if (obj.kind === "rect") {
-        showMeasureTip(sx, sy, "0 × 0 mm");
-      }
-      if (obj.kind === "circle") {
         showMeasureTip(sx, sy, "0 × 0 mm");
       }
       return;
@@ -1689,47 +1696,22 @@
           const mm = snapToMmGridWorld({ x: x2, y: y2 });
           x2 = mm.x; y2 = mm.y;
         }
-      } else if (k === "circle") {
-        // ✅ Circle precision snapping (match rect):
-        //   - default: snap drag corner to nearest whole millimetre grid
-        //   - Ctrl/Cmd: snap to nearby endpoints/intersections if close; otherwise fall back to whole-mm grid
-        if (ctrlHeld) {
-          const hit = snapPointWithCtrl({ x: x2, y: y2 });
-          if (hit) {
-            x2 = hit.x; y2 = hit.y;
-          } else {
-            const mm = snapToMmGridWorld({ x: x2, y: y2 });
-            x2 = mm.x; y2 = mm.y;
-          }
-        } else {
-          const mm = snapToMmGridWorld({ x: x2, y: y2 });
-          x2 = mm.x; y2 = mm.y;
-        }
       }
 
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
 
-      // Live length indicator for Line tool (force whole mm)
+      // Live length indicator for Line tool
       if (k === "line") {
         const dx = x2 - gesture.activeObj.x1;
         const dy = y2 - gesture.activeObj.y1;
         const lenPx = Math.hypot(dx, dy);
-        const lenMm = Math.round(lenPx / PX_PER_MM);
-        showMeasureTip(sx, sy, `${lenMm} mm`);
+        const lenMm = lenPx / PX_PER_MM;
+        showMeasureTip(sx, sy, formatMm(lenMm));
       }
 
       // Live size indicator for Rectangle tool (whole mm integers)
       if (k === "rect") {
-        const wPx = Math.abs(x2 - gesture.activeObj.x1);
-        const hPx = Math.abs(y2 - gesture.activeObj.y1);
-        const wMm = wPx / PX_PER_MM;
-        const hMm = hPx / PX_PER_MM;
-        showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
-      }
-
-      // ✅ Live size indicator for Circle tool (whole mm integers)
-      if (k === "circle") {
         const wPx = Math.abs(x2 - gesture.activeObj.x1);
         const hPx = Math.abs(y2 - gesture.activeObj.y1);
         const wMm = wPx / PX_PER_MM;
@@ -1817,6 +1799,7 @@
     redrawAll();
   });
 
+  
   function setBackgroundFromDataURL(dataURL) {
     const img = new Image();
     img.onload = () => {
@@ -1850,7 +1833,7 @@
     img.src = String(dataURL || "");
   }
 
-  // Background import
+// Background import
   bgFile.addEventListener("change", () => {
     const file = bgFile.files && bgFile.files[0];
     if (!file) return;
@@ -1900,12 +1883,306 @@
     redrawAll();
   });
 
+
+
+// ---------- Import SVG as ink (step through elements with arrow keys) ----------
+// We import common SVG shapes as *separate* whiteboard objects and start them hidden.
+// ArrowRight reveals next element; ArrowLeft hides previous.
+function parseNumberAttr(v) {
+  const n = parseFloat(String(v || "").replace(/px$/,""));
+  return isFinite(n) ? n : null;
+}
+
+function getSvgRootBox(svgEl) {
+  const vb = svgEl.getAttribute("viewBox");
+  if (vb) {
+    const parts = vb.trim().split(/[\s,]+/).map(Number);
+    if (parts.length === 4 && parts.every(isFinite)) {
+      return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+    }
+  }
+  const w = parseNumberAttr(svgEl.getAttribute("width")) ?? 1000;
+  const h = parseNumberAttr(svgEl.getAttribute("height")) ?? 1000;
+  return { x: 0, y: 0, w, h };
+}
+
+function ensureHiddenSvgHost() {
+  let host = document.getElementById("svgInkHost");
+  if (host) return host;
+  host = document.createElement("div");
+  host.id = "svgInkHost";
+  host.style.position = "fixed";
+  host.style.left = "-99999px";
+  host.style.top = "0";
+  host.style.width = "1px";
+  host.style.height = "1px";
+  host.style.overflow = "hidden";
+  host.style.pointerEvents = "none";
+  document.body.appendChild(host);
+  return host;
+}
+
+function importSvgInkFromText(svgText) {
+  const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
+  const parsedSvg = doc.querySelector("svg");
+  if (!parsedSvg) { showToast("SVG not valid"); return; }
+
+  const host = ensureHiddenSvgHost();
+  host.innerHTML = "";
+
+  const svg = parsedSvg.cloneNode(true);
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  host.appendChild(svg);
+
+  const rootBox = getSvgRootBox(svg);
+
+  const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
+  if (!els.length) { showToast("No SVG paths"); return; }
+
+  const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
+
+  const parts = [];
+  const boundsPts = [];
+
+  function pushPart(obj, ptsForBounds) {
+    parts.push(obj);
+    if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
+  }
+
+  function strokeOf(el) {
+    const stroke = el.getAttribute("stroke");
+    if (stroke && stroke !== "none") return stroke;
+    return "#111111";
+  }
+
+  function strokeWidthOf(el) {
+    const sw = parseNumberAttr(el.getAttribute("stroke-width"));
+    return Math.max(1, sw ?? 3);
+  }
+
+  function mapCTM(el, x, y) {
+    if (rootPt && el.getCTM) {
+      const m = el.getCTM();
+      rootPt.x = x; rootPt.y = y;
+      const p = rootPt.matrixTransform(m);
+      return { x: p.x, y: p.y };
+    }
+    return { x, y };
+  }
+
+  for (const el of els) {
+    const stroke = strokeOf(el);
+    const size = strokeWidthOf(el);
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === "line") {
+      const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
+      const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
+      const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
+      const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
+      const p1 = mapCTM(el, x1, y1);
+      const p2 = mapCTM(el, x2, y2);
+      pushPart({ kind:"line", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "rect") {
+      const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
+      const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
+      const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
+      const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
+      const p1 = mapCTM(el, x, y);
+      const p2 = mapCTM(el, x + w, y + h);
+      pushPart({ kind:"rect", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "circle") {
+      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+      const r  = parseNumberAttr(el.getAttribute("r")) ?? 0;
+      const p1 = mapCTM(el, cx - r, cy - r);
+      const p2 = mapCTM(el, cx + r, cy + r);
+      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "ellipse") {
+      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+      const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
+      const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
+      const p1 = mapCTM(el, cx - rx, cy - ry);
+      const p2 = mapCTM(el, cx + rx, cy + ry);
+      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "polyline" || tag === "polygon") {
+      const ptsAttr = (el.getAttribute("points") || "").trim();
+      if (!ptsAttr) continue;
+      const nums = ptsAttr.split(/[\s,]+/).map(Number).filter(n=>isFinite(n));
+      if (nums.length < 4) continue;
+      const pts = [];
+      for (let i=0;i<nums.length-1;i+=2){
+        pts.push(mapCTM(el, nums[i], nums[i+1]));
+      }
+      if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
+      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+      continue;
+    }
+
+    if (tag === "path") {
+      if (!el.getTotalLength) continue;
+      let total = 0;
+      try { total = el.getTotalLength(); } catch { total = 0; }
+      if (!isFinite(total) || total <= 0) continue;
+
+      const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
+      const pts = [];
+      for (let i=0;i<=steps;i++){
+        const t = (i/steps) * total;
+        let p;
+        try { p = el.getPointAtLength(t); } catch { p = null; }
+        if (!p) continue;
+        pts.push(mapCTM(el, p.x, p.y));
+      }
+      if (pts.length < 2) continue;
+      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+      continue;
+    }
+  }
+
+  if (!parts.length) { showToast("No supported SVG shapes"); return; }
+
+  // Bounds
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const use = boundsPts.length ? boundsPts : [
+    { x: rootBox.x, y: rootBox.y },
+    { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
+  ];
+  for (const p of use) {
+    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+  }
+
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+
+  const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+  const availW = (state.viewW / state.zoom) * 0.9;
+  const availH = (state.viewH / state.zoom) * 0.9;
+  const s = clamp(Math.min(availW / bw, availH / bh), 0.02, 50);
+
+  const cx0 = minX + bw/2;
+  const cy0 = minY + bh/2;
+
+  const groupId = "svg_" + Date.now();
+
+  pushUndo(); clearRedo();
+  hardResetGesture();
+
+  const startIndex = state.objects.length;
+
+  for (const o of parts) {
+    const obj = JSON.parse(JSON.stringify(o));
+    obj.svgGroupId = groupId;
+    obj.hidden = true;
+
+    if (obj.kind === "stroke" || obj.kind === "erase") {
+      obj.points = (obj.points || []).map(p => ({
+        x: viewCenter.x + (p.x - cx0) * s,
+        y: viewCenter.y + (p.y - cy0) * s
+      }));
+    } else {
+      obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
+      obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
+      obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
+      obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
+    }
+
+    state.objects.push(obj);
+  }
+
+  svgReveal.active = true;
+  svgReveal.groupId = groupId;
+  svgReveal.partIndices = [];
+  svgReveal.revealed = 0;
+  for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
+
+  state.selectionIndex = -1;
+  setActiveTool("select");
+  redrawAll();
+  showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
+}
+
+function clearImportedSvgInk() {
+  if (!svgReveal.active || !svgReveal.groupId) { showToast("No SVG ink"); return; }
+  pushUndo(); clearRedo();
+  const gid = svgReveal.groupId;
+  state.objects = state.objects.filter(o => !(o && o.svgGroupId === gid));
+  svgReveal.active = false;
+  svgReveal.groupId = null;
+  svgReveal.partIndices = [];
+  svgReveal.revealed = 0;
+  state.selectionIndex = -1;
+  redrawAll();
+  showToast("SVG cleared");
+}
+
+// Wire up UI if present
+if (svgInkFile) {
+  svgInkFile.addEventListener("change", () => {
+    const file = svgInkFile.files && svgInkFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => importSvgInkFromText(String(reader.result || ""));
+    reader.readAsText(file);
+    svgInkFile.value = "";
+  });
+}
+if (clearSvgInkBtn) {
+  clearSvgInkBtn.addEventListener("click", () => clearImportedSvgInk());
+}
+
   // ---------- Clipboard paste images (Ctrl/Cmd+V) ----------
+  // Paste an image from clipboard to become the background image.
+  // (No new UI added; uses the existing background system.)
   document.addEventListener("paste", (e) => {
     try {
       // ignore if typing in an input/textarea/select
       const tag = (document.activeElement && document.activeElement.tagName) || "";
-      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+// SVG reveal controls (when an SVG has been imported as ink)
+if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+  e.preventDefault();
+  const total = svgReveal.partIndices.length;
+  if (!total) return;
+
+  if (e.key === "ArrowRight") {
+    if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
+    const idx = svgReveal.partIndices[svgReveal.revealed];
+    const obj = state.objects[idx];
+    if (obj) obj.hidden = false;
+    svgReveal.revealed += 1;
+    redrawAll();
+    showToast(`SVG: ${svgReveal.revealed}/${total}`);
+    return;
+  }
+
+  if (e.key === "ArrowLeft") {
+    if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
+    svgReveal.revealed -= 1;
+    const idx = svgReveal.partIndices[svgReveal.revealed];
+    const obj = state.objects[idx];
+    if (obj) obj.hidden = true;
+    redrawAll();
+    showToast(`SVG: ${svgReveal.revealed}/${total}`);
+    return;
+  }
+}
+
       if (typing) return;
 
       const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
@@ -1941,7 +2218,37 @@
     }
 
     const tag = (document.activeElement && document.activeElement.tagName) || "";
-    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+// SVG reveal controls (when an SVG has been imported as ink)
+if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+  e.preventDefault();
+  const total = svgReveal.partIndices.length;
+  if (!total) return;
+
+  if (e.key === "ArrowRight") {
+    if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
+    const idx = svgReveal.partIndices[svgReveal.revealed];
+    const obj = state.objects[idx];
+    if (obj) obj.hidden = false;
+    svgReveal.revealed += 1;
+    redrawAll();
+    showToast(`SVG: ${svgReveal.revealed}/${total}`);
+    return;
+  }
+
+  if (e.key === "ArrowLeft") {
+    if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
+    svgReveal.revealed -= 1;
+    const idx = svgReveal.partIndices[svgReveal.revealed];
+    const obj = state.objects[idx];
+    if (obj) obj.hidden = true;
+    redrawAll();
+    showToast(`SVG: ${svgReveal.revealed}/${total}`);
+    return;
+  }
+}
+
 
     // Delete removes selection (when not typing)
     if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
@@ -2072,37 +2379,9 @@
     showToast("Board loaded");
   });
 
-if (deleteBoardBtn) {
-  deleteBoardBtn.addEventListener("click", function () {
-    const name = boardSelect.value;
-    if (!name) {
-      toast("Select a board");
-      return;
-    }
-
-    const ok = confirm(`Delete board "${name}"?\n\nThis cannot be undone.`);
-    if (!ok) return;
-
-    const index = loadBoardsIndex();
-    if (!index[name]) {
-      toast("Board not found");
-      refreshBoardSelect();
-      boardSelect.value = "";
-      return;
-    }
-
-    delete index[name];
-    saveBoardsIndex(index);
-
-    refreshBoardSelect();
-    boardSelect.value = "";
-
-    toast("Board deleted");
-  });
-}
-
   refreshBoardSelect();
 
+  
   // ---------- Export SVG (vector) ----------
   function svgEscape(s){
     return String(s)
@@ -2251,7 +2530,8 @@ if (deleteBoardBtn) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // ---------- Export PNG (composite) ----------
+
+// ---------- Export PNG (composite) ----------
   exportSvgBtn?.addEventListener("click", () => {
     exportSVG();
   });

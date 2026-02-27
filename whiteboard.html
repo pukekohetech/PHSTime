@@ -114,6 +114,16 @@
               <div class="panel__note">Use ↔ ⤡ ⟲ on the left (acts on selection if one is selected).</div>
             </div>
 
+<div class="panel__group panel__group--wide">
+  <label class="panel__label" for="svgInkFile">Import SVG (ink)</label>
+  <div class="panel__row">
+    <input id="svgInkFile" type="file" accept=".svg,image/svg+xml" class="panel__file" />
+    <button id="clearSvgInkBtn" class="panel__btn" type="button">Clear SVG</button>
+  </div>
+  <div class="panel__note">After importing: press → to reveal the next line, ← to hide the previous line.</div>
+</div>
+
+
             <div class="panel__group panel__group--wide">
               <label class="panel__label">Boards</label>
               <div class="panel__row panel__row--wrap">
@@ -140,12 +150,12 @@
       </div>
 
       <div class="hint">
-        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected
+        Wheel zooms to cursor • Space+drag pans • Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected • SVG: → reveal, ← hide
       </div>
     </section>
   </main>
 
   <!-- ✅ Ensure JS runs after the DOM exists -->
-  <script src="whiteboard.js"></script>
+  <script src="whiteboard_updated.js"></script>
 </body>
 </html>
