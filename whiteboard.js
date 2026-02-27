@@ -2096,6 +2096,7 @@ if (deleteBoardBtn) {
   boardSelect.value = "";
   showToast("Board deleted");
 });
+}
 
   refreshBoardSelect();
 
