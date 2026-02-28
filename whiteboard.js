@@ -1826,7 +1826,28 @@
     const { sx, sy } = clientToScreen(e);
     updateHoverCursor(sx, sy);
 
-    if (!gesture.active) return;
+  // Arc tool: show tip immediately after center is picked (even before dragging)
+if (state.tool === "arc" && arcDraft.hasCenter && !gesture.active) {
+  const wPreview = screenToWorld(sx, sy);
+
+  // Keep preview snapping consistent with your arc drawing
+  let p = wPreview;
+  if (snapFeaturesEnabled) {
+    const hit = snapPointWithCtrl(p);
+    p = hit || snapPointWithCtrlOrAngle({ x: arcDraft.cx, y: arcDraft.cy }, p);
+  } else {
+    p = snapToMmGridWorld(p);
+  }
+
+  const rPx = Math.max(1, Math.hypot(p.x - arcDraft.cx, p.y - arcDraft.cy));
+  const rMm = rPx / pxPerMm();
+
+  showMeasureTip(sx, sy, `Arc center set • R ${Math.round(rMm)} mm • click+drag to draw`);
+  redrawAll();
+  return;
+}
+
+if (!gesture.active) return;
 
     const w = screenToWorld(sx, sy);
 
