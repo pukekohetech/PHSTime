@@ -1827,24 +1827,23 @@
     updateHoverCursor(sx, sy);
 
   // Arc tool: show tip immediately after center is picked (even before dragging)
+// Arc tool: live radius tooltip after center is picked (before dragging)
 if (state.tool === "arc" && arcDraft.hasCenter && !gesture.active) {
+  const ctrlHeld = e.getModifierState("CapsLock");
   const wPreview = screenToWorld(sx, sy);
 
-  // Keep preview snapping consistent with your arc drawing
   let p = wPreview;
-  if (snapFeaturesEnabled) {
+  if (ctrlHeld) {
     const hit = snapPointWithCtrl(p);
     p = hit || snapPointWithCtrlOrAngle({ x: arcDraft.cx, y: arcDraft.cy }, p);
   } else {
     p = snapToMmGridWorld(p);
   }
 
-  const rPx = Math.max(1, Math.hypot(p.x - arcDraft.cx, p.y - arcDraft.cy));
-  const rMm = rPx / pxPerMm();
+  const rMm = Math.hypot(p.x - arcDraft.cx, p.y - arcDraft.cy) / pxPerMm();
+  showMeasureTip(sx, sy, `R ${Math.round(rMm)} mm`);
 
- showMeasureTip(sx, sy, `R ${Math.round(rMm)} mm`);
-  redrawAll();
-  return;
+  // ✅ no redrawAll() and no return; keep everything else behaving normally
 }
 
 if (!gesture.active) return;
