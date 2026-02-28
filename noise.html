@@ -296,7 +296,7 @@
             <label for="autoCal">Auto-cal</label>
           </span>
 
-          <span class="pillBtn" title="Smoothing reduces flicker (adaptive smoothing is also applied)">
+          <span class="pillBtn" title="Smoothing reduces flicker (asymmetric attack/release smoothing is applied)">
             <input id="smoothOn" type="checkbox" checked />
             <label for="smoothOn">Smoothing</label>
           </span>
@@ -320,7 +320,7 @@
             <label for="soundCue">Sound cue</label>
           </span>
 
-          <span class="pillBtn" title="Show a more consistent relative reading above the baseline">
+          <span class="pillBtn" title="Relative mode shows Δ above the room baseline (best for different mics)">
             <input id="relativeMode" type="checkbox" />
             <label for="relativeMode">Relative</label>
           </span>
@@ -337,17 +337,33 @@
         <div class="sliderWrap">
           <div class="sliderRow">
             <div class="miniLabel">Green → Orange</div>
-            <span class="valuePill"><span id="t1Label">60</span> dB</span>
+            <span class="valuePill"><span id="t1Label">60</span> <span id="tUnit1">dB</span></span>
           </div>
           <input id="t1" class="optRange" type="range" min="30" max="95" value="60" />
+          <div class="smallNote u-mt-8" id="tHelp">
+            Tip: in Relative mode, these are “Δ above baseline”.
+          </div>
         </div>
 
         <div class="sliderWrap">
           <div class="sliderRow">
             <div class="miniLabel">Orange → Red</div>
-            <span class="valuePill"><span id="t2Label">70</span> dB</span>
+            <span class="valuePill"><span id="t2Label">70</span> <span id="tUnit2">dB</span></span>
           </div>
           <input id="t2" class="optRange" type="range" min="35" max="105" value="70" />
+        </div>
+
+        <!-- Mic gain (post-scale) -->
+        <div class="divider"></div>
+        <div class="sliderWrap">
+          <div class="sliderRow">
+            <div class="miniLabel">Mic gain</div>
+            <span class="valuePill"><span id="gainLabel">1.00</span>x</span>
+          </div>
+          <input id="micGain" class="optRange" type="range" min="60" max="160" value="100" />
+          <div class="smallNote u-mt-8">
+            Use this if one device “spikes” too easily. Lower = less sensitive.
+          </div>
         </div>
 
         <!-- Stability (persistence + hysteresis) -->
@@ -357,9 +373,9 @@
           <div class="sliderWrap">
             <div class="sliderRow">
               <div class="miniLabel">Trigger delay</div>
-              <span class="valuePill"><span id="delayLabel">1.0</span> s</span>
+              <span class="valuePill"><span id="delayLabel">1.5</span> s</span>
             </div>
-            <input id="triggerDelay" class="optRange" type="range" min="0" max="30" value="10" />
+            <input id="triggerDelay" class="optRange" type="range" min="0" max="30" value="15" />
             <div class="smallNote u-mt-8">
               Prevents quick spikes causing colour changes.
             </div>
@@ -368,9 +384,9 @@
           <div class="sliderWrap">
             <div class="sliderRow">
               <div class="miniLabel">Hysteresis</div>
-              <span class="valuePill"><span id="hysLabel">3</span> dB</span>
+              <span class="valuePill"><span id="hysLabel">5</span> <span id="hysUnit">dB</span></span>
             </div>
-            <input id="hysteresis" class="optRange" type="range" min="0" max="10" value="3" />
+            <input id="hysteresis" class="optRange" type="range" min="0" max="10" value="5" />
             <div class="smallNote u-mt-8">
               Requires dropping a bit below thresholds to return to green.
             </div>
@@ -380,14 +396,15 @@
         <div class="divider"></div>
 
         <!-- Calibration -->
-        <div class="sliderWrap">
+        <div class="sliderWrap" id="calWrap">
           <div class="sliderRow">
             <div class="miniLabel">Calibration</div>
-            <span class="valuePill"><span id="calLabel">90</span> dB</span>
+            <span class="valuePill"><span id="calLabel">85</span> dB</span>
           </div>
-          <input id="calOffset" class="optRange" type="range" min="40" max="120" value="90" />
+          <input id="calOffset" class="optRange" type="range" min="40" max="120" value="85" />
           <div class="smallNote u-mt-8">
             Tip: set calibration so quiet room reads ~35–45 dB, normal speaking ~55–65 dB.
+            Relative mode is usually more consistent across devices.
           </div>
 
           <div class="u-h-10"></div>
@@ -458,7 +475,8 @@
           <div class="u-h-10"></div>
           <div class="smallNote">
             Browsers can’t measure true SPL dB without hardware calibration. This is an estimate based on your microphone.
-            Use <b>Calibration</b> to match a quiet room (~35–45 dB) and normal speaking (~55–65 dB). Relative mode is often more consistent.
+            Use <b>Calibration</b> to match a quiet room (~35–45 dB) and normal speaking (~55–65 dB).
+            <b>Relative</b> mode shows Δ above the room baseline and is the most consistent across different mics.
           </div>
         </details>
 
@@ -599,9 +617,7 @@ menuHeader.addEventListener("pointerup", () => dragStartY = null);
 menuHeader.addEventListener("pointercancel", () => dragStartY = null);
 
 /* ================= FULLSCREEN ================= */
-$("fullscreenBtn").addEventListener("click", async ()=>{
-  await toggleFullscreen();
-});
+$("fullscreenBtn").addEventListener("click", async ()=>{ await toggleFullscreen(); });
 async function toggleFullscreen(){
   try{
     if (!document.fullscreenElement){
@@ -618,8 +634,8 @@ document.addEventListener("fullscreenchange", ()=>{
 });
 
 /* ================= AUDIO + METER CORE =================
-   We measure dBFS internally (negative). Then map to estimated dB using calOffset.
-   Relative mode shows above-baseline delta (more consistent across devices).
+   dBFS internally (negative). Map to estimated dB via calOffset.
+   Relative mode shows Δ above baseline (best across different mics).
 ======================================================== */
 let audioCtx = null;
 let analyser = null;
@@ -654,37 +670,41 @@ let wsRedMs = 0;
 let wsLastTick = null;
 let wsLockedWin = false;
 
+// Stored preference keys
 const KEY = {
-  T1: "phs_noise_t1_v3",
-  T2: "phs_noise_t2_v3",
+  // absolute thresholds
+  T1A: "phs_noise_t1_abs_v1",
+  T2A: "phs_noise_t2_abs_v1",
+  // relative thresholds
+  T1R: "phs_noise_t1_rel_v1",
+  T2R: "phs_noise_t2_rel_v1",
+
   CAL:"phs_noise_cal_v3",
   AC: "phs_noise_autocal_v3",
   SM: "phs_noise_smooth_v3",
   FO: "phs_noise_face_v2",
   BM: "phs_noise_big_v1",
   SC: "phs_noise_sound_v1",
-  RM: "phs_noise_rel_v1",
+  RM: "phs_noise_rel_v2",
   TD: "phs_noise_delay_v1",
   HY: "phs_noise_hys_v1",
   WSO:"phs_noise_ws_on_v1",
   WSG:"phs_noise_ws_goal_v1",
   WSB:"phs_noise_ws_budget_v1",
-  RFS:"phs_noise_rem_fs_v1"
+  RFS:"phs_noise_rem_fs_v1",
+  GAIN:"phs_noise_gain_v1"
 };
 
 function rmsToDbFS(rms){
   // Epsilon stops -Infinity in silence
   const eps = 1e-6;
-
-  // dBFS (negative numbers, closer to 0 = louder)
   let db = 20 * Math.log10(rms + eps);
 
-  // Clamp to a realistic classroom mic range
-  // (quiet might be ~ -65 to -45 dBFS depending on device)
+  // Clamp to realistic device mic range
   db = clamp(db, -80, -10);
-
   return db;
 }
+
 function computeRMSFromTimeDomain(buffer){
   let sum = 0;
   for (let i=0;i<buffer.length;i++){
@@ -707,12 +727,47 @@ function getAvg(){
   return s / samples.length;
 }
 
-function updateLabels(){
-  // enforce t2 > t1
+function isRelative(){ return $("relativeMode").checked; }
+
+function getGain(){
+  // slider is 60..160 => 0.60..1.60
+  return Number($("micGain").value) / 100;
+}
+
+function updateThresholdSliderRange(){
+  // When Relative is ON, thresholds represent Δ above baseline.
+  // When Relative is OFF, thresholds represent estimated dB.
+  if (isRelative()){
+    // Recommended Δ ranges
+    $("t1").min = "0";
+    $("t1").max = "40";
+    $("t2").min = "1";
+    $("t2").max = "60";
+    $("tUnit1").textContent = "Δ";
+    $("tUnit2").textContent = "Δ";
+    $("hysUnit").textContent = "Δ";
+    $("calWrap").style.display = ""; // still useful (baseline), keep visible
+  } else {
+    $("t1").min = "30";
+    $("t1").max = "95";
+    $("t2").min = "35";
+    $("t2").max = "105";
+    $("tUnit1").textContent = "dB";
+    $("tUnit2").textContent = "dB";
+    $("hysUnit").textContent = "dB";
+    $("calWrap").style.display = "";
+  }
+}
+
+function ensureThresholdsValid(){
   const v1 = Number($("t1").value);
   let v2 = Number($("t2").value);
   if (v2 <= v1) v2 = v1 + 1;
   $("t2").value = String(v2);
+}
+
+function updateLabels(){
+  ensureThresholdsValid();
 
   $("t1Label").textContent = $("t1").value;
   $("t2Label").textContent = $("t2").value;
@@ -724,16 +779,57 @@ function updateLabels(){
   $("goalLabel").textContent = $("goalMins").value;
   $("redBudgetLabel").textContent = $("redBudget").value;
 
+  $("gainLabel").textContent = (getGain()).toFixed(2);
+
   // Update workshop goal text
   $("wsGoalMins").textContent = $("goalMins").value;
   $("wsBudget").textContent = $("redBudget").value;
 }
 
+function saveThresholdSet(){
+  if (!CAN_STORE) return;
+  try{
+    if (isRelative()){
+      localStorage.setItem(KEY.T1R, $("t1").value);
+      localStorage.setItem(KEY.T2R, $("t2").value);
+    } else {
+      localStorage.setItem(KEY.T1A, $("t1").value);
+      localStorage.setItem(KEY.T2A, $("t2").value);
+    }
+  } catch(e){}
+}
+
+function loadThresholdSet(){
+  // Load thresholds appropriate to current mode.
+  // If missing, load sane defaults.
+  let t1=null, t2=null;
+  try{
+    if (isRelative()){
+      t1 = CAN_STORE ? localStorage.getItem(KEY.T1R) : null;
+      t2 = CAN_STORE ? localStorage.getItem(KEY.T2R) : null;
+      if (!t1) t1 = "10";
+      if (!t2) t2 = "18";
+    } else {
+      t1 = CAN_STORE ? localStorage.getItem(KEY.T1A) : null;
+      t2 = CAN_STORE ? localStorage.getItem(KEY.T2A) : null;
+      if (!t1) t1 = "60";
+      if (!t2) t2 = "70";
+    }
+  } catch(e){
+    // fallback
+    if (isRelative()){ t1="10"; t2="18"; }
+    else { t1="60"; t2="70"; }
+  }
+  $("t1").value = t1;
+  $("t2").value = t2;
+  ensureThresholdsValid();
+}
+
 function savePrefs(){
   if (!CAN_STORE) return;
   try{
-    localStorage.setItem(KEY.T1, $("t1").value);
-    localStorage.setItem(KEY.T2, $("t2").value);
+    saveThresholdSet();
+
     localStorage.setItem(KEY.CAL,$("calOffset").value);
     localStorage.setItem(KEY.AC, $("autoCal").checked ? "1" : "0");
     localStorage.setItem(KEY.SM, $("smoothOn").checked ? "1" : "0");
@@ -747,17 +843,14 @@ function savePrefs(){
     localStorage.setItem(KEY.WSG, $("goalMins").value);
     localStorage.setItem(KEY.WSB, $("redBudget").value);
     localStorage.setItem(KEY.RFS, $("rememberFS").checked ? "1" : "0");
+    localStorage.setItem(KEY.GAIN, $("micGain").value);
   } catch(e){}
 }
 
 function loadPrefs(){
   if (!CAN_STORE) return;
   try{
-    const t1v = localStorage.getItem(KEY.T1);
-    const t2v = localStorage.getItem(KEY.T2);
     const calv= localStorage.getItem(KEY.CAL);
-    if (t1v) $("t1").value = t1v;
-    if (t2v) $("t2").value = t2v;
     if (calv) $("calOffset").value = calv;
 
     const ac = localStorage.getItem(KEY.AC);
@@ -770,6 +863,7 @@ function loadPrefs(){
     if (bm !== null) $("bigMode").checked = (bm === "1");
     const sc = localStorage.getItem(KEY.SC);
     if (sc !== null) $("soundCue").checked = (sc === "1");
+
     const rm = localStorage.getItem(KEY.RM);
     if (rm !== null) $("relativeMode").checked = (rm === "1");
 
@@ -787,6 +881,10 @@ function loadPrefs(){
 
     const rfs = localStorage.getItem(KEY.RFS);
     if (rfs !== null) $("rememberFS").checked = (rfs === "1");
+
+    const g = localStorage.getItem(KEY.GAIN);
+    if (g !== null) $("micGain").value = g;
+
   } catch(e){}
 }
 
@@ -829,11 +927,14 @@ function setBigMode(on){
   const card = $("noiseCard");
   card.classList.toggle("bigMode", !!on);
 }
+
 function setUnitText(){
-  const rel = $("relativeMode").checked;
+  const rel = isRelative();
   $("dbUnit").textContent = rel ? " Δ" : " dB";
-  // pills' unit
   document.querySelectorAll(".u").forEach(el => { el.textContent = rel ? "Δ" : "dB"; });
+  $("tUnit1").textContent = rel ? "Δ" : "dB";
+  $("tUnit2").textContent = rel ? "Δ" : "dB";
+  $("hysUnit").textContent = rel ? "Δ" : "dB";
 }
 
 function getThresholds(){
@@ -842,10 +943,8 @@ function getThresholds(){
   const h  = Number($("hysteresis").value);
   return {
     t1, t2, h,
-    // enter thresholds
     enterOrange: t1,
     enterRed: t2,
-    // exit thresholds (must drop below)
     exitOrangeToGreen: t1 - h,
     exitRedToOrange: t2 - h
   };
@@ -859,13 +958,9 @@ function desiredLevel(val){
 }
 
 function applyStability(val){
-  // Trigger delay means: only change if desired stays stable for delay duration.
   const delayMs = Number($("triggerDelay").value) * 100; // 0..3000ms
-
-  // hysteresis for dropping back
   const { exitOrangeToGreen, exitRedToOrange } = getThresholds();
 
-  // current level might need special “exit” checks
   let desired = desiredLevel(val);
 
   if (level === "red"){
@@ -909,7 +1004,7 @@ function applyStability(val){
   return level;
 }
 
-function setUIFromState(displayVal){
+function setUIFromState(){
   let chip = "READY";
   let status = "Ready";
 
@@ -929,7 +1024,7 @@ function setUIFromState(displayVal){
 
   $("subLabel").textContent = "CLICK DISPLAY TO START / STOP";
   $("timeHint").textContent = running
-    ? "Listening… • use Options (⚙️) for thresholds, stability, calibration"
+    ? "Listening… • use Options (⚙️) for thresholds, stability, calibration, mic gain"
     : "Start • allow microphone • use Options (⚙️) to adjust settings";
 }
 
@@ -991,24 +1086,22 @@ function maybeSoundCue(){
 }
 
 function getDisplayVal(estDb){
-  // Relative mode uses baseline from auto-cal (noiseFloorDbFS + calOffset)
-  if (!$("relativeMode").checked) return estDb;
+  // Relative mode uses baseline derived from auto-cal floor + calOffset
+  if (!isRelative()) return estDb;
 
   const offset = Number($("calOffset").value);
-  const baseline = noiseFloorDbFS + offset; // baseline on same est scale
+  const baseline = noiseFloorDbFS + offset; // baseline on estimated dB scale
   return estDb - baseline; // Δ above baseline
 }
 
 function mapBar(val){
-  // stable mapping based on thresholds
   const { t1, t2 } = getThresholds();
   const minV = t1 - 25;
   const maxV = t2 + 15;
   return clamp(((val - minV) / (maxV - minV)) * 100, 0, 100);
 }
 
-function updateWorkshop(displayVal){
-  // Workshop uses level (red/orange/green) rather than raw values
+function updateWorkshop(){
   const on = $("workshopOn").checked;
   const dash = $("workshopDash");
   const goalText = $("wsGoalText");
@@ -1024,7 +1117,6 @@ function updateWorkshop(displayVal){
     return;
   }
 
-  // If workshop is enabled but not started, keep UI idle
   if (!wsActive || !wsStartAt){
     $("wsTime").textContent = "--:--";
     $("wsRed").textContent = `${Math.floor(wsRedMs/1000)}s`;
@@ -1037,7 +1129,6 @@ function updateWorkshop(displayVal){
   const dt = t - wsLastTick;
   wsLastTick = t;
 
-  // Count red usage while listening
   if (running && level === "red"){
     wsRedMs += dt;
   }
@@ -1050,9 +1141,7 @@ function updateWorkshop(displayVal){
   const goalMs = Number($("goalMins").value) * 60 * 1000;
   const budgetMs = Number($("redBudget").value) * 1000;
 
-  // If red budget exceeded: auto-reset this round (but keep wins)
   if (wsRedMs > budgetMs){
-    // quick visual feedback: chip text
     $("stateChip").textContent = "WORKSHOP RESET";
     wsStartAt = nowMs();
     wsRedMs = 0;
@@ -1060,12 +1149,11 @@ function updateWorkshop(displayVal){
     return;
   }
 
-  // Win condition: reach goal time with red budget not exceeded
   if (!wsLockedWin && elapsed >= goalMs){
     wsWins += 1;
-    wsLockedWin = true; // prevent multiple wins until restarted/reset
+    wsLockedWin = true;
     $("wsWins").textContent = String(wsWins);
-    // Start a new round automatically
+
     wsStartAt = nowMs();
     wsRedMs = 0;
     wsLockedWin = false;
@@ -1080,27 +1168,18 @@ function render(){
   const rms = computeRMSFromTimeDomain(data);
   const dbFS = rmsToDbFS(rms);
 
-  // smoothing (adaptive): more smoothing when far from thresholds, less near thresholds
+  // Asymmetric smoothing: faster when getting louder, slower when getting quieter
   const smoothingOn = $("smoothOn").checked;
-
-  let alpha = 1.0; // 1.0 means no smoothing
-  if (smoothingOn){
-    // base blend
-    alpha = 0.15;
-
-    // adaptive tweak near thresholds (more responsive)
-    const offset = Number($("calOffset").value);
-    const est = (lastDbFS * 0.85 + dbFS * 0.15) + offset;
-    const { t1, t2 } = getThresholds();
-    const dist = Math.min(Math.abs(est - t1), Math.abs(est - t2));
-    if (dist < 6) alpha = 0.28;       // near threshold
-    else if (dist < 12) alpha = 0.20; // medium
-    else alpha = 0.12;                // far: very stable
+  if (!smoothingOn){
+    lastDbFS = dbFS;
+  } else {
+    const attack = 0.35;   // louder spikes become less instant
+    const release = 0.08;  // falling back is smoother
+    const a = (dbFS > lastDbFS) ? attack : release;
+    lastDbFS = lastDbFS * (1 - a) + dbFS * a;
   }
 
-  lastDbFS = smoothingOn ? (lastDbFS * (1-alpha) + dbFS * alpha) : dbFS;
-
-  // auto-calibration (dBFS floor)
+  // auto-calibration tracks mic floor
   if ($("autoCal").checked){
     if (lastDbFS < noiseFloorDbFS + 6){
       noiseFloorDbFS = noiseFloorDbFS * 0.98 + lastDbFS * 0.02;
@@ -1108,15 +1187,18 @@ function render(){
     noiseFloorDbFS = clamp(noiseFloorDbFS, -80, -10);
   }
 
-  // estimated +dB scale
+  // estimated dB scale
   const offset = Number($("calOffset").value);
   const estDb = lastDbFS + offset;
 
-  // stable level changes (delay + hysteresis)
-  applyStability(estDb);
-
   // display scale (absolute or relative)
-  const displayVal = getDisplayVal(estDb);
+  let displayVal = getDisplayVal(estDb);
+
+  // mic gain (post-scale): tames “spiky” devices
+  displayVal = displayVal * getGain();
+
+  // stability based on the SAME scale you see + set thresholds for
+  applyStability(displayVal);
 
   pushSample(displayVal);
   const avg = getAvg();
@@ -1129,9 +1211,9 @@ function render(){
   $("barFill").style.width = `${mapBar(displayVal).toFixed(1)}%`;
 
   setBgByLevel();
-  setUIFromState(displayVal);
+  setUIFromState();
   setEmojiByLevel();
-  updateWorkshop(displayVal);
+  updateWorkshop();
 
   rafId = requestAnimationFrame(render);
 }
@@ -1167,7 +1249,7 @@ async function start(){
 
     resetStats();
     setUnitText();
-    setUIFromState(0);
+    setUIFromState();
     setEmojiByLevel();
 
     stopLoop();
@@ -1204,16 +1286,27 @@ function toggleStartStop(){
 
 /* ================= PRESETS ================= */
 function applyPreset(name){
-  // Values tuned for classroom feel (starting points).
-  // You can tweak these defaults anytime.
-  const presets = {
-    silent:      { t1: 48, t2: 55, delay: 12, hys: 4, cal: 90 },
-    partner:     { t1: 58, t2: 68, delay: 10, hys: 3, cal: 90 },
-    group:       { t1: 62, t2: 74, delay: 10, hys: 3, cal: 90 },
-    presentation:{ t1: 54, t2: 62, delay: 12, hys: 4, cal: 90 },
-    workshop:    { t1: 64, t2: 78, delay: 8,  hys: 2, cal: 90 }
+  const rel = isRelative();
+
+  // Absolute presets (estimated dB)
+  const presetsAbs = {
+    silent:      { t1: 48, t2: 55, delay: 18, hys: 5, cal: 85, gain: 1.00 },
+    partner:     { t1: 58, t2: 68, delay: 15, hys: 4, cal: 85, gain: 1.00 },
+    group:       { t1: 62, t2: 74, delay: 15, hys: 4, cal: 85, gain: 1.00 },
+    presentation:{ t1: 54, t2: 62, delay: 18, hys: 5, cal: 85, gain: 1.00 },
+    workshop:    { t1: 64, t2: 78, delay: 12, hys: 3, cal: 85, gain: 1.00 }
   };
-  const p = presets[name];
+
+  // Relative presets (Δ above baseline) — recommended for mixed devices
+  const presetsRel = {
+    silent:      { t1: 6,  t2: 10, delay: 18, hys: 3, cal: 85, gain: 0.95 },
+    partner:     { t1: 10, t2: 18, delay: 15, hys: 4, cal: 85, gain: 1.00 },
+    group:       { t1: 12, t2: 22, delay: 15, hys: 4, cal: 85, gain: 1.00 },
+    presentation:{ t1: 8,  t2: 14, delay: 18, hys: 3, cal: 85, gain: 0.95 },
+    workshop:    { t1: 14, t2: 26, delay: 12, hys: 3, cal: 85, gain: 1.00 }
+  };
+
+  const p = (rel ? presetsRel : presetsAbs)[name];
   if (!p) return;
 
   $("t1").value = String(p.t1);
@@ -1221,8 +1314,8 @@ function applyPreset(name){
   $("triggerDelay").value = String(p.delay);
   $("hysteresis").value = String(p.hys);
   $("calOffset").value = String(p.cal);
+  $("micGain").value = String(Math.round(p.gain * 100));
 
-  // Workshop preset also turns workshop on + sets a friendly goal
   if (name === "workshop"){
     $("workshopOn").checked = true;
     $("goalMins").value = "8";
@@ -1233,15 +1326,10 @@ function applyPreset(name){
   savePrefs();
 }
 
-/* ================= CALIBRATION WIZARD =================
-   Quiet calibration: measure baseline display value (estDb) for 10s and suggest calOffset.
-   Talking calibration: measure normal talking and suggest threshold t1 based on result.
-======================================================== */
+/* ================= CALIBRATION WIZARD ================= */
 let calTask = null;
 
-function setCalMsg(msg){
-  $("calMsg").textContent = msg || "";
-}
+function setCalMsg(msg){ $("calMsg").textContent = msg || ""; }
 
 async function ensureRunningForCal(){
   if (!running){
@@ -1250,7 +1338,6 @@ async function ensureRunningForCal(){
 }
 
 function startCalibration(mode){
-  // mode: "quiet" | "talk"
   if (calTask) return;
 
   ensureRunningForCal().then(()=>{
@@ -1277,25 +1364,33 @@ function startCalibration(mode){
         return;
       }
 
-      // finish
       const avg = vals.reduce((a,b)=>a+b,0) / Math.max(1, vals.length);
       const p90 = percentile(vals, 0.90);
 
       if (mode === "quiet"){
-        // Suggest calOffset so quiet reads ~40 dB
-        const desiredQuiet = 40;
+        const desiredQuiet = 35;
         const currentOffset = Number($("calOffset").value);
         const suggestedOffset = clamp(currentOffset + (desiredQuiet - avg), 40, 120);
 
         $("calOffset").value = String(Math.round(suggestedOffset));
         setCalMsg(`Quiet baseline measured ~${Math.round(avg)} dB → suggested calibration: ${Math.round(suggestedOffset)} dB.`);
       } else {
-        // Suggest green threshold around “normal talking” p90
         const suggestedT1 = clamp(Math.round(p90), 35, 95);
         const suggestedT2 = clamp(suggestedT1 + 10, 40, 105);
-        $("t1").value = String(suggestedT1);
-        $("t2").value = String(suggestedT2);
-        setCalMsg(`Talking measured ~${Math.round(p90)} dB (p90) → suggested thresholds: ${suggestedT1}/${suggestedT2} dB.`);
+        // Only apply to ABS thresholds (talk calibration is absolute)
+        // If currently in Relative mode, we still store these as ABS set (so switching off uses them)
+        const wasRel = isRelative();
+        if (wasRel){
+          // temporarily treat as absolute for storing
+          try{
+            localStorage.setItem(KEY.T1A, String(suggestedT1));
+            localStorage.setItem(KEY.T2A, String(suggestedT2));
+          } catch(e){}
+        } else {
+          $("t1").value = String(suggestedT1);
+          $("t2").value = String(suggestedT2);
+        }
+        setCalMsg(`Talking measured ~${Math.round(p90)} dB (p90) → suggested ABS thresholds: ${suggestedT1}/${suggestedT2} dB.`);
       }
 
       updateLabels();
@@ -1333,14 +1428,13 @@ async function clapTest(){
   clapTask = true;
 
   const tick = ()=>{
-    // Use display value (current mode) so it matches what teacher sees
     const offset = Number($("calOffset").value);
     const estDb = lastDbFS + offset;
-    const dv = getDisplayVal(estDb);
+    let dv = getDisplayVal(estDb) * getGain();
     peak = Math.max(peak, dv);
 
     if (nowMs() - startAt >= dur){
-      setCalMsg(peak > -200 ? `Clap test peak: ${Math.round(peak)}${$("relativeMode").checked ? "Δ" : " dB"} ✓` : "No signal detected. Check microphone permission.");
+      setCalMsg(peak > -200 ? `Clap test peak: ${Math.round(peak)}${isRelative() ? "Δ" : " dB"} ✓` : "No signal detected. Check microphone permission.");
       clapTask = null;
       return;
     }
@@ -1356,7 +1450,6 @@ function workshopStart(){
   wsLastTick = nowMs();
   wsRedMs = 0;
   wsLockedWin = false;
-  // Start listening if not already
   if (!running) start();
 }
 function workshopReset(){
@@ -1389,7 +1482,7 @@ function wire(){
   });
 
   // sliders / toggles
-  ["t1","t2","calOffset","triggerDelay","hysteresis","goalMins","redBudget"].forEach(id=>{
+  ["t1","t2","calOffset","triggerDelay","hysteresis","goalMins","redBudget","micGain"].forEach(id=>{
     $(id).addEventListener("input", ()=>{
       updateLabels();
       savePrefs();
@@ -1410,11 +1503,21 @@ function wire(){
 
   $("soundCue").addEventListener("change", ()=> savePrefs());
 
+  // IMPORTANT: Relative mode keeps its own thresholds AND remains adjustable in Settings
   $("relativeMode").addEventListener("change", ()=>{
-    setUnitText();
-    // reset peak stats because scale changed
+    // store current thresholds to the mode we're leaving
+    saveThresholdSet();
+
+    // switch range + load the other threshold set
+    updateThresholdSliderRange();
+    loadThresholdSet();
+
+    // reset peak/avg because scale changed
     samples = [];
     peakVal = null;
+
+    setUnitText();
+    updateLabels();
     savePrefs();
   });
 
@@ -1423,7 +1526,6 @@ function wire(){
   $("workshopOn").addEventListener("change", ()=>{
     updateLabels();
     savePrefs();
-    // When turning off, stop workshop timer but keep wins visible reset? We'll keep wins unless user resets.
     if (!$("workshopOn").checked){
       wsActive = false;
       wsStartAt = null;
@@ -1436,26 +1538,32 @@ function wire(){
   // reset all
   $("resetAllBtn").addEventListener("click", async ()=>{
     await stop();
+
     if (CAN_STORE){
       Object.values(KEY).forEach(k => localStorage.removeItem(k));
     }
 
     // defaults
-    $("t1").value = "60";
-    $("t2").value = "70";
-    $("calOffset").value = "90";
+    $("relativeMode").checked = false;
+
+    updateThresholdSliderRange();
+    loadThresholdSet(); // loads defaults for mode
+
+    $("calOffset").value = "85";
     $("autoCal").checked = true;
     $("smoothOn").checked = true;
     $("faceOn").checked = true;
     $("bigMode").checked = false;
     $("soundCue").checked = false;
-    $("relativeMode").checked = false;
-    $("triggerDelay").value = "10"; // 1.0s
-    $("hysteresis").value = "3";
+
+    $("triggerDelay").value = "15"; // 1.5s
+    $("hysteresis").value = "5";
     $("workshopOn").checked = false;
     $("goalMins").value = "5";
     $("redBudget").value = "20";
     $("rememberFS").checked = false;
+
+    $("micGain").value = "100";
 
     workshopReset();
     setBigMode(false);
@@ -1468,6 +1576,7 @@ function wire(){
     $("stateChip").textContent = "READY";
     $("statusPill").textContent = "Ready";
     setCalMsg("");
+    savePrefs();
   });
 
   // presets
@@ -1496,12 +1605,12 @@ function wire(){
     if (e.key.toLowerCase() === "f"){ e.preventDefault(); toggleFullscreen(); }
   });
 
-  // keep labels correct after bfcache restore
   window.addEventListener("pageshow", ()=>{
+    updateThresholdSliderRange();
     updateLabels();
     setBigMode($("bigMode").checked);
     setUnitText();
-    setUIFromState(0);
+    setUIFromState();
     setEmojiByLevel();
   });
 }
@@ -1509,6 +1618,10 @@ function wire(){
 /* ================= INIT ================= */
 async function init(){
   loadPrefs();
+
+  updateThresholdSliderRange();
+  loadThresholdSet();
+
   updateLabels();
   resetStats();
   $("noiseEmoji").textContent = "🙂";
@@ -1516,20 +1629,12 @@ async function init(){
   setBigMode($("bigMode").checked);
   setUnitText();
 
-  // restore full-screen preference (only if user asked to remember)
-  if ($("rememberFS").checked){
-    // Note: browsers may block auto fullscreen. We try only if previously in FS isn't known.
-    // So we just set the button label correctly; user can press F / Options.
-  }
-
-  // workshop UI
   workshopReset();
   if ($("workshopOn").checked){
-    // keep wins at 0 initially, but show dashboard
-    updateWorkshop(0);
+    updateWorkshop();
   }
 
-  setUIFromState(0);
+  setUIFromState();
   setEmojiByLevel();
   wire();
 }
