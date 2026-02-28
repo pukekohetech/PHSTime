@@ -2803,12 +2803,12 @@
     const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
     // SVG reveal controls (when an SVG has been imported as ink)
-    if (!typing && svgReveal.active && (e.key === "<" || e.key === ">")) {
+    if (!typing && svgReveal.active && (e.key === "." || e.key === ",")) {
       e.preventDefault();
       const total = svgReveal.partIndices.length;
       if (!total) return;
 
-      if (e.key === "ArrowRight") {
+      if (e.key === ".") {
         // Skip any missing indices (objects may have been deleted/undone)
         while (svgReveal.revealed < total) {
           const idx = svgReveal.partIndices[svgReveal.revealed];
@@ -2824,7 +2824,7 @@
         return;
       }
 
-      if (e.key === "ArrowLeft") {
+      if (e.key === ",") {
         // Skip any missing indices
         while (svgReveal.revealed > 0) {
           svgReveal.revealed -= 1;
