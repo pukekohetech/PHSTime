@@ -2201,36 +2201,33 @@
     document.body.appendChild(host);
     return host;
   }
+function importSvgInkFromText(svgText) {
+  const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
+  const parsedSvg = doc.querySelector("svg");
+  if (!parsedSvg) { showToast("SVG not valid"); return; }
 
-  function importSvgInkFromText(svgText) {
-    const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
-    const parsedSvg = doc.querySelector("svg");
-    if (!parsedSvg) { showToast("SVG not valid"); return; }
+  const host = ensureHiddenSvgHost();
+  host.innerHTML = "";
 
-    const host = ensureHiddenSvgHost();
-    host.innerHTML = "";
+  const svg = parsedSvg.cloneNode(true);
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+  host.appendChild(svg);
 
-    const svg = parsedSvg.cloneNode(true);
-    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-    host.appendChild(svg);
+  const rootBox = getSvgRootBox(svg);
 
-    const rootBox = getSvgRootBox(svg);
-
-    // --- If the SVG contains an <image>, treat it as the board background ---
+  // ---- Background image (DEFER applying until we know the same transform we apply to ink) ----
+  let pendingBg = null;
+  {
     const imgEl = svg.querySelector("image");
     if (imgEl) {
       const href = imgEl.getAttribute("href") || imgEl.getAttribute("xlink:href") || "";
       const wAttr = parseNumberAttr(imgEl.getAttribute("width"));
       const hAttr = parseNumberAttr(imgEl.getAttribute("height"));
-
       if (href) {
-        const natW = wAttr ?? rootBox.w ?? 0;
-        const natH = hAttr ?? rootBox.h ?? 0;
-
+        // NOTE: exporter writes x/y in the transform string; we preserve those
         const tf = (imgEl.getAttribute("transform") || "").trim();
         let x = 0, y = 0, rot = 0, scale = 1;
-
         try {
           const m = tf.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*rotate\(\s*([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*$/i);
           if (m) {
@@ -2241,199 +2238,241 @@
           }
         } catch {}
 
-        state.bg.src = String(href);
-        state.bg.natW = natW;
-        state.bg.natH = natH;
-        state.bg.x = x;
-        state.bg.y = y;
-        state.bg.scale = scale;
-        state.bg.rot = rot;
-
-        bgImg.src = state.bg.src;
-        applyBgTransform();
+        pendingBg = {
+          src: String(href),
+          natW: (wAttr ?? rootBox.w ?? 0),
+          natH: (hAttr ?? rootBox.h ?? 0),
+          x, y, rot, scale
+        };
       }
     }
-
-    const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
-    if (!els.length) { showToast("No SVG paths"); return; }
-
-    const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
-
-    const parts = [];
-    const boundsPts = [];
-
-    function pushPart(obj, ptsForBounds) {
-      parts.push(obj);
-      if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
-    }
-
-    function strokeOf(el) {
-      const stroke = el.getAttribute("stroke");
-      if (stroke && stroke !== "none") return stroke;
-      return "#111111";
-    }
-
-    function strokeWidthOf(el) {
-      const sw = parseNumberAttr(el.getAttribute("stroke-width"));
-      return Math.max(1, sw ?? 3);
-    }
-
-    function mapCTM(el, x, y) {
-      if (rootPt && el.getCTM) {
-        const m = el.getCTM();
-        rootPt.x = x; rootPt.y = y;
-        const p = rootPt.matrixTransform(m);
-        return { x: p.x, y: p.y };
-      }
-      return { x, y };
-    }
-
-    for (const el of els) {
-      // Skip the bg <image> from being imported as ink (it isn't in els anyway)
-      const stroke = strokeOf(el);
-      const size = strokeWidthOf(el);
-      const tag = el.tagName.toLowerCase();
-
-      if (tag === "line") {
-        const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
-        const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
-        const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
-        const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
-        const p1 = mapCTM(el, x1, y1);
-        const p2 = mapCTM(el, x2, y2);
-        pushPart({ kind:"line", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-        continue;
-      }
-
-      if (tag === "rect") {
-        const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
-        const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
-        const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
-        const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
-        const p1 = mapCTM(el, x, y);
-        const p2 = mapCTM(el, x + w, y + h);
-        pushPart({ kind:"rect", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-        continue;
-      }
-
-      if (tag === "circle") {
-        const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
-        const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
-        const r  = parseNumberAttr(el.getAttribute("r")) ?? 0;
-        const p1 = mapCTM(el, cx - r, cy - r);
-        const p2 = mapCTM(el, cx + r, cy + r);
-        pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-        continue;
-      }
-
-      if (tag === "ellipse") {
-        const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
-        const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
-        const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
-        const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
-        const p1 = mapCTM(el, cx - rx, cy - ry);
-        const p2 = mapCTM(el, cx + rx, cy + ry);
-        pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-        continue;
-      }
-
-      if (tag === "polyline" || tag === "polygon") {
-        const ptsAttr = (el.getAttribute("points") || "").trim();
-        if (!ptsAttr) continue;
-        const nums = ptsAttr.split(/[\s,]+/).map(Number).filter(n=>isFinite(n));
-        if (nums.length < 4) continue;
-        const pts = [];
-        for (let i=0;i<nums.length-1;i+=2){
-          pts.push(mapCTM(el, nums[i], nums[i+1]));
-        }
-        if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
-        pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-        continue;
-      }
-
-      if (tag === "path") {
-        if (!el.getTotalLength) continue;
-        let total = 0;
-        try { total = el.getTotalLength(); } catch { total = 0; }
-        if (!isFinite(total) || total <= 0) continue;
-
-        const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
-        const pts = [];
-        for (let i=0;i<=steps;i++){
-          const t = (i/steps) * total;
-          let p;
-          try { p = el.getPointAtLength(t); } catch { p = null; }
-          if (!p) continue;
-          pts.push(mapCTM(el, p.x, p.y));
-        }
-        if (pts.length < 2) continue;
-        pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-        continue;
-      }
-    }
-
-    if (!parts.length) { showToast("No supported SVG shapes"); return; }
-
-    // Bounds
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const use = boundsPts.length ? boundsPts : [
-      { x: rootBox.x, y: rootBox.y },
-      { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
-    ];
-    for (const p of use) {
-      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-    }
-
-    const bw = Math.max(1, maxX - minX);
-    const bh = Math.max(1, maxY - minY);
-
-    const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
-    const availW = (state.viewW / state.zoom) * 0.9;
-    const availH = (state.viewH / state.zoom) * 0.9;
-    const s = clamp(Math.min(availW / bw, availH / bh), 0.02, 50);
-
-    const cx0 = minX + bw/2;
-    const cy0 = minY + bh/2;
-
-    const groupId = "svg_" + Date.now();
-
-    pushUndo(); clearRedo();
-    hardResetGesture();
-
-    const startIndex = state.objects.length;
-
-    for (const o of parts) {
-      const obj = JSON.parse(JSON.stringify(o));
-      obj.svgGroupId = groupId;
-      obj.hidden = true;
-
-      if (obj.kind === "stroke" || obj.kind === "erase") {
-        obj.points = (obj.points || []).map(p => ({
-          x: viewCenter.x + (p.x - cx0) * s,
-          y: viewCenter.y + (p.y - cy0) * s
-        }));
-      } else {
-        obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
-        obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
-        obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
-        obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
-      }
-
-      state.objects.push(obj);
-    }
-
-    svgReveal.active = true;
-    svgReveal.groupId = groupId;
-    svgReveal.partIndices = [];
-    svgReveal.revealed = 0;
-    for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
-
-    state.selectionIndex = -1;
-    setActiveTool("select");
-    redrawAll();
-    showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
   }
+
+  const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
+  if (!els.length && !pendingBg) { showToast("No SVG paths"); return; }
+
+  const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
+
+  const parts = [];
+  const boundsPts = [];
+
+  function pushPart(obj, ptsForBounds) {
+    parts.push(obj);
+    if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
+  }
+
+  const isNone = (v) => {
+    const s = String(v || "").trim().toLowerCase();
+    return !s || s === "none" || s === "transparent";
+  };
+
+  function strokeOf(el) {
+    const stroke = el.getAttribute("stroke");
+    if (!isNone(stroke)) return stroke;
+    return "#111111";
+  }
+
+  function strokeWidthOf(el) {
+    const sw = parseNumberAttr(el.getAttribute("stroke-width"));
+    return Math.max(1, sw ?? 3);
+  }
+
+  function mapCTM(el, x, y) {
+    if (rootPt && el.getCTM) {
+      const m = el.getCTM();
+      rootPt.x = x; rootPt.y = y;
+      const p = rootPt.matrixTransform(m);
+      return { x: p.x, y: p.y };
+    }
+    return { x, y };
+  }
+
+  // ---- Build ink parts; SKIP fill-only exporter background shapes (the "random box") ----
+  for (const el of els) {
+    const tag = el.tagName.toLowerCase();
+
+    // Exporter background is: <rect ... fill="white" stroke="none"> (or no stroke)
+    // We never want to import that as ink.
+    const strokeAttr = el.getAttribute("stroke");
+    const fillAttr = el.getAttribute("fill");
+    const strokeIsNone = isNone(strokeAttr);
+    const fillIsWhiteish = (() => {
+      const f = String(fillAttr || "").trim().toLowerCase();
+      return f === "white" || f === "#fff" || f === "#ffffff" || f === "rgb(255,255,255)";
+    })();
+
+    // If it's a big rect with no stroke and white fill, ignore it (this removes the random box)
+    if (tag === "rect" && strokeIsNone && (fillIsWhiteish || !fillAttr)) {
+      continue;
+    }
+
+    // If there is truly no stroke on a shape, skip it (we only import strokes as ink)
+    if ((tag === "rect" || tag === "circle" || tag === "ellipse" || tag === "path" || tag === "line" || tag === "polyline" || tag === "polygon")
+        && strokeIsNone) {
+      // allow line/path/etc that explicitly rely on stroke; if stroke is none, it's not ink.
+      continue;
+    }
+
+    const stroke = strokeOf(el);
+    const size = strokeWidthOf(el);
+
+    if (tag === "line") {
+      const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
+      const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
+      const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
+      const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
+      const p1 = mapCTM(el, x1, y1);
+      const p2 = mapCTM(el, x2, y2);
+      pushPart({ kind:"line", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "rect") {
+      const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
+      const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
+      const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
+      const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
+      const p1 = mapCTM(el, x, y);
+      const p2 = mapCTM(el, x + w, y + h);
+      pushPart({ kind:"rect", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "circle") {
+      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+      const r  = parseNumberAttr(el.getAttribute("r")) ?? 0;
+      const p1 = mapCTM(el, cx - r, cy - r);
+      const p2 = mapCTM(el, cx + r, cy + r);
+      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "ellipse") {
+      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+      const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
+      const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
+      const p1 = mapCTM(el, cx - rx, cy - ry);
+      const p2 = mapCTM(el, cx + rx, cy + ry);
+      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+      continue;
+    }
+
+    if (tag === "polyline" || tag === "polygon") {
+      const ptsAttr = (el.getAttribute("points") || "").trim();
+      if (!ptsAttr) continue;
+      const nums = ptsAttr.split(/[\s,]+/).map(Number).filter(n=>isFinite(n));
+      if (nums.length < 4) continue;
+      const pts = [];
+      for (let i=0;i<nums.length-1;i+=2){
+        pts.push(mapCTM(el, nums[i], nums[i+1]));
+      }
+      if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
+      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+      continue;
+    }
+
+    if (tag === "path") {
+      if (!el.getTotalLength) continue;
+      let total = 0;
+      try { total = el.getTotalLength(); } catch { total = 0; }
+      if (!isFinite(total) || total <= 0) continue;
+
+      const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
+      const pts = [];
+      for (let i=0;i<=steps;i++){
+        const t = (i/steps) * total;
+        let p;
+        try { p = el.getPointAtLength(t); } catch { p = null; }
+        if (!p) continue;
+        pts.push(mapCTM(el, p.x, p.y));
+      }
+      if (pts.length < 2) continue;
+      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+      continue;
+    }
+  }
+
+  if (!parts.length && !pendingBg) { showToast("No supported SVG shapes"); return; }
+
+  // ---- Bounds (for recenter/scale) ----
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const use = boundsPts.length ? boundsPts : [
+    { x: rootBox.x, y: rootBox.y },
+    { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
+  ];
+  for (const p of use) {
+    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+  }
+
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+
+  const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+  const availW = (state.viewW / state.zoom) * 0.9;
+  const availH = (state.viewH / state.zoom) * 0.9;
+  const s = clamp(Math.min(availW / bw, availH / bh), 0.02, 50);
+
+  const cx0 = minX + bw/2;
+  const cy0 = minY + bh/2;
+
+  const groupId = "svg_" + Date.now();
+
+  pushUndo(); clearRedo();
+  hardResetGesture();
+
+  // ---- Apply SAME recenter/scale to background image (so bg + ink align) ----
+  if (pendingBg) {
+    state.bg.src = pendingBg.src;
+    state.bg.natW = pendingBg.natW;
+    state.bg.natH = pendingBg.natH;
+
+    state.bg.rot = pendingBg.rot;
+    state.bg.scale = pendingBg.scale * s;
+
+    // map the image's top-left (world coords) through the same transform
+    state.bg.x = viewCenter.x + (pendingBg.x - cx0) * s;
+    state.bg.y = viewCenter.y + (pendingBg.y - cy0) * s;
+
+    bgImg.src = state.bg.src;
+    applyBgTransform();
+  }
+
+  const startIndex = state.objects.length;
+
+  for (const o of parts) {
+    const obj = JSON.parse(JSON.stringify(o));
+    obj.svgGroupId = groupId;
+    obj.hidden = true;
+
+    if (obj.kind === "stroke" || obj.kind === "erase") {
+      obj.points = (obj.points || []).map(p => ({
+        x: viewCenter.x + (p.x - cx0) * s,
+        y: viewCenter.y + (p.y - cy0) * s
+      }));
+    } else {
+      obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
+      obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
+      obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
+      obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
+    }
+
+    state.objects.push(obj);
+  }
+
+  svgReveal.active = true;
+  svgReveal.groupId = groupId;
+  svgReveal.partIndices = [];
+  svgReveal.revealed = 0;
+  for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
+
+  state.selectionIndex = -1;
+  setActiveTool("select");
+  redrawAll();
+  showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
+}
 
   function clearImportedSvgInk() {
     if (!svgReveal.active || !svgReveal.groupId) { showToast("No SVG ink"); return; }
