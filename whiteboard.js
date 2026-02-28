@@ -2807,18 +2807,7 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   });
 
   // ---------- Keyboard ----------
-// Toggle snapping features with Ctrl or Cmd
-if (e.key === "Control" || e.key === "Meta") {
-  snapFeaturesEnabled = !snapFeaturesEnabled;
 
-  showToast(
-    snapFeaturesEnabled
-      ? "Snapping: ON"
-      : "Snapping: OFF"
-  );
-
-  return;
-}
    
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -2827,7 +2816,12 @@ if (e.key === "Control" || e.key === "Meta") {
       arcDraft.hasCenter = false;
       hideMeasureTip();
     }
-
+// Toggle snapping (press Ctrl/Cmd)
+if (e.key === "Control" || e.key === "Meta") {
+  snapFeaturesEnabled = !snapFeaturesEnabled;
+  showToast(snapFeaturesEnabled ? "Snapping: ON" : "Snapping: OFF");
+  return;
+}
     if (e.code === "Space") {
       spacePanning = true;
       e.preventDefault();
