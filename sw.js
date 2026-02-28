@@ -11,6 +11,7 @@ const ASSETS = [
   "./brainbreak.html",
   "./brainbreak.js",
   "./timer.html",
+   "./timer.js",
   "./whiteboard.html",
   "./whiteboard.css",
   "./whiteboard.js",
