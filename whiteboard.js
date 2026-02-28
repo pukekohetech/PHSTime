@@ -104,6 +104,9 @@
   const deleteAllBoardsBtn = document.getElementById("deleteAllBoardsBtn");
 
   // ---------- State ----------
+
+let snapFeaturesEnabled = true; // default ON
+   
   const state = {
     tool: "pen",
     color: "#111111",
@@ -1704,11 +1707,11 @@
 
     // Arc tool (two-stage): click to set center, then click+drag to draw
     if (state.tool === "arc") {
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+       
 
       if (!arcDraft.hasCenter) {
         let c = w;
-        if (ctrlHeld) {
+        if (snapFeaturesEnabled) {
           const hit = snapPointWithCtrl(c);
           c = hit || snapToMmGridWorld(c);
         } else {
@@ -1736,7 +1739,7 @@
       state.selectionIndex = -1;
 
       let p1 = w;
-      if (ctrlHeld) {
+      if (snapFeaturesEnabled) {
         const hit = snapPointWithCtrl(p1);
         p1 = hit || snapToMmGridWorld(p1);
       } else {
@@ -1790,10 +1793,10 @@
     if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
       let p0 = w;
       const isSnapShape = state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle";
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+       
 
       if (isSnapShape) {
-        if (ctrlHeld) {
+        if (snapFeaturesEnabled) {
           const hit = snapPointWithCtrl(p0);
           p0 = hit || snapToMmGridWorld(p0);
         } else {
@@ -2014,7 +2017,7 @@
 
  // Drawing: Arc (CW/CCW + full circle snap + length indicator)
 if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
-  const ctrlHeld = e.ctrlKey || e.metaKey;
+   
 
   const cx = gesture.arcCenter.cx;
   const cy = gesture.arcCenter.cy;
@@ -2022,7 +2025,7 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   let p = w;
   let snappedHit = null;
 
-  if (ctrlHeld) {
+  if (snapFeaturesEnabled) {
     snappedHit = snapPointWithCtrl(p);
     if (snappedHit) {
       p = snappedHit;
@@ -2104,7 +2107,7 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
       let y2 = w.y;
 
       const k = gesture.activeObj.kind;
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+       
 
       const startPt = { x: gesture.activeObj.x1, y: gesture.activeObj.y1 };
       const rawPt = { x: x2, y: y2 };
@@ -2804,6 +2807,19 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   });
 
   // ---------- Keyboard ----------
+// Toggle snapping features with Ctrl or Cmd
+if (e.key === "Control" || e.key === "Meta") {
+  snapFeaturesEnabled = !snapFeaturesEnabled;
+
+  showToast(
+    snapFeaturesEnabled
+      ? "Snapping: ON"
+      : "Snapping: OFF"
+  );
+
+  return;
+}
+   
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       openSettings(false);
