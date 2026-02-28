@@ -481,6 +481,16 @@
     const d2 = Math.hypot(pt.x - hit2.x, pt.y - hit2.y);
     return d2 < d1 ? hit2 : hit1;
   }
+  // Ctrl/Cmd snapping: prefer endpoint/intersection; otherwise constrain to common angles then snap to whole-mm grid.
+  function snapPointWithCtrlOrAngle(start, rawPt) {
+    const hit = snapPointWithCtrl(rawPt);
+    if (hit) return hit;
+
+    // Angle snap around start point, then snap to mm grid
+    const s = snapEndpointToAngles(start.x, start.y, rawPt.x, rawPt.y);
+    return snapToMmGridWorld({ x: s.x2, y: s.y2 });
+  }
+
 
   function updateSwatch() {
     swatchLive.style.background = state.color;
@@ -1845,7 +1855,11 @@
       let snappedHit = null;
       if (ctrlHeld) {
         snappedHit = snapPointWithCtrl(p);
-        p = snappedHit || snapToMmGridWorld(p);
+        if (snappedHit) {
+          p = snappedHit;
+        } else {
+          p = snapPointWithCtrlOrAngle({ x: cx, y: cy }, p);
+        }
       } else {
         p = snapToMmGridWorld(p);
       }
@@ -1907,43 +1921,18 @@
       const k = gesture.activeObj.kind;
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      if (k === "line" || k === "arrow") {
-        if (ctrlHeld) {
-          const hit = snapPointWithCtrl({ x: x2, y: y2 });
-          const mm = snapToMmGridWorld({ x: x2, y: y2 });
-          x2 = (hit ? hit.x : mm.x);
-          y2 = (hit ? hit.y : mm.y);
-        } else {
-          const mm = snapToMmGridWorld({ x: x2, y: y2 });
-          x2 = mm.x; y2 = mm.y;
-        }
-      } else if (k === "rect") {
-        if (ctrlHeld) {
-          const hit = snapPointWithCtrl({ x: x2, y: y2 });
-          if (hit) {
-            x2 = hit.x; y2 = hit.y;
-          } else {
-            const mm = snapToMmGridWorld({ x: x2, y: y2 });
-            x2 = mm.x; y2 = mm.y;
-          }
-        } else {
-          const mm = snapToMmGridWorld({ x: x2, y: y2 });
-          x2 = mm.x; y2 = mm.y;
-        }
-      } else if (k === "circle") {
-        if (ctrlHeld) {
-          const hit = snapPointWithCtrl({ x: x2, y: y2 });
-          if (hit) {
-            x2 = hit.x; y2 = hit.y;
-          } else {
-            const mm = snapToMmGridWorld({ x: x2, y: y2 });
-            x2 = mm.x; y2 = mm.y;
-          }
-        } else {
-          const mm = snapToMmGridWorld({ x: x2, y: y2 });
-          x2 = mm.x; y2 = mm.y;
-        }
+      // Whole-mm snapping is always on. Ctrl/Cmd additionally enables:
+      //   1) snap to nearby endpoints/intersections (highest priority)
+      //   2) if none nearby, constrain direction to common angles (0/30/45/60/90/...)
+      const startPt = { x: gesture.activeObj.x1, y: gesture.activeObj.y1 };
+      const rawPt = { x: x2, y: y2 };
 
+      if (k === "line" || k === "arrow" || k === "rect" || k === "circle") {
+        const p2 = ctrlHeld ? snapPointWithCtrlOrAngle(startPt, rawPt) : snapToMmGridWorld(rawPt);
+        x2 = p2.x; y2 = p2.y;
+      }
+
+      if (k === "circle") {
         // Shift = perfect circle (uniform)
         if (e.shiftKey) {
           const dx = x2 - gesture.activeObj.x1;
@@ -1953,7 +1942,12 @@
           const d = Math.max(Math.abs(dx), Math.abs(dy));
           x2 = gesture.activeObj.x1 + sgnX * d;
           y2 = gesture.activeObj.y1 + sgnY * d;
+
+          // Re-snap to whole mm after uniform constraint
+          const mm2 = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = mm2.x; y2 = mm2.y;
         }
+      }
       }
 
       gesture.activeObj.x2 = x2;
