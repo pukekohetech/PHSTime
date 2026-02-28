@@ -2490,141 +2490,142 @@
     }
   });
 
-  // ---------- Keyboard ----------
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      openSettings(false);
-      toggleColorPop(false);
-      arcDraft.hasCenter = false;
-      hideMeasureTip();
+ // ---------- Keyboard ----------
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    openSettings(false);
+    toggleColorPop(false);
+    arcDraft.hasCenter = false;
+    hideMeasureTip();
+  }
+
+  if (e.code === "Space") {
+    spacePanning = true;
+    e.preventDefault();
+    if (gesture.active && gesture.mode === "pan") inkCanvas.style.cursor = "grabbing";
+  }
+
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+  // SVG reveal controls (when an SVG has been imported as ink)
+  if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+    e.preventDefault();
+    const total = svgReveal.partIndices.length;
+    if (!total) return;
+
+    if (e.key === "ArrowRight") {
+      if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
+      const idx = svgReveal.partIndices[svgReveal.revealed];
+      const obj = state.objects[idx];
+      if (obj) obj.hidden = false;
+      svgReveal.revealed += 1;
+      redrawAll();
+      showToast(`SVG: ${svgReveal.revealed}/${total}`);
+      return;
     }
 
-    if (e.code === "Space") {
-      spacePanning = true;
-      e.preventDefault();
-      if (gesture.active && gesture.mode === "pan") inkCanvas.style.cursor = "grabbing";
+    if (e.key === "ArrowLeft") {
+      if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
+      svgReveal.revealed -= 1;
+      const idx = svgReveal.partIndices[svgReveal.revealed];
+      const obj = state.objects[idx];
+      if (obj) obj.hidden = true;
+      redrawAll();
+      showToast(`SVG: ${svgReveal.revealed}/${total}`);
+      return;
     }
+  }
 
-    const tag = (document.activeElement && document.activeElement.tagName) || "";
-    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-
-    // SVG reveal controls (when an SVG has been imported as ink)
-    if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-      e.preventDefault();
-      const total = svgReveal.partIndices.length;
-      if (!total) return;
-
-      if (e.key === "ArrowRight") {
-        if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
-        const idx = svgReveal.partIndices[svgReveal.revealed];
-        const obj = state.objects[idx];
-        if (obj) obj.hidden = false;
-        svgReveal.revealed += 1;
-        redrawAll();
-        showToast(`SVG: ${svgReveal.revealed}/${total}`);
-        return;
-      }
-
-      if (e.key === "ArrowLeft") {
-        if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
-        svgReveal.revealed -= 1;
-        const idx = svgReveal.partIndices[svgReveal.revealed];
-        const obj = state.objects[idx];
-        if (obj) obj.hidden = true;
-        redrawAll();
-        showToast(`SVG: ${svgReveal.revealed}/${total}`);
-        return;
-      }
+  // Delete removes selection (when not typing)
+  if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
+    if (state.selectionIndex >= 0) {
+      pushUndo(); clearRedo();
+      state.objects.splice(state.selectionIndex, 1);
+      state.selectionIndex = -1;
+      redrawAll();
+      showToast("Deleted");
     }
+  }
 
-    // Delete removes selection (when not typing)
-    if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
-      if (state.selectionIndex >= 0) {
-        pushUndo(); clearRedo();
-        state.objects.splice(state.selectionIndex, 1);
-        state.selectionIndex = -1;
-        redrawAll();
-        showToast("Deleted");
-      }
-    }
+  // Tool hotkeys
+  if (!typing) {
+    const k = e.key.toLowerCase();
+    if (k === "v") setActiveTool("select");
+    if (k === "p") setActiveTool("pen");
+    if (k === "l") setActiveTool("line");
+    if (k === "r") setActiveTool("rect");
+    if (k === "c") setActiveTool("circle");
+    if (k === "g") setActiveTool("arc");
+    if (k === "a") setActiveTool("arrow");
+    if (k === "t") setActiveTool("text");
+    if (k === "e") setActiveTool("eraser");
+  }
 
-    // Tool hotkeys
-    if (!typing) {
-      const k = e.key.toLowerCase();
-      if (k === "v") setActiveTool("select");
-      if (k === "p") setActiveTool("pen");
-      if (k === "l") setActiveTool("line");
-      if (k === "r") setActiveTool("rect");
-      if (k === "c") setActiveTool("circle");
-      if (k === "g") setActiveTool("arc");
-      if (k === "a") setActiveTool("arrow");
-      if (k === "t") setActiveTool("text");
-      if (k === "e") setActiveTool("eraser");
-    }
+  // Undo/redo shortcuts
+  const isMac = navigator.platform.toUpperCase().includes("MAC");
+  const mod = isMac ? e.metaKey : e.ctrlKey;
 
-    // Undo/redo shortcuts
-    const isMac = navigator.platform.toUpperCase().includes("MAC");
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if (!mod) return;
-
+  if (mod) {
     const key = e.key.toLowerCase();
     if (key === "z" && !e.shiftKey) {
       e.preventDefault();
       hardResetGesture();
       undo();
+      return;
     } else if (key === "y" || (key === "z" && e.shiftKey)) {
       e.preventDefault();
       hardResetGesture();
       redo();
+      return;
     }
-  });
+  }
 
-      // ----- Ctrl/Cmd + NUMBER = set stroke size -----
-    if (!typing && (e.ctrlKey || e.metaKey)) {
-      // Top row digits + numpad digits
-      const digit = (/^[0-9]$/).test(e.key) ? Number(e.key) : null;
+  // ----- Ctrl/Cmd + NUMBER / +/- / ARROWS helpers -----
+  if (!typing && (e.ctrlKey || e.metaKey)) {
+    // Top row digits + numpad digits
+    const digit = (/^[0-9]$/).test(e.key) ? Number(e.key) : null;
 
-      if (digit !== null) {
-        e.preventDefault();
-        // map 0 => 10 (common expectation), 1..9 => 1..9
-        const size = (digit === 0) ? 10 : digit;
-        setBrushSizeFromHotkey(size);
-        return;
-      }
-
-      // Ctrl/Cmd + = / - : quick size up/down
-      if (e.key === "=" || e.key === "+") {
-        e.preventDefault();
-        setBrushSizeFromHotkey(state.size + (e.shiftKey ? 5 : 1));
-        return;
-      }
-      if (e.key === "-" || e.key === "_") {
-        e.preventDefault();
-        setBrushSizeFromHotkey(state.size - (e.shiftKey ? 5 : 1));
-        return;
-      }
-
-      // ----- Ctrl/Cmd + ARROWS = pan camera -----
-      if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        e.preventDefault();
-
-        const step = (e.shiftKey ? 160 : 60); // px per tap (Shift = faster)
-        if (e.key === "ArrowUp")    nudgePan(0, step);
-        if (e.key === "ArrowDown")  nudgePan(0, -step);
-        if (e.key === "ArrowLeft")  nudgePan(step, 0);
-        if (e.key === "ArrowRight") nudgePan(-step, 0);
-        return;
-      }
+    if (digit !== null) {
+      e.preventDefault();
+      // map 0 => 10, 1..9 => 1..9
+      const size = (digit === 0) ? 10 : digit;
+      setBrushSizeFromHotkey(size);
+      return;
     }
-    const tag = (document.activeElement && document.activeElement.tagName) || "";
-    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-  
-  document.addEventListener("keyup", (e) => {
-    if (e.code === "Space") {
-      spacePanning = false;
-      updateCursorFromTool();
+
+    // Ctrl/Cmd + = / - : quick size up/down
+    if (e.key === "=" || e.key === "+") {
+      e.preventDefault();
+      setBrushSizeFromHotkey(state.size + (e.shiftKey ? 5 : 1));
+      return;
     }
-  });
+    if (e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      setBrushSizeFromHotkey(state.size - (e.shiftKey ? 5 : 1));
+      return;
+    }
+
+    // Ctrl/Cmd + ARROWS = pan camera
+    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const step = (e.shiftKey ? 160 : 60); // px per tap (Shift = faster)
+      if (e.key === "ArrowUp")    nudgePan(0, step);
+      if (e.key === "ArrowDown")  nudgePan(0, -step);
+      if (e.key === "ArrowLeft")  nudgePan(step, 0);
+      if (e.key === "ArrowRight") nudgePan(-step, 0);
+      return;
+    }
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  if (e.code === "Space") {
+    spacePanning = false;
+    updateCursorFromTool();
+  }
+});
+
 
   // ---------- Boards ----------
   // ---------- Boards ----------
