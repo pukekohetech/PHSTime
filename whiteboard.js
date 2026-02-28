@@ -1704,7 +1704,7 @@
 
     // Arc tool (two-stage): click to set center, then click+drag to draw
     if (state.tool === "arc") {
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+      const ctrlHeld = e.getModifierState("CapsLock");
 
       if (!arcDraft.hasCenter) {
         let c = w;
@@ -1790,7 +1790,7 @@
     if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
       let p0 = w;
       const isSnapShape = state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle";
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+      const ctrlHeld = e.getModifierState("CapsLock");
 
       if (isSnapShape) {
         if (ctrlHeld) {
@@ -2014,7 +2014,7 @@
 
     // Drawing: Arc (CW/CCW + full circle snap + length indicator)
     if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+      const ctrlHeld = e.getModifierState("CapsLock");
 
       const cx = gesture.arcCenter.cx;
       const cy = gesture.arcCenter.cy;
@@ -2085,7 +2085,7 @@
       let y2 = w.y;
 
       const k = gesture.activeObj.kind;
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+      const ctrlHeld = e.getModifierState("CapsLock");
 
       const startPt = { x: gesture.activeObj.x1, y: gesture.activeObj.y1 };
       const rawPt = { x: x2, y: y2 };
@@ -2887,7 +2887,7 @@
     }
 
     // ----- Ctrl/Cmd + NUMBER / +/- / ARROWS helpers -----
-    if (!typing && (e.ctrlKey || e.metaKey)) {
+    if (!typing && (e.getModifierState("CapsLock"))) {
       // Top row digits + numpad digits
       const digit = /^[0-9]$/.test(e.key) ? Number(e.key) : null;
 
