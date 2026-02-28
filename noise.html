@@ -681,7 +681,7 @@ function rmsToDbFS(rms){
 
   // Clamp to a realistic mic floor/ceiling for classroom use
   // (prevents insane negatives like -120)
-  db = clamp(db, 20, 100);
+  db = clamp(db, -60, -80);
 
   return db;
 }
