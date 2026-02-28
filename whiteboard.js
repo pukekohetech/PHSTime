@@ -1,4 +1,4 @@
-/* =========================================================
+ /* =========================================================
    whiteboard.js — background as DOM image (no zoom artefacts)
 
    ADDITIONS (requested):
@@ -24,7 +24,7 @@
      ✅ New board matches initial zoomed-out view
    ========================================================= */
 
-(() => {
+ (() => {
   // ---------- DOM ----------
   const stage = document.getElementById("stage");
 
@@ -1948,7 +1948,7 @@
           x2 = mm2.x; y2 = mm2.y;
         }
       }
-      }
+      
 
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
@@ -1986,7 +1986,7 @@
       redrawAll();
       return;
     }
-  }
+  
 
   function onPointerUp() {
     if (!gesture.active) return;
@@ -2572,152 +2572,71 @@
   });
 
   // ---------- Boards ----------
-  const LS_KEY = "PHS_WHITEBOARD_BOARDS_v8";
+  // ---------- Boards ----------
+const LS_KEY = "PHS_WHITEBOARD_BOARDS_v8";
 
-  function loadBoardsIndex() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
-    catch { return {}; }
+function loadBoardsIndex() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveBoardsIndex(index) {
+  localStorage.setItem(LS_KEY, JSON.stringify(index));
+}
+function refreshBoardSelect() {
+  const index = loadBoardsIndex();
+  const names = Object.keys(index).sort((a,b) => a.localeCompare(b));
+  boardSelect.innerHTML = "";
+  const opt0 = document.createElement("option");
+  opt0.value = ""; opt0.textContent = "— select —";
+  boardSelect.appendChild(opt0);
+  for (const name of names) {
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = name;
+    boardSelect.appendChild(opt);
   }
-  function saveBoardsIndex(index) {
-    localStorage.setItem(LS_KEY, JSON.stringify(index));
-  }
-  function refreshBoardSelect() {
-    const index = loadBoardsIndex();
-    const names = Object.keys(index).sort((a,b) => a.localeCompare(b));
-    boardSelect.innerHTML = "";
-    const opt0 = document.createElement("option");
-    opt0.value = ""; opt0.textContent = "— select —";
-    boardSelect.appendChild(opt0);
-    for (const name of names) {
-      const opt = document.createElement("option");
-      opt.value = name; opt.textContent = name;
-      boardSelect.appendChild(opt);
-    }
-  }
+}
 
-  function snapshotBoard() {
-    return { v: 8, savedAt: new Date().toISOString(), ...snapshot() };
-  }
+function snapshotBoard() {
+  return { v: 8, savedAt: new Date().toISOString(), ...snapshot() };
+}
 
-  async function applyBoard(data) {
-    hardResetGesture();
-    state.undo = [];
-    state.redo = [];
+async function applyBoard(data) {
+  hardResetGesture();
+  state.undo = [];
+  state.redo = [];
+  applySnapshot(data);
 
-    applySnapshot(data);
+  if (state.bg && state.bg.src) bgImg.src = state.bg.src;
+  else bgImg.removeAttribute("src");
 
-    if (state.bg && state.bg.src) {
-      bgImg.src = state.bg.src;
-    } else {
-      bgImg.removeAttribute("src");
-    }
+  applyBgTransform();
+  redrawAll();
+}
 
-    applyBgTransform();
-    redrawAll();
-  }
-
-  newBoardBtn.addEventListener("click", () => {
-    pushUndo(); clearRedo();
-    hardResetGesture();
-    state.objects = [];
-    state.selectionIndex = -1;
-    state.title = "";
-    titleInput.value = "";
-
-    // ✅ match initial zoomed-out view
-    state.zoom = 0.25;
-    state.panX = (state.viewW / 2);
-    state.panY = (state.viewH / 2);
-
-    state.bg = { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
-    bgImg.removeAttribute("src");
-    setActiveTool("pen");
-    applyBgTransform();
-    redrawAll();
-    showToast("New board");
-  });
-
-  saveBoardBtn.addEventListener("click", () => {
-    const name = prompt("Save board as name:", boardSelect.value || "");
-    if (!name) return;
-    const index = loadBoardsIndex();
-    index[name] = snapshotBoard();
-    saveBoardsIndex(index);
-    refreshBoardSelect();
-
-  // ---------- Scale calibration ----------
-  function getLineForCalibration() {
-    const sel = (state.selectionIndex >= 0) ? state.objects[state.selectionIndex] : null;
-    if (sel && (sel.kind === "line" || sel.kind === "arrow")) return sel;
-    for (let i = state.objects.length - 1; i >= 0; i--) {
-      const o = state.objects[i];
-      if (o && (o.kind === "line" || o.kind === "arrow")) return o;
-    }
-    return null;
-  }
-
-  setScaleBtn?.addEventListener("click", () => {
-    const o = getLineForCalibration();
-    if (!o) { showToast("Draw/select a line first"); return; }
-    const lenPx = Math.hypot((o.x2 - o.x1), (o.y2 - o.y1));
-    if (!isFinite(lenPx) || lenPx < 1) { showToast("Line too short"); return; }
-    const mmStr = prompt("Enter the real length of that line (mm):", "100");
-    if (mmStr == null) return;
-    const mm = parseFloat(String(mmStr).replace(/[^0-9.+-]/g, ""));
-    if (!isFinite(mm) || mm <= 0) { showToast("Invalid mm"); return; }
-    pushUndo(); clearRedo();
-    state.pxPerMm = lenPx / mm;
-    updateScaleOut();
-    redrawAll();
-    showToast("Scale set");
-  });
-
-  resetScaleBtn?.addEventListener("click", () => {
-    pushUndo(); clearRedo();
-    state.pxPerMm = (96 / 25.4);
-    updateScaleOut();
-    redrawAll();
-    showToast("Scale reset");
-  });
-
-  // ---------- Delete saved boards ----------
-  deleteBoardBtn?.addEventListener("click", () => {
-    const name = boardSelect.value;
-    if (!name) { showToast("Select a board"); return; }
-    if (!confirm(`Delete saved board “${name}”?`)) return;
-    const index = loadBoardsIndex();
-    if (!index[name]) { showToast("Not found"); return; }
-    delete index[name];
-    saveBoardsIndex(index);
-    refreshBoardSelect();
-    boardSelect.value = "";
-    showToast("Board deleted");
-  });
-
-  deleteAllBoardsBtn?.addEventListener("click", () => {
-    const index = loadBoardsIndex();
-    const names = Object.keys(index);
-    if (!names.length) { showToast("No saved boards"); return; }
-    if (!confirm(`Delete ALL saved boards (${names.length})?`)) return;
-    localStorage.removeItem(LS_KEY);
-    refreshBoardSelect();
-    boardSelect.value = "";
-    showToast("All boards deleted");
-  });
-    boardSelect.value = name;
-    showToast("Board saved");
-  });
-
-  loadBoardBtn.addEventListener("click", async () => {
-    const name = boardSelect.value;
-    if (!name) return;
-    const index = loadBoardsIndex();
-    if (!index[name]) return;
-    await applyBoard(index[name]);
-    showToast("Board loaded");
-  });
-
+saveBoardBtn?.addEventListener("click", () => {
+  const name = prompt("Save board as name:", boardSelect.value || "");
+  if (!name) return;
+  const index = loadBoardsIndex();
+  index[name] = snapshotBoard();
+  saveBoardsIndex(index);
   refreshBoardSelect();
+  boardSelect.value = name;
+  showToast("Board saved");
+});
+
+loadBoardBtn?.addEventListener("click", async () => {
+  const name = boardSelect.value;
+  if (!name) return;
+  const index = loadBoardsIndex();
+  if (!index[name]) return;
+  await applyBoard(index[name]);
+  showToast("Board loaded");
+});
+
+
+
+
+refreshBoardSelect();
 
   // ---------- Scale calibration ----------
   function getLineForCalibration() {
@@ -2934,7 +2853,7 @@
     const inkMarkup = pastLayer + currentLayer;
 
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+ <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>${defs}
   </defs>
@@ -2943,7 +2862,7 @@
     ${bgMarkup}
     ${inkMarkup}
   </g>
-</svg>`;
+ </svg>`;
 
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
@@ -3024,6 +2943,5 @@
 
   const ro = new ResizeObserver(() => resizeAll());
   ro.observe(stage);
-
-  init();
+ init();
 })();
