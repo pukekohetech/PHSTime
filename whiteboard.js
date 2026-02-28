@@ -1557,7 +1557,7 @@
 
     // Arc tool (two-stage): click to set center, then click+drag to draw
     if (state.tool === "arc") {
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+      const snapping = !(e.ctrlKey || e.metaKey);
 
       if (!arcDraft.hasCenter) {
         let c = w;
