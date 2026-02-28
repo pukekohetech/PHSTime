@@ -14,13 +14,21 @@
        - Default: end point snaps to nearest millimetre grid
        - Ctrl/Cmd: snaps to nearby endpoints/intersections; if none nearby, angle-snaps (0/30/45/60/90 etc.)
      ✅ DPR-safe transforms & pointer mapping using inkCanvas rect
+
+   FIXES (this version):
+     ✅ Circles: Ctrl snaps + whole-mm snapping + live size tooltip (and Shift = perfect circle)
+     ✅ Arcs: draw CW/CCW, accumulate sweep, snap to full circle, show radius + arc length tooltip
+     ✅ SVG export: bg image uses href + xlink:href; arcs export with direction; full circle -> <circle>
+     ✅ SVG import: if SVG contains <image>, restore it as background (visible)
+     ✅ Removed accidental SVG reveal handler from paste() (was using e.key in paste event)
+     ✅ New board matches initial zoomed-out view
    ========================================================= */
 
 (() => {
   // ---------- DOM ----------
   const stage = document.getElementById("stage");
 
-  // ---------- Measurement tooltip (Line tool) ----------
+  // ---------- Measurement tooltip (Line/Rect/Circle/Arc tools) ----------
   const measureTip = document.createElement("div");
   measureTip.id = "measureTip";
   measureTip.style.position = "absolute";
@@ -35,7 +43,6 @@
   measureTip.style.transform = "translate(10px, 10px)";
   measureTip.style.display = "none";
   stage.appendChild(measureTip);
-
 
   // Background DOM layer
   const bgLayer = document.getElementById("bgLayer");
@@ -126,18 +133,18 @@
     viewH: 0
   };
 
-// SVG step-reveal (ArrowRight reveal, ArrowLeft hide)
-const svgReveal = {
-  active: false,
-  groupId: null,
-  partIndices: [],
-  revealed: 0
-};
+  // SVG step-reveal (ArrowRight reveal, ArrowLeft hide)
+  const svgReveal = {
+    active: false,
+    groupId: null,
+    partIndices: [],
+    revealed: 0
+  };
 
   // Handle geometry cached each redraw (screen coords)
   const uiHandles = {
     visible: false,
-    box: null, // {x,y,w,h}
+    box: null,    // {x,y,w,h}
     rotate: null, // {x,y,r}
     corners: null // [{name,x,y,s}]
   };
@@ -183,7 +190,6 @@ const svgReveal = {
     measureTip.style.display = "none";
   }
 
-
   // --- Angle snapping helpers (Ctrl/Cmd) ---
   function snapAngleRad(angleRad) {
     const snapsDeg = [
@@ -222,7 +228,7 @@ const svgReveal = {
     };
   }
 
-  // --- Precision snapping (requested) ---
+  // --- Precision snapping ---
   // World units are in CSS pixels at zoom=1. We approximate 1mm in CSS pixels using 96dpi.
   const PX_PER_MM = 96 / 25.4;         // ≈3.7795 px per mm
   const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
@@ -263,46 +269,45 @@ const svgReveal = {
     return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c };
   }
 
-// --- Arc helpers ---
-function normAngle(a){
-  let x = a % (Math.PI * 2);
-  if (x < 0) x += Math.PI * 2;
-  return x;
-}
-function arcDelta(a1, a2){
-  let d = normAngle(a2) - normAngle(a1);
-  if (d < 0) d += Math.PI * 2;
-  return d;
-}
-function pointOnArc(obj, which){
-  const a = (which === "start") ? obj.a1 : obj.a2;
-  return { x: obj.cx + Math.cos(a) * obj.r, y: obj.cy + Math.sin(a) * obj.r };
-}
-function isAngleOnArc(a, a1, a2){
-  const aa = normAngle(a);
-  const s = normAngle(a1);
-  const e = normAngle(a2);
-  if (s <= e) return aa >= s && aa <= e;
-  return aa >= s || aa <= e; // wrap
-}
-function arcBounds(obj){
-  const pts = [];
-  const steps = 48;
-  const d = arcDelta(obj.a1, obj.a2);
-  const n = Math.max(6, Math.min(steps, Math.ceil(steps * (d / (Math.PI * 2)))));
-  for (let i=0;i<=n;i++){
-    const t = obj.a1 + (d * (i / n));
-    pts.push({ x: obj.cx + Math.cos(t) * obj.r, y: obj.cy + Math.sin(t) * obj.r });
+  // --- Arc helpers ---
+  function normAngle(a){
+    let x = a % (Math.PI * 2);
+    if (x < 0) x += Math.PI * 2;
+    return x;
   }
-  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-  for (const p of pts){
-    minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
-    maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y);
+  function arcDelta(a1, a2){
+    let d = normAngle(a2) - normAngle(a1);
+    if (d < 0) d += Math.PI * 2;
+    return d;
   }
-  const pad = (obj.size || 4) * 1.0;
-  return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-}
-
+  function pointOnArc(obj, which){
+    const a = (which === "start") ? obj.a1 : obj.a2;
+    return { x: obj.cx + Math.cos(a) * obj.r, y: obj.cy + Math.sin(a) * obj.r };
+  }
+  function isAngleOnArc(a, a1, a2){
+    const aa = normAngle(a);
+    const s = normAngle(a1);
+    const e = normAngle(a2);
+    if (s <= e) return aa >= s && aa <= e;
+    return aa >= s || aa <= e; // wrap
+  }
+  function arcBounds(obj){
+    const pts = [];
+    const steps = 48;
+    const d = arcDelta(obj.a1, obj.a2);
+    const n = Math.max(6, Math.min(steps, Math.ceil(steps * (d / (Math.PI * 2)))));
+    for (let i=0;i<=n;i++){
+      const t = obj.a1 + (d * (i / n));
+      pts.push({ x: obj.cx + Math.cos(t) * obj.r, y: obj.cy + Math.sin(t) * obj.r });
+    }
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for (const p of pts){
+      minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
+      maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y);
+    }
+    const pad = (obj.size || 4) * 1.0;
+    return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+  }
 
   function rectEdges(obj) {
     const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
@@ -400,7 +405,6 @@ function arcBounds(obj){
         segs.push(...rectEdges(obj));
       } else if (obj.kind === "stroke" || obj.kind === "erase") {
         const pts = obj.points || [];
-        // downsample long strokes for intersection finding
         const stride = Math.max(1, Math.floor(pts.length / 60));
         for (let i = stride; i < pts.length; i += stride) {
           const p0 = pts[i - stride];
@@ -445,7 +449,6 @@ function arcBounds(obj){
   }
 
   function snapPointWithCtrl(pt) {
-    // Snap to endpoints + intersections (within a screen-space radius).
     const radiusWorld = SNAP_RADIUS_PX / (state.zoom || 1);
 
     const endpoints = collectSnapEndpoints();
@@ -457,7 +460,6 @@ function arcBounds(obj){
     if (!hit1) return hit2;
     if (!hit2) return hit1;
 
-    // pick closer
     const d1 = Math.hypot(pt.x - hit1.x, pt.y - hit1.y);
     const d2 = Math.hypot(pt.x - hit2.x, pt.y - hit2.y);
     return d2 < d1 ? hit2 : hit1;
@@ -718,14 +720,13 @@ function arcBounds(obj){
       inkCtx.ellipse(0, 0, rx, ry, ang, 0, Math.PI * 2);
       inkCtx.stroke();
       inkCtx.restore();
-
-} else if (obj.kind === "arc") {
-  const { cx, cy, r, a1, a2 } = obj;
-  inkCtx.save();
-  inkCtx.beginPath();
-  inkCtx.arc(cx, cy, Math.max(0.5, r || 0), a1 || 0, a2 || 0, false);
-  inkCtx.stroke();
-  inkCtx.restore();
+    } else if (obj.kind === "arc") {
+      const { cx, cy, r, a1, a2 } = obj;
+      inkCtx.save();
+      inkCtx.beginPath();
+      inkCtx.arc(cx, cy, Math.max(0.5, r || 0), a1 || 0, a2 || 0, !!obj.ccw);
+      inkCtx.stroke();
+      inkCtx.restore();
     } else if (obj.kind === "arrow") {
       inkCtx.beginPath(); inkCtx.moveTo(x1, y1); inkCtx.lineTo(x2, y2); inkCtx.stroke();
       const ang = Math.atan2(y2 - y1, x2 - x1);
@@ -755,7 +756,6 @@ function arcBounds(obj){
     return { w, h, fontSize };
   }
 
-
   function objectBounds(obj) {
     // NOTE: bounds are axis-aligned; rotated text will be approximate (good enough for handles)
     if (obj.kind === "text") {
@@ -763,7 +763,6 @@ function arcBounds(obj){
       const w = m.w;
       const h = m.h;
 
-      // Axis-aligned bounds of a rotated rectangle around its center
       const cx = obj.x + w / 2;
       const cy = obj.y + h / 2;
       const ang = obj.rot || 0;
@@ -785,6 +784,7 @@ function arcBounds(obj){
       }
       return { minX, minY, maxX, maxY };
     }
+
     if (obj.kind === "stroke" || obj.kind === "erase") {
       const pts = obj.points || [];
       if (!pts.length) return { minX:0, minY:0, maxX:0, maxY:0 };
@@ -955,12 +955,10 @@ function arcBounds(obj){
     if (!isFinite(fx)) fx = 1;
     if (!isFinite(fy)) fy = 1;
 
-    // protect against tiny/negative flips
     fx = clamp(fx, -20, 20);
     fy = clamp(fy, -20, 20);
 
     if (obj.kind === "text") {
-      // move position around anchor and scale font size (uniform-ish)
       obj.x = ax + (obj.x - ax) * fx;
       obj.y = ay + (obj.y - ay) * fy;
       const uni = Math.max(0.2, (Math.abs(fx) + Math.abs(fy)) / 2);
@@ -1011,7 +1009,6 @@ function arcBounds(obj){
       return;
     }
 
-    // Rectangles + ellipses rotate by storing an angle; drawing uses that angle.
     if (obj.kind === "rect" || obj.kind === "circle") {
       obj.rot = (obj.rot || 0) + angle;
       return;
@@ -1199,6 +1196,7 @@ function arcBounds(obj){
     uiCtx.strokeStyle = "rgba(46, 204, 113, 0.95)";
     uiCtx.lineWidth = 2;
     uiCtx.setLineDash([6, 4]);
+
     if (!uiHandles.poly) {
       uiCtx.strokeRect(b.x, b.y, b.w, b.h);
     } else {
@@ -1251,8 +1249,8 @@ function arcBounds(obj){
 
   // ---------- Gesture state ----------
 
-// Arc tool draft state (two-stage: pick center, then drag to create arc)
-const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
+  // Arc tool draft state (two-stage: pick center, then drag to create arc)
+  const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
 
   const gesture = {
     active: false,
@@ -1277,7 +1275,9 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
     // Arc drawing cached values
     arcCenter: null,
     arcR: 0,
-    arcA1: 0
+    arcA1: 0,
+    arcLastA: 0,
+    arcAccum: 0
   };
 
   let spacePanning = false;
@@ -1303,6 +1303,8 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
     gesture.arcCenter = null;
     gesture.arcR = 0;
     gesture.arcA1 = 0;
+    gesture.arcLastA = 0;
+    gesture.arcAccum = 0;
   }
 
   // ---------- Cursor UX ----------
@@ -1339,7 +1341,7 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
   }
 
   function updateHoverCursor(sx, sy) {
-    if (gesture.active) return; // don't fight active gesture
+    if (gesture.active) return;
     if (state.tool !== "select") { updateCursorFromTool(); return; }
 
     const h = hitHandle(sx, sy);
@@ -1348,7 +1350,6 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
     if (h.kind === "rotate") { inkCanvas.style.cursor = "grab"; return; }
     if (h.kind === "move")   { inkCanvas.style.cursor = "move"; return; }
 
-    // scale corners
     if (h.corner === "nw" || h.corner === "se") inkCanvas.style.cursor = "nwse-resize";
     else inkCanvas.style.cursor = "nesw-resize";
   }
@@ -1403,7 +1404,6 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
   // Tools ↔ ⤡ ⟲ act on selection if selected; otherwise background
   function beginToolTransformForSelectionOrBg(tool, w) {
     if (state.selectionIndex >= 0) {
-      // Use selection transforms but driven by drag direction (legacy tools)
       pushUndo(); clearRedo();
       gesture.selIndex = state.selectionIndex;
       gesture.selStartObj = deepClone(state.objects[state.selectionIndex]);
@@ -1426,7 +1426,6 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
       return true;
     }
 
-    // No selection -> background
     return beginBgTransform(tool, w);
   }
 
@@ -1480,20 +1479,17 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
     if (state.tool === "select") {
       const handle = hitHandle(sx, sy);
       if (handle) {
-        // transform existing selection
         if (beginSelectionTransform(handle.kind, e, w, sx, sy)) {
           redrawAll();
           return;
         }
       }
 
-      // no handle -> select object
       const hit = findHit(w.x, w.y);
       state.selectionIndex = hit;
       redrawAll();
 
       if (hit >= 0) {
-        // begin move on drag
         beginSelectionTransform("move", e, w, sx, sy);
       } else {
         gesture.mode = "select";
@@ -1507,7 +1503,7 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
       return;
     }
 
-    // Arc tool (two-stage): click to set center, then click+drag to draw (Ctrl/Cmd enables snap-to endpoints/intersections)
+    // Arc tool (two-stage): click to set center, then click+drag to draw
     if (state.tool === "arc") {
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
@@ -1551,13 +1547,15 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
       let r = Math.hypot(p1.x - cx, p1.y - cy);
       r = Math.max(1, Math.round(r / PX_PER_MM) * PX_PER_MM);
 
-      const obj = { kind: "arc", color: state.color, size: state.size, cx, cy, r, a1, a2: a1 };
+      const obj = { kind: "arc", color: state.color, size: state.size, cx, cy, r, a1, a2: a1, ccw: false };
       state.objects.push(obj);
       gesture.activeObj = obj;
       gesture.mode = "drawArc";
       gesture.arcCenter = { cx, cy };
       gesture.arcR = r;
       gesture.arcA1 = a1;
+      gesture.arcLastA = a1;
+      gesture.arcAccum = 0;
 
       showMeasureTip(sx, sy, `R ${Math.round(r / PX_PER_MM)} mm`);
       redrawAll();
@@ -1588,12 +1586,9 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
 
     if (["line","rect","circle","arrow"].includes(state.tool)) {
       let p0 = w;
-      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect");
+      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle");
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      // Start point snapping for line/arrow/rect:
-      //   - default: snap to nearest mm grid
-      //   - Ctrl/Cmd: snap to nearby endpoints/intersections (if any)
       if (isSnapShape) {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
@@ -1609,12 +1604,14 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
       gesture.mode = "drawShape";
       redrawAll();
 
-      // Show measurement tooltip when starting a straight line or rectangle
       if (obj.kind === "line") {
         showMeasureTip(sx, sy, "0 mm");
       }
       if (obj.kind === "rect") {
         showMeasureTip(sx, sy, "0 × 0 mm");
+      }
+      if (obj.kind === "circle") {
+        showMeasureTip(sx, sy, "Ø 0 mm");
       }
       return;
     }
@@ -1689,7 +1686,6 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
           const uni = Math.max(0.2, (Math.abs(fx) + Math.abs(fy)) / 2);
           obj.fontSize = Math.max(6, obj0.fontSize * uni);
 
-          // keep center fixed (x/y is top-left)
           const m0 = textMetrics(obj0);
           obj.x = ax - (m0.w / 2);
           obj.y = ay - (m0.h / 2);
@@ -1738,7 +1734,6 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
       let a1 = Math.atan2(w.y - ay, w.x - ax);
       let delta = a1 - a0;
 
-      // Shift = snap 15 degrees
       if (e.shiftKey) {
         const step = 15 * Math.PI / 180;
         delta = Math.round(delta / step) * step;
@@ -1785,7 +1780,6 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
 
         state.bg.scale = newScale;
 
-        // Keep center fixed (bg.x/bg.y are UN-SCALED top-left)
         state.bg.x = cx0 - bg0.natW / 2;
         state.bg.y = cy0 - bg0.natH / 2;
 
@@ -1812,43 +1806,72 @@ const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
       }
     }
 
-    // Drawing
-if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
-  const ctrlHeld = e.ctrlKey || e.metaKey;
+    // Drawing: Arc (CW/CCW + full circle snap + length indicator)
+    if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
-  const cx = gesture.arcCenter.cx;
-  const cy = gesture.arcCenter.cy;
+      const cx = gesture.arcCenter.cx;
+      const cy = gesture.arcCenter.cy;
 
-  // pointer in world with same snapping rules as before
-  let p = w;
-  if (ctrlHeld) {
-    const hit = snapPointWithCtrl(p);
-    p = hit || snapToMmGridWorld(p);
-  } else {
-    p = snapToMmGridWorld(p);
-  }
+      let p = w;
+      let snappedHit = null;
+      if (ctrlHeld) {
+        snappedHit = snapPointWithCtrl(p);
+        p = snappedHit || snapToMmGridWorld(p);
+      } else {
+        p = snapToMmGridWorld(p);
+      }
 
-  // ✅ Angle follows pointer, radius stays fixed at arc start
-  const a2 = Math.atan2(p.y - cy, p.x - cx);
-  const rFixed = Math.max(1, gesture.arcR || 1);
+      let aNow = Math.atan2(p.y - cy, p.x - cx);
+      if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
 
-  gesture.activeObj.cx = cx;
-  gesture.activeObj.cy = cy;
-  gesture.activeObj.r  = rFixed;
-  gesture.activeObj.a1 = gesture.arcA1;
-  gesture.activeObj.a2 = a2;
+      const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
+      const step = wrapSigned(aNow - (gesture.arcLastA || aNow));
+      gesture.arcAccum = (gesture.arcAccum || 0) + step;
+      gesture.arcLastA = aNow;
 
-  showMeasureTip(sx, sy, `R ${Math.round(rFixed / PX_PER_MM)} mm`);
-  redrawAll();
-  return;
-}
+      const rFixed = Math.max(1, gesture.arcR || 1);
+      let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
 
+      const TWO_PI = Math.PI * 2;
+      const spanAbs = Math.abs(gesture.arcAccum || 0);
+      const snapTol = 10 * Math.PI / 180; // 10°
+      let isCircle = false;
+
+      if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
+        isCircle = true;
+        a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
+      }
+
+      gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
+
+      gesture.activeObj.cx = cx;
+      gesture.activeObj.cy = cy;
+      gesture.activeObj.r  = rFixed;
+      gesture.activeObj.a1 = gesture.arcA1;
+      gesture.activeObj.a2 = a2;
+
+      const rMm = rFixed / PX_PER_MM;
+      const span = Math.abs(a2 - (gesture.arcA1 || 0));
+      const lenMm = (span * rFixed) / PX_PER_MM;
+
+      const label = isCircle
+        ? `Circle • R ${Math.round(rMm)} mm`
+        : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
+
+      showMeasureTip(sx, sy, label);
+      redrawAll();
+      return;
+    }
+
+    // Drawing: stroke / erase
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
       gesture.activeObj.points.push(w);
       redrawAll();
       return;
     }
 
+    // Drawing: line/rect/circle/arrow
     if (gesture.mode === "drawShape" && gesture.activeObj) {
       let x2 = w.x;
       let y2 = w.y;
@@ -1856,9 +1879,6 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
       const k = gesture.activeObj.kind;
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      // Line / Arrow precision snapping:
-      //   - default: snap end point to nearest millimetre grid
-      //   - Ctrl/Cmd: snap to nearby intersections/endpoints (if any). If none nearby, keep the existing angle-snap behaviour.
       if (k === "line" || k === "arrow") {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl({ x: x2, y: y2 });
@@ -1877,9 +1897,6 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
           x2 = mm.x; y2 = mm.y;
         }
       } else if (k === "rect") {
-        // Rectangle precision snapping:
-        //   - default: snap drag corner to nearest whole millimetre grid
-        //   - Ctrl/Cmd: snap to nearby endpoints/intersections if close; otherwise fall back to whole-mm grid
         if (ctrlHeld) {
           const hit = snapPointWithCtrl({ x: x2, y: y2 });
           if (hit) {
@@ -1892,12 +1909,35 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
           const mm = snapToMmGridWorld({ x: x2, y: y2 });
           x2 = mm.x; y2 = mm.y;
         }
+      } else if (k === "circle") {
+        if (ctrlHeld) {
+          const hit = snapPointWithCtrl({ x: x2, y: y2 });
+          if (hit) {
+            x2 = hit.x; y2 = hit.y;
+          } else {
+            const mm = snapToMmGridWorld({ x: x2, y: y2 });
+            x2 = mm.x; y2 = mm.y;
+          }
+        } else {
+          const mm = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = mm.x; y2 = mm.y;
+        }
+
+        // Shift = perfect circle (uniform)
+        if (e.shiftKey) {
+          const dx = x2 - gesture.activeObj.x1;
+          const dy = y2 - gesture.activeObj.y1;
+          const sgnX = dx >= 0 ? 1 : -1;
+          const sgnY = dy >= 0 ? 1 : -1;
+          const d = Math.max(Math.abs(dx), Math.abs(dy));
+          x2 = gesture.activeObj.x1 + sgnX * d;
+          y2 = gesture.activeObj.y1 + sgnY * d;
+        }
       }
 
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
 
-      // Live length indicator for Line tool
       if (k === "line") {
         const dx = x2 - gesture.activeObj.x1;
         const dy = y2 - gesture.activeObj.y1;
@@ -1906,13 +1946,26 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
         showMeasureTip(sx, sy, formatMm(lenMm));
       }
 
-      // Live size indicator for Rectangle tool (whole mm integers)
       if (k === "rect") {
         const wPx = Math.abs(x2 - gesture.activeObj.x1);
         const hPx = Math.abs(y2 - gesture.activeObj.y1);
         const wMm = wPx / PX_PER_MM;
         const hMm = hPx / PX_PER_MM;
         showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
+      }
+
+      if (k === "circle") {
+        const wPx = Math.abs(x2 - gesture.activeObj.x1);
+        const hPx = Math.abs(y2 - gesture.activeObj.y1);
+        const wMm = wPx / PX_PER_MM;
+        const hMm = hPx / PX_PER_MM;
+
+        if (Math.abs(wMm - hMm) <= 1) {
+          const dMm = Math.round((wMm + hMm) / 2);
+          showMeasureTip(sx, sy, `Ø ${dMm} mm`);
+        } else {
+          showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
+        }
       }
 
       redrawAll();
@@ -1978,17 +2031,18 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   });
 
   // ---------- Tool buttons ----------
-dockBtns.forEach(b => b.addEventListener("click", () => {
-  const t = b.dataset.tool;
+  dockBtns.forEach(b => b.addEventListener("click", () => {
+    const t = b.dataset.tool;
 
-  // ✅ If Arc is already active, clicking it again arms a new center pick
-  if (t === "arc" && state.tool === "arc") {
-    arcDraft.hasCenter = false;
-    showToast("Click to set arc center");
-  }
+    // ✅ If Arc is already active, clicking it again arms a new center pick
+    if (t === "arc" && state.tool === "arc") {
+      arcDraft.hasCenter = false;
+      showToast("Click to set arc center");
+    }
 
-  setActiveTool(t);
-}));
+    setActiveTool(t);
+  }));
+
   clearBtn.addEventListener("click", () => {
     pushUndo(); clearRedo();
     hardResetGesture();
@@ -2004,7 +2058,6 @@ dockBtns.forEach(b => b.addEventListener("click", () => {
     redrawAll();
   });
 
-  
   function setBackgroundFromDataURL(dataURL) {
     const img = new Image();
     img.onload = () => {
@@ -2024,8 +2077,6 @@ dockBtns.forEach(b => b.addEventListener("click", () => {
       const fit = Math.min(viewW / img.naturalWidth, viewH / img.naturalHeight);
       state.bg.scale = clamp(fit, 0.05, 10);
 
-      // bg.x/bg.y are the UN-SCALED top-left in world coords.
-      // rotate/scale are about image center, so centering uses natural size.
       state.bg.x = viewCenter.x - img.naturalWidth / 2;
       state.bg.y = viewCenter.y - img.naturalHeight / 2;
       state.bg.rot = 0;
@@ -2038,7 +2089,7 @@ dockBtns.forEach(b => b.addEventListener("click", () => {
     img.src = String(dataURL || "");
   }
 
-// Background import
+  // Background import
   bgFile.addEventListener("change", () => {
     const file = bgFile.files && bgFile.files[0];
     if (!file) return;
@@ -2063,8 +2114,6 @@ dockBtns.forEach(b => b.addEventListener("click", () => {
         const fit = Math.min(viewW / img.naturalWidth, viewH / img.naturalHeight);
         state.bg.scale = clamp(fit, 0.05, 10);
 
-        // NOTE: bg.x/bg.y are the UN-SCALED top-left in world coords.
-        // Because we rotate/scale about the image center, centering uses natural size.
         state.bg.x = viewCenter.x - img.naturalWidth / 2;
         state.bg.y = viewCenter.y - img.naturalHeight / 2;
         state.bg.rot = 0;
@@ -2088,306 +2137,308 @@ dockBtns.forEach(b => b.addEventListener("click", () => {
     redrawAll();
   });
 
-
-
-// ---------- Import SVG as ink (step through elements with arrow keys) ----------
-// We import common SVG shapes as *separate* whiteboard objects and start them hidden.
-// ArrowRight reveals next element; ArrowLeft hides previous.
-function parseNumberAttr(v) {
-  const n = parseFloat(String(v || "").replace(/px$/,""));
-  return isFinite(n) ? n : null;
-}
-
-function getSvgRootBox(svgEl) {
-  const vb = svgEl.getAttribute("viewBox");
-  if (vb) {
-    const parts = vb.trim().split(/[\s,]+/).map(Number);
-    if (parts.length === 4 && parts.every(isFinite)) {
-      return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
-    }
-  }
-  const w = parseNumberAttr(svgEl.getAttribute("width")) ?? 1000;
-  const h = parseNumberAttr(svgEl.getAttribute("height")) ?? 1000;
-  return { x: 0, y: 0, w, h };
-}
-
-function ensureHiddenSvgHost() {
-  let host = document.getElementById("svgInkHost");
-  if (host) return host;
-  host = document.createElement("div");
-  host.id = "svgInkHost";
-  host.style.position = "fixed";
-  host.style.left = "-99999px";
-  host.style.top = "0";
-  host.style.width = "1px";
-  host.style.height = "1px";
-  host.style.overflow = "hidden";
-  host.style.pointerEvents = "none";
-  document.body.appendChild(host);
-  return host;
-}
-
-function importSvgInkFromText(svgText) {
-  const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
-  const parsedSvg = doc.querySelector("svg");
-  if (!parsedSvg) { showToast("SVG not valid"); return; }
-
-  const host = ensureHiddenSvgHost();
-  host.innerHTML = "";
-
-  const svg = parsedSvg.cloneNode(true);
-  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  host.appendChild(svg);
-
-  const rootBox = getSvgRootBox(svg);
-
-  const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
-  if (!els.length) { showToast("No SVG paths"); return; }
-
-  const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
-
-  const parts = [];
-  const boundsPts = [];
-
-  function pushPart(obj, ptsForBounds) {
-    parts.push(obj);
-    if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
+  // ---------- Import SVG as ink (step through elements with arrow keys) ----------
+  function parseNumberAttr(v) {
+    const n = parseFloat(String(v || "").replace(/px$/,""));
+    return isFinite(n) ? n : null;
   }
 
-  function strokeOf(el) {
-    const stroke = el.getAttribute("stroke");
-    if (stroke && stroke !== "none") return stroke;
-    return "#111111";
-  }
-
-  function strokeWidthOf(el) {
-    const sw = parseNumberAttr(el.getAttribute("stroke-width"));
-    return Math.max(1, sw ?? 3);
-  }
-
-  function mapCTM(el, x, y) {
-    if (rootPt && el.getCTM) {
-      const m = el.getCTM();
-      rootPt.x = x; rootPt.y = y;
-      const p = rootPt.matrixTransform(m);
-      return { x: p.x, y: p.y };
-    }
-    return { x, y };
-  }
-
-  for (const el of els) {
-    const stroke = strokeOf(el);
-    const size = strokeWidthOf(el);
-    const tag = el.tagName.toLowerCase();
-
-    if (tag === "line") {
-      const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
-      const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
-      const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
-      const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
-      const p1 = mapCTM(el, x1, y1);
-      const p2 = mapCTM(el, x2, y2);
-      pushPart({ kind:"line", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
-    }
-
-    if (tag === "rect") {
-      const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
-      const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
-      const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
-      const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
-      const p1 = mapCTM(el, x, y);
-      const p2 = mapCTM(el, x + w, y + h);
-      pushPart({ kind:"rect", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
-    }
-
-    if (tag === "circle") {
-      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
-      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
-      const r  = parseNumberAttr(el.getAttribute("r")) ?? 0;
-      const p1 = mapCTM(el, cx - r, cy - r);
-      const p2 = mapCTM(el, cx + r, cy + r);
-      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
-    }
-
-    if (tag === "ellipse") {
-      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
-      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
-      const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
-      const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
-      const p1 = mapCTM(el, cx - rx, cy - ry);
-      const p2 = mapCTM(el, cx + rx, cy + ry);
-      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
-    }
-
-    if (tag === "polyline" || tag === "polygon") {
-      const ptsAttr = (el.getAttribute("points") || "").trim();
-      if (!ptsAttr) continue;
-      const nums = ptsAttr.split(/[\s,]+/).map(Number).filter(n=>isFinite(n));
-      if (nums.length < 4) continue;
-      const pts = [];
-      for (let i=0;i<nums.length-1;i+=2){
-        pts.push(mapCTM(el, nums[i], nums[i+1]));
+  function getSvgRootBox(svgEl) {
+    const vb = svgEl.getAttribute("viewBox");
+    if (vb) {
+      const parts = vb.trim().split(/[\s,]+/).map(Number);
+      if (parts.length === 4 && parts.every(isFinite)) {
+        return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
       }
-      if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
-      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-      continue;
     }
+    const w = parseNumberAttr(svgEl.getAttribute("width")) ?? 1000;
+    const h = parseNumberAttr(svgEl.getAttribute("height")) ?? 1000;
+    return { x: 0, y: 0, w, h };
+  }
 
-    if (tag === "path") {
-      if (!el.getTotalLength) continue;
-      let total = 0;
-      try { total = el.getTotalLength(); } catch { total = 0; }
-      if (!isFinite(total) || total <= 0) continue;
+  function ensureHiddenSvgHost() {
+    let host = document.getElementById("svgInkHost");
+    if (host) return host;
+    host = document.createElement("div");
+    host.id = "svgInkHost";
+    host.style.position = "fixed";
+    host.style.left = "-99999px";
+    host.style.top = "0";
+    host.style.width = "1px";
+    host.style.height = "1px";
+    host.style.overflow = "hidden";
+    host.style.pointerEvents = "none";
+    document.body.appendChild(host);
+    return host;
+  }
 
-      const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
-      const pts = [];
-      for (let i=0;i<=steps;i++){
-        const t = (i/steps) * total;
-        let p;
-        try { p = el.getPointAtLength(t); } catch { p = null; }
-        if (!p) continue;
-        pts.push(mapCTM(el, p.x, p.y));
+  function importSvgInkFromText(svgText) {
+    const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
+    const parsedSvg = doc.querySelector("svg");
+    if (!parsedSvg) { showToast("SVG not valid"); return; }
+
+    const host = ensureHiddenSvgHost();
+    host.innerHTML = "";
+
+    const svg = parsedSvg.cloneNode(true);
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    host.appendChild(svg);
+
+    const rootBox = getSvgRootBox(svg);
+
+    // --- If the SVG contains an <image>, treat it as the board background ---
+    const imgEl = svg.querySelector("image");
+    if (imgEl) {
+      const href = imgEl.getAttribute("href") || imgEl.getAttribute("xlink:href") || "";
+      const wAttr = parseNumberAttr(imgEl.getAttribute("width"));
+      const hAttr = parseNumberAttr(imgEl.getAttribute("height"));
+
+      if (href) {
+        const natW = wAttr ?? rootBox.w ?? 0;
+        const natH = hAttr ?? rootBox.h ?? 0;
+
+        const tf = (imgEl.getAttribute("transform") || "").trim();
+        let x = 0, y = 0, rot = 0, scale = 1;
+
+        try {
+          const m = tf.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*rotate\(\s*([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*$/i);
+          if (m) {
+            x = parseFloat(m[1]) || 0;
+            y = parseFloat(m[2]) || 0;
+            rot = (parseFloat(m[5]) || 0) * Math.PI / 180;
+            scale = parseFloat(m[6]) || 1;
+          }
+        } catch {}
+
+        state.bg.src = String(href);
+        state.bg.natW = natW;
+        state.bg.natH = natH;
+        state.bg.x = x;
+        state.bg.y = y;
+        state.bg.scale = scale;
+        state.bg.rot = rot;
+
+        bgImg.src = state.bg.src;
+        applyBgTransform();
       }
-      if (pts.length < 2) continue;
-      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-      continue;
-    }
-  }
-
-  if (!parts.length) { showToast("No supported SVG shapes"); return; }
-
-  // Bounds
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const use = boundsPts.length ? boundsPts : [
-    { x: rootBox.x, y: rootBox.y },
-    { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
-  ];
-  for (const p of use) {
-    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-  }
-
-  const bw = Math.max(1, maxX - minX);
-  const bh = Math.max(1, maxY - minY);
-
-  const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
-  const availW = (state.viewW / state.zoom) * 0.9;
-  const availH = (state.viewH / state.zoom) * 0.9;
-  const s = clamp(Math.min(availW / bw, availH / bh), 0.02, 50);
-
-  const cx0 = minX + bw/2;
-  const cy0 = minY + bh/2;
-
-  const groupId = "svg_" + Date.now();
-
-  pushUndo(); clearRedo();
-  hardResetGesture();
-
-  const startIndex = state.objects.length;
-
-  for (const o of parts) {
-    const obj = JSON.parse(JSON.stringify(o));
-    obj.svgGroupId = groupId;
-    obj.hidden = true;
-
-    if (obj.kind === "stroke" || obj.kind === "erase") {
-      obj.points = (obj.points || []).map(p => ({
-        x: viewCenter.x + (p.x - cx0) * s,
-        y: viewCenter.y + (p.y - cy0) * s
-      }));
-    } else {
-      obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
-      obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
-      obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
-      obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
     }
 
-    state.objects.push(obj);
+    const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
+    if (!els.length) { showToast("No SVG paths"); return; }
+
+    const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
+
+    const parts = [];
+    const boundsPts = [];
+
+    function pushPart(obj, ptsForBounds) {
+      parts.push(obj);
+      if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
+    }
+
+    function strokeOf(el) {
+      const stroke = el.getAttribute("stroke");
+      if (stroke && stroke !== "none") return stroke;
+      return "#111111";
+    }
+
+    function strokeWidthOf(el) {
+      const sw = parseNumberAttr(el.getAttribute("stroke-width"));
+      return Math.max(1, sw ?? 3);
+    }
+
+    function mapCTM(el, x, y) {
+      if (rootPt && el.getCTM) {
+        const m = el.getCTM();
+        rootPt.x = x; rootPt.y = y;
+        const p = rootPt.matrixTransform(m);
+        return { x: p.x, y: p.y };
+      }
+      return { x, y };
+    }
+
+    for (const el of els) {
+      // Skip the bg <image> from being imported as ink (it isn't in els anyway)
+      const stroke = strokeOf(el);
+      const size = strokeWidthOf(el);
+      const tag = el.tagName.toLowerCase();
+
+      if (tag === "line") {
+        const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
+        const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
+        const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
+        const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
+        const p1 = mapCTM(el, x1, y1);
+        const p2 = mapCTM(el, x2, y2);
+        pushPart({ kind:"line", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+        continue;
+      }
+
+      if (tag === "rect") {
+        const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
+        const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
+        const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
+        const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
+        const p1 = mapCTM(el, x, y);
+        const p2 = mapCTM(el, x + w, y + h);
+        pushPart({ kind:"rect", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+        continue;
+      }
+
+      if (tag === "circle") {
+        const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+        const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+        const r  = parseNumberAttr(el.getAttribute("r")) ?? 0;
+        const p1 = mapCTM(el, cx - r, cy - r);
+        const p2 = mapCTM(el, cx + r, cy + r);
+        pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+        continue;
+      }
+
+      if (tag === "ellipse") {
+        const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+        const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+        const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
+        const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
+        const p1 = mapCTM(el, cx - rx, cy - ry);
+        const p2 = mapCTM(el, cx + rx, cy + ry);
+        pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
+        continue;
+      }
+
+      if (tag === "polyline" || tag === "polygon") {
+        const ptsAttr = (el.getAttribute("points") || "").trim();
+        if (!ptsAttr) continue;
+        const nums = ptsAttr.split(/[\s,]+/).map(Number).filter(n=>isFinite(n));
+        if (nums.length < 4) continue;
+        const pts = [];
+        for (let i=0;i<nums.length-1;i+=2){
+          pts.push(mapCTM(el, nums[i], nums[i+1]));
+        }
+        if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
+        pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+        continue;
+      }
+
+      if (tag === "path") {
+        if (!el.getTotalLength) continue;
+        let total = 0;
+        try { total = el.getTotalLength(); } catch { total = 0; }
+        if (!isFinite(total) || total <= 0) continue;
+
+        const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
+        const pts = [];
+        for (let i=0;i<=steps;i++){
+          const t = (i/steps) * total;
+          let p;
+          try { p = el.getPointAtLength(t); } catch { p = null; }
+          if (!p) continue;
+          pts.push(mapCTM(el, p.x, p.y));
+        }
+        if (pts.length < 2) continue;
+        pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+        continue;
+      }
+    }
+
+    if (!parts.length) { showToast("No supported SVG shapes"); return; }
+
+    // Bounds
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const use = boundsPts.length ? boundsPts : [
+      { x: rootBox.x, y: rootBox.y },
+      { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
+    ];
+    for (const p of use) {
+      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+    }
+
+    const bw = Math.max(1, maxX - minX);
+    const bh = Math.max(1, maxY - minY);
+
+    const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+    const availW = (state.viewW / state.zoom) * 0.9;
+    const availH = (state.viewH / state.zoom) * 0.9;
+    const s = clamp(Math.min(availW / bw, availH / bh), 0.02, 50);
+
+    const cx0 = minX + bw/2;
+    const cy0 = minY + bh/2;
+
+    const groupId = "svg_" + Date.now();
+
+    pushUndo(); clearRedo();
+    hardResetGesture();
+
+    const startIndex = state.objects.length;
+
+    for (const o of parts) {
+      const obj = JSON.parse(JSON.stringify(o));
+      obj.svgGroupId = groupId;
+      obj.hidden = true;
+
+      if (obj.kind === "stroke" || obj.kind === "erase") {
+        obj.points = (obj.points || []).map(p => ({
+          x: viewCenter.x + (p.x - cx0) * s,
+          y: viewCenter.y + (p.y - cy0) * s
+        }));
+      } else {
+        obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
+        obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
+        obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
+        obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
+      }
+
+      state.objects.push(obj);
+    }
+
+    svgReveal.active = true;
+    svgReveal.groupId = groupId;
+    svgReveal.partIndices = [];
+    svgReveal.revealed = 0;
+    for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
+
+    state.selectionIndex = -1;
+    setActiveTool("select");
+    redrawAll();
+    showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
   }
 
-  svgReveal.active = true;
-  svgReveal.groupId = groupId;
-  svgReveal.partIndices = [];
-  svgReveal.revealed = 0;
-  for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
+  function clearImportedSvgInk() {
+    if (!svgReveal.active || !svgReveal.groupId) { showToast("No SVG ink"); return; }
+    pushUndo(); clearRedo();
+    const gid = svgReveal.groupId;
+    state.objects = state.objects.filter(o => !(o && o.svgGroupId === gid));
+    svgReveal.active = false;
+    svgReveal.groupId = null;
+    svgReveal.partIndices = [];
+    svgReveal.revealed = 0;
+    state.selectionIndex = -1;
+    redrawAll();
+    showToast("SVG cleared");
+  }
 
-  state.selectionIndex = -1;
-  setActiveTool("select");
-  redrawAll();
-  showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
-}
-
-function clearImportedSvgInk() {
-  if (!svgReveal.active || !svgReveal.groupId) { showToast("No SVG ink"); return; }
-  pushUndo(); clearRedo();
-  const gid = svgReveal.groupId;
-  state.objects = state.objects.filter(o => !(o && o.svgGroupId === gid));
-  svgReveal.active = false;
-  svgReveal.groupId = null;
-  svgReveal.partIndices = [];
-  svgReveal.revealed = 0;
-  state.selectionIndex = -1;
-  redrawAll();
-  showToast("SVG cleared");
-}
-
-// Wire up UI if present
-if (svgInkFile) {
-  svgInkFile.addEventListener("change", () => {
-    const file = svgInkFile.files && svgInkFile.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => importSvgInkFromText(String(reader.result || ""));
-    reader.readAsText(file);
-    svgInkFile.value = "";
-  });
-}
-if (clearSvgInkBtn) {
-  clearSvgInkBtn.addEventListener("click", () => clearImportedSvgInk());
-}
+  // Wire up UI if present
+  if (svgInkFile) {
+    svgInkFile.addEventListener("change", () => {
+      const file = svgInkFile.files && svgInkFile.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => importSvgInkFromText(String(reader.result || ""));
+      reader.readAsText(file);
+      svgInkFile.value = "";
+    });
+  }
+  if (clearSvgInkBtn) {
+    clearSvgInkBtn.addEventListener("click", () => clearImportedSvgInk());
+  }
 
   // ---------- Clipboard paste images (Ctrl/Cmd+V) ----------
-  // Paste an image from clipboard to become the background image.
-  // (No new UI added; uses the existing background system.)
   document.addEventListener("paste", (e) => {
     try {
-      // ignore if typing in an input/textarea/select
       const tag = (document.activeElement && document.activeElement.tagName) || "";
-  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-
-// SVG reveal controls (when an SVG has been imported as ink)
-if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-  e.preventDefault();
-  const total = svgReveal.partIndices.length;
-  if (!total) return;
-
-  if (e.key === "ArrowRight") {
-    if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
-    const idx = svgReveal.partIndices[svgReveal.revealed];
-    const obj = state.objects[idx];
-    if (obj) obj.hidden = false;
-    svgReveal.revealed += 1;
-    redrawAll();
-    showToast(`SVG: ${svgReveal.revealed}/${total}`);
-    return;
-  }
-
-  if (e.key === "ArrowLeft") {
-    if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
-    svgReveal.revealed -= 1;
-    const idx = svgReveal.partIndices[svgReveal.revealed];
-    const obj = state.objects[idx];
-    if (obj) obj.hidden = true;
-    redrawAll();
-    showToast(`SVG: ${svgReveal.revealed}/${total}`);
-    return;
-  }
-}
-
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
       if (typing) return;
 
       const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
@@ -2425,37 +2476,36 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
     }
 
     const tag = (document.activeElement && document.activeElement.tagName) || "";
-const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
-// SVG reveal controls (when an SVG has been imported as ink)
-if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-  e.preventDefault();
-  const total = svgReveal.partIndices.length;
-  if (!total) return;
+    // SVG reveal controls (when an SVG has been imported as ink)
+    if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+      e.preventDefault();
+      const total = svgReveal.partIndices.length;
+      if (!total) return;
 
-  if (e.key === "ArrowRight") {
-    if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
-    const idx = svgReveal.partIndices[svgReveal.revealed];
-    const obj = state.objects[idx];
-    if (obj) obj.hidden = false;
-    svgReveal.revealed += 1;
-    redrawAll();
-    showToast(`SVG: ${svgReveal.revealed}/${total}`);
-    return;
-  }
+      if (e.key === "ArrowRight") {
+        if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
+        const idx = svgReveal.partIndices[svgReveal.revealed];
+        const obj = state.objects[idx];
+        if (obj) obj.hidden = false;
+        svgReveal.revealed += 1;
+        redrawAll();
+        showToast(`SVG: ${svgReveal.revealed}/${total}`);
+        return;
+      }
 
-  if (e.key === "ArrowLeft") {
-    if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
-    svgReveal.revealed -= 1;
-    const idx = svgReveal.partIndices[svgReveal.revealed];
-    const obj = state.objects[idx];
-    if (obj) obj.hidden = true;
-    redrawAll();
-    showToast(`SVG: ${svgReveal.revealed}/${total}`);
-    return;
-  }
-}
-
+      if (e.key === "ArrowLeft") {
+        if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
+        svgReveal.revealed -= 1;
+        const idx = svgReveal.partIndices[svgReveal.revealed];
+        const obj = state.objects[idx];
+        if (obj) obj.hidden = true;
+        redrawAll();
+        showToast(`SVG: ${svgReveal.revealed}/${total}`);
+        return;
+      }
+    }
 
     // Delete removes selection (when not typing)
     if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
@@ -2558,7 +2608,12 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
     state.selectionIndex = -1;
     state.title = "";
     titleInput.value = "";
-    state.zoom = 1; state.panX = 0; state.panY = 0;
+
+    // ✅ match initial zoomed-out view
+    state.zoom = 0.25;
+    state.panX = (state.viewW / 2);
+    state.panY = (state.viewH / 2);
+
     state.bg = { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
     bgImg.removeAttribute("src");
     setActiveTool("pen");
@@ -2589,7 +2644,6 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
 
   refreshBoardSelect();
 
-  
   // ---------- Export SVG (vector) ----------
   function svgEscape(s){
     return String(s)
@@ -2627,7 +2681,8 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
         `scale(${state.bg.scale.toFixed(6)})`,
         `translate(${-cx.toFixed(3)} ${-cy.toFixed(3)})`
       ].join(" ");
-      bgMarkup = `<image href="${state.bg.src}" x="0" y="0" width="${natW}" height="${natH}" transform="${t}" />`;
+      // ✅ include xlink:href for compatibility
+      bgMarkup = `<image href="${state.bg.src}" xlink:href="${state.bg.src}" x="0" y="0" width="${natW}" height="${natH}" transform="${t}" />`;
     }
 
     let defs = "";
@@ -2714,20 +2769,31 @@ if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLe
         continue;
       }
 
-if (obj.kind === "arc"){
-  const a1 = obj.a1 || 0;
-  const a2 = obj.a2 || 0;
-  const d = arcDelta(a1, a2);
-  const largeArc = d > Math.PI ? 1 : 0;
-  const sweep = 1; // matches canvas default direction used here
-  const sxp = obj.cx + Math.cos(a1) * obj.r;
-  const syp = obj.cy + Math.sin(a1) * obj.r;
-  const exp = obj.cx + Math.cos(a2) * obj.r;
-  const eyp = obj.cy + Math.sin(a2) * obj.r;
-  currentLayer += `<path d="M ${sxp} ${syp} A ${obj.r} ${obj.r} 0 ${largeArc} ${sweep} ${exp} ${eyp}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
-  continue;
-}
+      if (obj.kind === "arc"){
+        const a1 = obj.a1 || 0;
+        const a2 = obj.a2 || 0;
+        const ccw = !!obj.ccw;
 
+        // Span (positive)
+        const span = ccw ? arcDelta(a2, a1) : arcDelta(a1, a2);
+
+        // Full circle: SVG arc can't do 360° as one A command -> use <circle>
+        if (span >= (Math.PI * 2 - 1e-6)) {
+          currentLayer += `<circle cx="${obj.cx}" cy="${obj.cy}" r="${obj.r}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
+          continue;
+        }
+
+        const largeArc = span > Math.PI ? 1 : 0;
+        const sweep = ccw ? 0 : 1; // SVG sweep-flag: 1 = CW, 0 = CCW
+
+        const sxp = obj.cx + Math.cos(a1) * obj.r;
+        const syp = obj.cy + Math.sin(a1) * obj.r;
+        const exp = obj.cx + Math.cos(a2) * obj.r;
+        const eyp = obj.cy + Math.sin(a2) * obj.r;
+
+        currentLayer += `<path d="M ${sxp} ${syp} A ${obj.r} ${obj.r} 0 ${largeArc} ${sweep} ${exp} ${eyp}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
+        continue;
+      }
     }
 
     const inkMarkup = pastLayer + currentLayer;
@@ -2753,8 +2819,7 @@ if (obj.kind === "arc"){
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-
-// ---------- Export PNG (composite) ----------
+  // ---------- Export PNG (composite) ----------
   exportSvgBtn?.addEventListener("click", () => {
     exportSVG();
   });
@@ -2801,26 +2866,25 @@ if (obj.kind === "arc"){
   });
 
   // ---------- Init + resize ----------
-function init() {
-  setColor(colorInput.value);
-  setBrushSize(brushSize.value);
-  setActiveTool("pen");
+  function init() {
+    setColor(colorInput.value);
+    setBrushSize(brushSize.value);
+    setActiveTool("pen");
 
-  applyBgTransform();
-  updateSwatch();
+    applyBgTransform();
+    updateSwatch();
 
-  resizeAll();
+    resizeAll();
 
-  // ✅ start zoomed right out
-  requestAnimationFrame(() => {
-    resizeAll();               // ensure viewW/viewH are correct
-    state.zoom = 0.25;         // pick how far out you want (0.25 = 25%)
-    // center the world origin nicely
-    state.panX = (state.viewW / 2);
-    state.panY = (state.viewH / 2);
-    redrawAll();
-  });
-}
+    // ✅ start zoomed right out
+    requestAnimationFrame(() => {
+      resizeAll();               // ensure viewW/viewH are correct
+      state.zoom = 0.25;         // pick how far out you want (0.25 = 25%)
+      state.panX = (state.viewW / 2);
+      state.panY = (state.viewH / 2);
+      redrawAll();
+    });
+  }
 
   const ro = new ResizeObserver(() => resizeAll());
   ro.observe(stage);
