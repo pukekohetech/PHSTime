@@ -1826,6 +1826,7 @@ let snapFeaturesEnabled = true; // default ON
   }
 
   function onPointerMove(e) {
+     const ctrlHeld = e.ctrlKey || e.metaKey;
     const { sx, sy } = clientToScreen(e);
     updateHoverCursor(sx, sy);
 
@@ -3006,7 +3007,7 @@ if (e.key === "Control" || e.key === "Meta") {
     redrawAll();
   }
 
-   function freshBoardSnapshot() {
+function freshBoardSnapshot() {
   return {
     v: 8,
     savedAt: new Date().toISOString(),
@@ -3014,22 +3015,20 @@ if (e.key === "Control" || e.key === "Meta") {
     color: state.color || "#111111",
     size: state.size || 5,
     zoom: 0.25,
-    panX: (state.viewW / 2),
-    panY: (state.viewH / 2),
+    panX: state.viewW / 2,
+    panY: state.viewH / 2,
     title: "",
-    pxPerMm: state.pxPerMm || (96/25.4),
-    bg: { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 },
+    pxPerMm: state.pxPerMm || (96 / 25.4),
+    bg: { src: "", natW: 0, natH: 0, x: 0, y: 0, scale: 1, rot: 0 },
     objects: []
   };
 }
 
-newBoardBtn?.addEventListener("click", (e) => {
-  // Prevent form-submit / navigation accidents
-  if (e && typeof e.preventDefault === "function") e.preventDefault();
-  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+newBoardBtn?.addEventListener("click", async (e) => {
+  if (e?.preventDefault) e.preventDefault();
+  if (e?.stopPropagation) e.stopPropagation();
 
   try {
-    // 1) Ask to save
     const doSave = window.confirm("Save the current canvas before starting a new one?");
     if (doSave) {
       const name = window.prompt("Save board as name:", boardSelect?.value || "");
@@ -3043,9 +3042,7 @@ newBoardBtn?.addEventListener("click", (e) => {
       }
     }
 
-    // 2) Fresh board (DO NOT await; applyBoard already redraws)
-    applyBoard(freshBoardSnapshot());
-
+    await applyBoard(freshBoardSnapshot());
     if (boardSelect) boardSelect.value = "";
     showToast("New board");
   } catch (err) {
