@@ -2589,7 +2589,7 @@ document.addEventListener("keydown", (e) => {
     if (digit !== null) {
       e.preventDefault();
       // map 0 => 10, 1..9 => 1..9
-      const size = (digit === 0) ? 10 : digit;
+      const size = (digit === 0) ? 13 : digit;
       setBrushSizeFromHotkey(size);
       return;
     }
