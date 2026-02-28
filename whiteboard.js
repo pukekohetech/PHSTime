@@ -3273,32 +3273,34 @@ newBoardBtn?.addEventListener("click", async () => {
         continue;
       }
 
-      if (obj.kind === "arc") {
-        const a1 = obj.a1 || 0;
-        const a2 = obj.a2 || 0;
-        const ccw = !!obj.ccw;
+ if (obj.kind === "arc") {
+  const a1 = obj.a1 || 0;
+  const a2 = obj.a2 || 0;
+  const ccw = !!obj.ccw;
 
-        // Span (positive)
-        const span = ccw ? arcDelta(a2, a1) : arcDelta(a1, a2);
+  const TWO_PI = Math.PI * 2;
 
-        // Full circle: SVG arc can't do 360° as one A command -> use <circle>
-        if (span >= Math.PI * 2 - 1e-6) {
-          currentLayer += `<circle cx="${obj.cx}" cy="${obj.cy}" r="${obj.r}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
-          continue;
-        }
+  // ✅ Full circle detection must use RAW delta (a2 may be a1 ± 2π but arcDelta normalizes to ~0)
+  const rawSpanAbs = Math.abs(a2 - a1);
+  if (rawSpanAbs >= TWO_PI - 1e-6) {
+    currentLayer += `<circle cx="${obj.cx}" cy="${obj.cy}" r="${obj.r}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
+    continue;
+  }
 
-        const largeArc = span > Math.PI ? 1 : 0;
-        const sweep = ccw ? 0 : 1; // SVG sweep-flag: 1 = CW, 0 = CCW
+  // Span (positive)
+  const span = ccw ? arcDelta(a2, a1) : arcDelta(a1, a2);
 
-        const sxp = obj.cx + Math.cos(a1) * obj.r;
-        const syp = obj.cy + Math.sin(a1) * obj.r;
-        const exp = obj.cx + Math.cos(a2) * obj.r;
-        const eyp = obj.cy + Math.sin(a2) * obj.r;
+  const largeArc = span > Math.PI ? 1 : 0;
+  const sweep = ccw ? 0 : 1; // SVG sweep-flag: 1 = CW, 0 = CCW
 
-        currentLayer += `<path d="M ${sxp} ${syp} A ${obj.r} ${obj.r} 0 ${largeArc} ${sweep} ${exp} ${eyp}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
-        continue;
-      }
-    }
+  const sxp = obj.cx + Math.cos(a1) * obj.r;
+  const syp = obj.cy + Math.sin(a1) * obj.r;
+  const exp = obj.cx + Math.cos(a2) * obj.r;
+  const eyp = obj.cy + Math.sin(a2) * obj.r;
+
+  currentLayer += `<path d="M ${sxp} ${syp} A ${obj.r} ${obj.r} 0 ${largeArc} ${sweep} ${exp} ${eyp}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
+  continue;
+}
 
     const inkMarkup = pastLayer + currentLayer;
 
