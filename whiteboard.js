@@ -184,6 +184,20 @@
     return { sx: evt.clientX - r.left, sy: evt.clientY - r.top };
   }
 
+    // ---------- Keyboard size + camera helpers ----------
+  function nudgePan(dx, dy) {
+    state.panX += dx;
+    state.panY += dy;
+    redrawAll();
+  }
+
+  function setBrushSizeFromHotkey(n) {
+    // clamp to sensible range
+    const v = clamp(Number(n), 1, 60);
+    setBrushSize(v);
+    showToast(`Stroke ${v}px`);
+  }
+  
   function formatMm(mm) {
     if (!isFinite(mm)) return "0 mm";
     // Show 0 decimals when close to an integer (common with mm-grid snap); otherwise 1 decimal.
@@ -2565,6 +2579,46 @@
     }
   });
 
+      // ----- Ctrl/Cmd + NUMBER = set stroke size -----
+    if (!typing && (e.ctrlKey || e.metaKey)) {
+      // Top row digits + numpad digits
+      const digit = (/^[0-9]$/).test(e.key) ? Number(e.key) : null;
+
+      if (digit !== null) {
+        e.preventDefault();
+        // map 0 => 10 (common expectation), 1..9 => 1..9
+        const size = (digit === 0) ? 10 : digit;
+        setBrushSizeFromHotkey(size);
+        return;
+      }
+
+      // Ctrl/Cmd + = / - : quick size up/down
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        setBrushSizeFromHotkey(state.size + (e.shiftKey ? 5 : 1));
+        return;
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        setBrushSizeFromHotkey(state.size - (e.shiftKey ? 5 : 1));
+        return;
+      }
+
+      // ----- Ctrl/Cmd + ARROWS = pan camera -----
+      if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+
+        const step = (e.shiftKey ? 160 : 60); // px per tap (Shift = faster)
+        if (e.key === "ArrowUp")    nudgePan(0, step);
+        if (e.key === "ArrowDown")  nudgePan(0, -step);
+        if (e.key === "ArrowLeft")  nudgePan(step, 0);
+        if (e.key === "ArrowRight") nudgePan(-step, 0);
+        return;
+      }
+    }
+    const tag = (document.activeElement && document.activeElement.tagName) || "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  
   document.addEventListener("keyup", (e) => {
     if (e.code === "Space") {
       spacePanning = false;
