@@ -1842,7 +1842,7 @@ if (state.tool === "arc" && arcDraft.hasCenter && !gesture.active) {
   const rPx = Math.max(1, Math.hypot(p.x - arcDraft.cx, p.y - arcDraft.cy));
   const rMm = rPx / pxPerMm();
 
-  showMeasureTip(sx, sy, `Arc center set • R ${Math.round(rMm)} mm • click+drag to draw`);
+ showMeasureTip(sx, sy, `R ${Math.round(rMm)} mm`);
   redrawAll();
   return;
 }
