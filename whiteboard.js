@@ -2597,12 +2597,12 @@ document.addEventListener("keydown", (e) => {
     // Ctrl/Cmd + = / - : quick size up/down
     if (e.key === "=" || e.key === "+") {
       e.preventDefault();
-      setBrushSizeFromHotkey(state.size + (e.shiftKey ? 5 : 1));
+      setBrushSizeFromHotkey(state.size + (e.shiftKey ? 8 : 1));
       return;
     }
     if (e.key === "-" || e.key === "_") {
       e.preventDefault();
-      setBrushSizeFromHotkey(state.size - (e.shiftKey ? 5 : 1));
+      setBrushSizeFromHotkey(state.size - (e.shiftKey ? 8 : 1));
       return;
     }
 
