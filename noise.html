@@ -629,8 +629,8 @@ let rafId = null;
 let running = false;
 
 // dBFS tracking
-let noiseFloorDbFS = 30;
-let lastDbFS = 50;
+let noiseFloorDbFS = -60;
+let lastDbFS = -80;
 
 // Stats (on current display scale)
 const AVG_WINDOW_MS = 10000; // 10s
@@ -673,8 +673,17 @@ const KEY = {
 };
 
 function rmsToDbFS(rms){
-  const eps = 1e-8;
-  return 20 * Math.log10(rms + eps);
+  // Bigger epsilon avoids -150ish readings in near-silence
+  const eps = 1e-4;
+
+  // Raw dBFS
+  let db = 20 * Math.log10(rms + eps);
+
+  // Clamp to a realistic mic floor/ceiling for classroom use
+  // (prevents insane negatives like -120)
+  db = clamp(db, 20, 100);
+
+  return db;
 }
 function computeRMSFromTimeDomain(buffer){
   let sum = 0;
