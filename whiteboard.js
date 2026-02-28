@@ -1561,7 +1561,7 @@
 
       if (!arcDraft.hasCenter) {
         let c = w;
-        if (ctrlHeld) {
+        if (!ctrlHeld) {
           const hit = snapPointWithCtrl(c);
           c = hit || snapToMmGridWorld(c);
         } else {
@@ -1586,7 +1586,7 @@
       state.selectionIndex = -1;
 
       let p1 = w;
-      if (ctrlHeld) {
+      if (!ctrlHeld) {
         const hit = snapPointWithCtrl(p1);
         p1 = hit || snapToMmGridWorld(p1);
       } else {
@@ -1642,7 +1642,7 @@
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (isSnapShape) {
-        if (ctrlHeld) {
+        if (!ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
           p0 = hit || snapToMmGridWorld(p0);
         } else {
@@ -1867,7 +1867,7 @@
 
       let p = w;
       let snappedHit = null;
-      if (ctrlHeld) {
+      if (!ctrlHeld) {
         snappedHit = snapPointWithCtrl(p);
         if (snappedHit) {
           p = snappedHit;
