@@ -3301,7 +3301,7 @@ newBoardBtn?.addEventListener("click", async () => {
   currentLayer += `<path d="M ${sxp} ${syp} A ${obj.r} ${obj.r} 0 ${largeArc} ${sweep} ${exp} ${eyp}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
   continue;
 }
-
+    }
     const inkMarkup = pastLayer + currentLayer;
 
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
