@@ -2201,6 +2201,23 @@
     document.body.appendChild(host);
     return host;
   }
+function parseCamTransform(transformStr) {
+  // Matches: translate(px py) scale(z)
+  const s = String(transformStr || "").trim();
+  const m = s.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)/i);
+  if (!m) return null;
+  const panX = parseFloat(m[1]);
+  const panY = parseFloat(m[2]);
+  const zoom = parseFloat(m[3]);
+  if (![panX, panY, zoom].every(Number.isFinite) || zoom === 0) return null;
+  return { panX, panY, zoom };
+}
+
+function invCamPoint(p, cam) {
+  // Inverse of: screen = world*zoom + pan
+  return { x: (p.x - cam.panX) / cam.zoom, y: (p.y - cam.panY) / cam.zoom };
+}
+  
 function importSvgInkFromText(svgText) {
   const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
   const parsedSvg = doc.querySelector("svg");
@@ -2214,6 +2231,11 @@ function importSvgInkFromText(svgText) {
   svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
   host.appendChild(svg);
 
+// Detect round-trip export from *this* app: first child <g transform="translate(pan) scale(zoom)">
+const camGroup = svg.querySelector(":scope > g[transform]");
+const cam = camGroup ? parseCamTransform(camGroup.getAttribute("transform")) : null;
+const isRoundTrip = !!cam;
+ 
   const rootBox = getSvgRootBox(svg);
 
   // ---- Background image (DEFER applying until we know the same transform we apply to ink) ----
@@ -2277,16 +2299,18 @@ function importSvgInkFromText(svgText) {
     return Math.max(1, sw ?? 3);
   }
 
-  function mapCTM(el, x, y) {
-    if (rootPt && el.getCTM) {
-      const m = el.getCTM();
-      rootPt.x = x; rootPt.y = y;
-      const p = rootPt.matrixTransform(m);
-      return { x: p.x, y: p.y };
-    }
-    return { x, y };
+function mapCTM(el, x, y) {
+  if (rootPt && el.getCTM) {
+    const m = el.getCTM();
+    rootPt.x = x; rootPt.y = y;
+    const p = rootPt.matrixTransform(m); // includes cam group if present
+    if (isRoundTrip) return invCamPoint({ x: p.x, y: p.y }, cam); // remove camera
+    return { x: p.x, y: p.y };
   }
-
+  const p = { x, y };
+  if (isRoundTrip) return invCamPoint(p, cam);
+  return p;
+}
   // ---- Build ink parts; SKIP fill-only exporter background shapes (the "random box") ----
   for (const el of els) {
     const tag = el.tagName.toLowerCase();
@@ -2410,13 +2434,20 @@ function importSvgInkFromText(svgText) {
   const bw = Math.max(1, maxX - minX);
   const bh = Math.max(1, maxY - minY);
 
-  const viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
-  const availW = (state.viewW / state.zoom) * 0.9;
-  const availH = (state.viewH / state.zoom) * 0.9;
-  const s = clamp(Math.min(availW / bw, availH / bh), 0.02, 50);
+let viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+let s = clamp(Math.min(((state.viewW / state.zoom) * 0.9) / bw, ((state.viewH / state.zoom) * 0.9) / bh), 0.02, 50);
 
-  const cx0 = minX + bw/2;
-  const cy0 = minY + bh/2;
+let cx0 = minX + bw/2;
+let cy0 = minY + bh/2;
+
+if (isRoundTrip) {
+  // Keep original world coords, no refit/recenter
+  viewCenter = { x: 0, y: 0 };
+  s = 1;
+  cx0 = 0;
+  cy0 = 0;
+}
+ 
 
   const groupId = "svg_" + Date.now();
 
@@ -2470,6 +2501,13 @@ function importSvgInkFromText(svgText) {
 
   state.selectionIndex = -1;
   setActiveTool("select");
+
+if (isRoundTrip) {
+  state.zoom = cam.zoom;
+  state.panX = cam.panX;
+  state.panY = cam.panY;
+}
+ 
   redrawAll();
   showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
 }
