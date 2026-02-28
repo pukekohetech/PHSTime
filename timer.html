@@ -11,20 +11,20 @@
 
 <body class="page-timer">
 
-   <nav class="appNav" aria-label="PHS Classroom Tools">
+  <nav class="appNav" aria-label="PHS Classroom Tools">
     <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
-     <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
     <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
     <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
     <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
     <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
   </nav>
-  
+
   <!-- OPTIONS MENU -->
   <div class="controls">
-    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+    <button id="optionsBtn" aria-haspopup="dialog" aria-expanded="false" title="Options">⚙️</button>
 
-    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+    <div id="optionsMenu" class="hidden" role="dialog" aria-modal="true" aria-label="Options">
       <div class="menuHeader" id="menuHeader" title="Drag down to close">
         <div>
           <div class="menuTitle">Options</div>
@@ -47,6 +47,11 @@
             <label for="endSoundOn">End sound</label>
           </span>
 
+          <span class="pillBtn" title="Repeat the end sound every 10s until reset">
+            <input id="repeatChimeOn" type="checkbox" />
+            <label for="repeatChimeOn">Repeat chime</label>
+          </span>
+
           <span class="pillBtn" title="Show/hide the progress bar under the timer">
             <input id="progressOn" type="checkbox" />
             <label for="progressOn">Progress</label>
@@ -59,10 +64,27 @@
         </div>
 
         <div class="menuRow menuRow--center">
+          <label class="pillBtn" title="Choose what the end sound is">
+            🔔
+            <select id="soundType" class="timerSelect" aria-label="Sound type">
+              <option value="chime">Chime</option>
+              <option value="beep">Beep</option>
+              <option value="double">Double beep</option>
+            </select>
+          </label>
+
           <span class="pillBtn" title="Volume">
             🔊 <input id="volume" class="timerVolume" type="range" min="0" max="100" value="40" />
           </span>
+
           <button id="resetAllBtn" type="button" title="Reset timer + options">Reset</button>
+        </div>
+
+        <div class="menuRow">
+          <span class="pillBtn" title="Switch between minutes and seconds timer">
+            <input id="secondsModeOn" type="checkbox" />
+            <label for="secondsModeOn">Seconds mode</label>
+          </span>
         </div>
 
         <details>
@@ -71,6 +93,8 @@
           <div class="timerShortcutText">
             <div><span class="valuePill">Space</span> Start / Pause</div>
             <div class="u-mt-8"><span class="valuePill">R</span> Reset</div>
+            <div class="u-mt-8"><span class="valuePill">M</span> Mute toggle</div>
+            <div class="u-mt-8"><span class="valuePill">1–6</span> Presets (when focused on page)</div>
           </div>
         </details>
       </div>
@@ -87,447 +111,55 @@
       <div class="stateChip" id="stateChip">READY</div>
     </div>
 
+    <!-- Screen reader announcements -->
+    <div id="liveRegion" class="srOnly" aria-live="polite" aria-atomic="true"></div>
+
     <button class="timeBtn" id="timeBtn" type="button" aria-label="Timer display button">
       <div class="timeDisplay" id="timeDisplay">5:00</div>
-      <div class="timeHint" id="timeHint">Set minutes below • then click to start</div>
+      <div class="timeHint" id="timeHint">Set time below • then click to start</div>
     </button>
 
-    <!-- aria-hidden must reflect visibility; default false -->
     <div class="progressTrack" id="progressTrack" aria-hidden="false">
       <div class="progressFill" id="progressFill"></div>
     </div>
 
     <div class="timerControls" role="group" aria-label="Timer controls">
-      <button id="startPauseBtn" type="button">Start</button>
+      <button id="startPauseBtn" type="button" aria-pressed="false">Start</button>
       <button id="resetBtn" type="button">Reset</button>
     </div>
 
+    <!-- Nudges -->
+    <div class="nudgeRow" role="group" aria-label="Adjust remaining time">
+      <button class="nudgeBtn" id="minus30Btn" type="button">−30s</button>
+      <button class="nudgeBtn" id="plus30Btn" type="button">+30s</button>
+      <button class="nudgeBtn" id="minus1mBtn" type="button">−1m</button>
+      <button class="nudgeBtn" id="plus1mBtn" type="button">+1m</button>
+    </div>
+
+    <!-- Presets -->
+    <div class="presetWrap" aria-label="Quick presets">
+      <div class="presetLabelRow">
+        <div class="miniLabel" id="presetLabel">Presets (minutes)</div>
+        <span class="valuePill" id="presetHint">Tap to set</span>
+      </div>
+      <div class="presetRow" id="presetRow">
+        <!-- filled by JS depending on mode -->
+      </div>
+    </div>
+
+    <!-- Slider -->
     <div class="sliderWrap">
       <div class="sliderRow">
-        <div class="miniLabel">Minutes</div>
-        <span class="valuePill"><span id="minsLabel">5</span> min</span>
+        <div class="miniLabel" id="sliderLabel">Minutes</div>
+        <span class="valuePill">
+          <span id="mainValueLabel">5</span>
+          <span id="mainValueUnit">min</span>
+        </span>
       </div>
-      <input id="minsRange" class="timerMinsRange" type="range" min="1" max="15" value="5" />
+      <input id="mainRange" class="timerMinsRange" type="range" min="1" max="15" value="5" />
     </div>
   </div>
 
-  <script>
-/* ================= HELPERS ================= */
-const $ = (id) => document.getElementById(id);
-
-function mmss(totalSeconds){
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2,"0")}`;
-}
-
-function storageOK(){
-  try{
-    const k="__storage_test__";
-    localStorage.setItem(k,"1");
-    localStorage.removeItem(k);
-    return true;
-  } catch(e){
-    return false;
-  }
-}
-const CAN_STORE = storageOK();
-
-/* ================= OPTIONS MENU ================= */
-const optionsBtn = $("optionsBtn");
-const optionsMenu = $("optionsMenu");
-const closeMenuBtn = $("closeMenu");
-const menuHeader = $("menuHeader");
-
-function openMenu(){
-  optionsMenu.classList.remove("hidden");
-  optionsBtn.setAttribute("aria-expanded", "true");
-}
-function closeMenu(){
-  optionsMenu.classList.add("hidden");
-  optionsBtn.setAttribute("aria-expanded", "false");
-}
-function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
-
-optionsBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(); });
-["pointerdown","click"].forEach(evt => {
-  closeMenuBtn.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); });
-});
-
-document.addEventListener("pointerdown", (e) => {
-  if (optionsMenu.classList.contains("hidden")) return;
-  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
-});
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
-
-let dragStartY = null;
-menuHeader.addEventListener("pointerdown", (e) => { dragStartY = e.clientY; menuHeader.setPointerCapture(e.pointerId); });
-menuHeader.addEventListener("pointermove", (e) => {
-  if (dragStartY === null) return;
-  const dy = e.clientY - dragStartY;
-  if (dy > 70) { dragStartY = null; closeMenu(); }
-});
-menuHeader.addEventListener("pointerup", () => dragStartY = null);
-menuHeader.addEventListener("pointercancel", () => dragStartY = null);
-
-/* ================= FULLSCREEN ================= */
-$("fullscreenBtn").addEventListener("click", async ()=>{
-  try{
-    if (!document.fullscreenElement){
-      await document.documentElement.requestFullscreen();
-      $("fullscreenBtn").textContent = "Exit full screen";
-    } else {
-      await document.exitFullscreen();
-      $("fullscreenBtn").textContent = "Full screen";
-    }
-  } catch (e) { alert("Fullscreen blocked by the browser. Try pressing F11."); }
-});
-document.addEventListener("fullscreenchange", ()=>{
-  $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
-});
-
-/* ================= NAV BUTTON (PHSTimer) ================= */
-$("goPHSTimerBtn").addEventListener("click", ()=>{
-  window.location.href = "index.html";
-});
-
-/* ================= AUDIO ================= */
-let audioCtx = null;
-
-const VOL_KEY = "trial_timer_volume_v1";
-function getVolume(){ return Number($("volume").value) / 100; }
-
-function ensureAudio(){
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === "suspended") audioCtx.resume();
-}
-
-function beep(freq=880, durationMs=220, type="sine", gain=0.25){
-  ensureAudio();
-  const t0 = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-
-  const vol = gain * getVolume();
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(vol, t0 + 0.02);
-  g.gain.linearRampToValueAtTime(0.0001, t0 + durationMs/1000);
-
-  osc.connect(g);
-  g.connect(audioCtx.destination);
-  osc.start(t0);
-  osc.stop(t0 + durationMs/1000 + 0.05);
-}
-
-function finishChime(){
-  beep(660, 140, "sine", 0.35);
-  setTimeout(()=>beep(880, 160, "sine", 0.35), 120);
-  setTimeout(()=>beep(990, 180, "sine", 0.35), 250);
-}
-
-function loadVolume(){
-  if (!CAN_STORE) return;
-  const v = localStorage.getItem(VOL_KEY);
-  if (v !== null) $("volume").value = v;
-}
-$("volume").addEventListener("input", ()=>{
-  if (!CAN_STORE) return;
-  localStorage.setItem(VOL_KEY, $("volume").value);
-});
-
-/* ================= WAKE LOCK ================= */
-let wakeLock = null;
-
-async function setWakeLock(on){
-  if (!("wakeLock" in navigator)){
-    if (on) alert("Wake Lock not supported on this browser/device.");
-    $("wakeLockOn").checked = false;
-    return;
-  }
-  try{
-    if (on){
-      wakeLock = await navigator.wakeLock.request("screen");
-    } else {
-      if (wakeLock) await wakeLock.release();
-      wakeLock = null;
-    }
-  } catch (e){
-    $("wakeLockOn").checked = false;
-    alert("Couldn't enable Keep awake (permission/device limitation).");
-  }
-}
-document.addEventListener("visibilitychange", ()=>{
-  if (document.visibilityState === "visible" && $("wakeLockOn").checked){
-    setWakeLock(true);
-  }
-});
-
-/* ================= TIMER WIDGET ================= */
-const TimerWidget = (() => {
-  const KEY_MINS = "trial_timer_mins_v2";
-  const KEY_ENDSOUND = "trial_timer_end_sound_v2";
-  const KEY_PROGRESS = "trial_timer_progress_v1";
-  const KEY_WAKE = "trial_timer_wake_v1";
-
-  let durationSec = 5 * 60;
-  let remainingSec = durationSec;
-  let running = false;
-  let lastTickMs = 0;
-  let rafId = null;
-  let wired = false;
-
-  function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
-
-  function setBgByState(){
-    if (!running && remainingSec === durationSec){
-      document.body.style.backgroundColor = "var(--bgGrey)";
-      return;
-    }
-    if (!running && remainingSec === 0){
-      document.body.style.backgroundColor = "var(--bgGreen)";
-      return;
-    }
-    const pctLeft = durationSec ? (remainingSec / durationSec) : 0;
-    if (pctLeft <= 0.2) document.body.style.backgroundColor = "var(--bgRed)";
-    else document.body.style.backgroundColor = "var(--bgOrange)";
-  }
-
-  function setProgressVisible(on){
-    const el = $("progressTrack");
-    el.classList.toggle("hidden", !on);
-    el.setAttribute("aria-hidden", on ? "false" : "true");
-  }
-
-  function setUI(){
-    $("timeDisplay").textContent = mmss(remainingSec);
-
-    const pctDone = durationSec ? (1 - (remainingSec / durationSec)) : 1;
-    $("progressFill").style.width = `${clamp(pctDone * 100, 0, 100)}%`;
-
-    let chip = "READY";
-    if (running) chip = "RUNNING";
-    else if (remainingSec === 0) chip = "DONE";
-    else if (remainingSec !== durationSec) chip = "PAUSED";
-    $("stateChip").textContent = chip;
-
-    $("startPauseBtn").textContent = running ? "Pause" : (remainingSec === 0 ? "Restart" : "Start");
-
-    if (remainingSec === 0){
-      $("timeHint").textContent = "Finished • Reset or Restart";
-      $("subLabel").textContent = "TIME'S UP";
-    } else if (running){
-      $("timeHint").textContent = "Running… click time to pause";
-      $("subLabel").textContent = "CLICK TIME TO START / PAUSE";
-    } else {
-      $("timeHint").textContent = (remainingSec === durationSec)
-        ? "Set minutes below • then click to start"
-        : "Paused • click time to resume";
-      $("subLabel").textContent = "CLICK TIME TO START / PAUSE";
-    }
-
-    setBgByState();
-  }
-
-  function savePrefs(){
-    if (!CAN_STORE) return;
-    try{
-      localStorage.setItem(KEY_MINS, String(Math.round(durationSec / 60)));
-      localStorage.setItem(KEY_ENDSOUND, $("endSoundOn").checked ? "1" : "0");
-      localStorage.setItem(KEY_PROGRESS, $("progressOn").checked ? "1" : "0");
-      localStorage.setItem(KEY_WAKE, $("wakeLockOn").checked ? "1" : "0");
-    } catch(e){}
-  }
-
-  function loadPrefs(){
-    if (!CAN_STORE) return;
-
-    try{
-      const rawM = localStorage.getItem(KEY_MINS);
-      const m = rawM ? Number(rawM) : 5;
-      if (Number.isFinite(m)) setDurationMinutes(m, { reset:true });
-
-      $("endSoundOn").checked = localStorage.getItem(KEY_ENDSOUND) === "1";
-
-      const progOn = localStorage.getItem(KEY_PROGRESS);
-      $("progressOn").checked = (progOn === null) ? true : (progOn === "1");
-
-      $("wakeLockOn").checked = localStorage.getItem(KEY_WAKE) === "1";
-    } catch(e){}
-  }
-
-  function setDurationMinutes(mins, { reset=false } = {}){
-    const m = clamp(Number(mins) || 5, 1, 15);
-    durationSec = m * 60;
-
-    // simplified: if not running OR explicitly reset, snap remaining to new duration
-    if (reset || !running) remainingSec = durationSec;
-
-    $("minsRange").value = String(m);
-    $("minsLabel").textContent = String(m);
-    savePrefs();
-    setUI();
-  }
-
-  function stopLoop(){
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-
-  function tickLoop(nowMs){
-    if (!running) return;
-
-    if (!lastTickMs) lastTickMs = nowMs;
-    const dt = (nowMs - lastTickMs) / 1000;
-
-    if (dt >= 0.2){
-      const drop = Math.floor(dt);
-      remainingSec = Math.max(0, remainingSec - drop);
-      lastTickMs += drop * 1000;
-      setUI();
-
-      if (remainingSec === 0){
-        running = false;
-        stopLoop();
-        setUI();
-        if ($("endSoundOn").checked) finishChime();
-        return;
-      }
-    }
-
-    rafId = requestAnimationFrame(tickLoop);
-  }
-
-  function start(){
-    if (remainingSec === 0) remainingSec = durationSec;
-    if (running) return;
-    running = true;
-    lastTickMs = 0;
-    setUI();
-    stopLoop();
-    rafId = requestAnimationFrame(tickLoop);
-  }
-
-  function pause(){
-    running = false;
-    stopLoop();
-    setUI();
-  }
-
-  function toggleStartPause(){
-    running ? pause() : start();
-  }
-
-  function reset(){
-    pause();
-    remainingSec = durationSec;
-    setUI();
-  }
-
-  function syncFromCheckboxes(){
-    // fixes “sometimes” issues after bfcache / PWA resume
-    setProgressVisible($("progressOn").checked);
-    setUI();
-  }
-
-  function wire(){
-    $("minsRange").addEventListener("input", () => {
-      setDurationMinutes($("minsRange").value, { reset: true });
-    });
-
-    $("timeBtn").addEventListener("click", () => {
-      if ($("endSoundOn").checked) ensureAudio();
-      toggleStartPause();
-    });
-
-    $("startPauseBtn").addEventListener("click", () => {
-      if ($("endSoundOn").checked) ensureAudio();
-      toggleStartPause();
-    });
-
-    $("resetBtn").addEventListener("click", reset);
-
-    $("endSoundOn").addEventListener("change", () => {
-      savePrefs();
-      if ($("endSoundOn").checked) ensureAudio();
-    });
-
-    $("progressOn").addEventListener("change", ()=>{
-      setProgressVisible($("progressOn").checked);
-      savePrefs();
-      setUI();
-    });
-
-    $("wakeLockOn").addEventListener("change", ()=>{
-      setWakeLock($("wakeLockOn").checked);
-      savePrefs();
-    });
-
-    $("resetAllBtn").addEventListener("click", ()=>{
-      if (CAN_STORE){
-        localStorage.removeItem(KEY_MINS);
-        localStorage.removeItem(KEY_ENDSOUND);
-        localStorage.removeItem(KEY_PROGRESS);
-        localStorage.removeItem(KEY_WAKE);
-        localStorage.removeItem(VOL_KEY);
-      }
-
-      $("volume").value = "40";
-      $("endSoundOn").checked = false;
-      $("progressOn").checked = true;
-      $("wakeLockOn").checked = false;
-      setWakeLock(false);
-
-      setProgressVisible(true);
-      setDurationMinutes(5, { reset:true });
-      reset();
-      closeMenu();
-    });
-
-    document.addEventListener("keydown", (e) => {
-      // avoid toggling while typing in a control
-      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-
-      if (e.key === " "){ e.preventDefault(); toggleStartPause(); }
-      if (e.key.toLowerCase() === "r"){ reset(); }
-    });
-
-    // Key fix for “checkbox checked but bar hidden” after restore:
-    window.addEventListener("pageshow", syncFromCheckboxes);
-
-    wired = true;
-  }
-
-  function init(){
-    loadPrefs();
-
-    if (!durationSec) durationSec = 300;
-    if (!remainingSec) remainingSec = durationSec;
-
-    setProgressVisible($("progressOn").checked);
-
-    if ($("wakeLockOn").checked) setWakeLock(true);
-
-    if (!wired) wire();
-    setUI();
-
-    // prime audio on first interaction (if enabled)
-    document.addEventListener("pointerdown", () => {
-      if ($("endSoundOn").checked) ensureAudio();
-    }, { once:true });
-  }
-
-  return { init, start, pause, reset, setDurationMinutes };
-})();
-
-/* ================= INIT ================= */
-function init(){
-  loadVolume();
-  TimerWidget.init();
-}
-init();
-  </script>
+  <script src="timer.js"></script>
 </body>
 </html>
