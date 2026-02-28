@@ -2803,7 +2803,7 @@
     const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
     // SVG reveal controls (when an SVG has been imported as ink)
-    if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+    if (!typing && svgReveal.active && (e.key === "." || e.key === ",")) {
       e.preventDefault();
       const total = svgReveal.partIndices.length;
       if (!total) return;
