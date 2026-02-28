@@ -2012,65 +2012,84 @@
       }
     }
 
-    // Drawing: Arc (CW/CCW + full circle snap + length indicator)
-    if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
-      const ctrlHeld = e.ctrlKey || e.metaKey;
+ // Drawing: Arc (CW/CCW + full circle snap + length indicator)
+if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
+  const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      const cx = gesture.arcCenter.cx;
-      const cy = gesture.arcCenter.cy;
+  const cx = gesture.arcCenter.cx;
+  const cy = gesture.arcCenter.cy;
 
-      let p = w;
-      let snappedHit = null;
-      if (ctrlHeld) {
-        snappedHit = snapPointWithCtrl(p);
-        if (snappedHit) {
-          p = snappedHit;
-        } else {
-          p = snapPointWithCtrlOrAngle({ x: cx, y: cy }, p);
-        }
-      } else {
-        p = snapToMmGridWorld(p);
-      }
+  let p = w;
+  let snappedHit = null;
 
-      let aNow = Math.atan2(p.y - cy, p.x - cx);
-      if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
-
-      const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
-      const step = wrapSigned(aNow - (gesture.arcLastA || aNow));
-      gesture.arcAccum = (gesture.arcAccum || 0) + step;
-      gesture.arcLastA = aNow;
-
-      const rFixed = Math.max(1, gesture.arcR || 1);
-      let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
-
-      const TWO_PI = Math.PI * 2;
-      const spanAbs = Math.abs(gesture.arcAccum || 0);
-      const snapTol = (10 * Math.PI) / 180; // 10°
-      let isCircle = false;
-
-      if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
-        isCircle = true;
-        a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
-      }
-
-      gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
-
-      gesture.activeObj.cx = cx;
-      gesture.activeObj.cy = cy;
-      gesture.activeObj.r = rFixed;
-      gesture.activeObj.a1 = gesture.arcA1;
-      gesture.activeObj.a2 = a2;
-
-      const rMm = rFixed / pxPerMm();
-      const span = Math.abs(a2 - (gesture.arcA1 || 0));
-      const lenMm = (span * rFixed) / pxPerMm();
-
-      const label = isCircle ? `Circle • R ${Math.round(rMm)} mm` : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
-
-      showMeasureTip(sx, sy, label);
-      redrawAll();
-      return;
+  if (ctrlHeld) {
+    snappedHit = snapPointWithCtrl(p);
+    if (snappedHit) {
+      p = snappedHit;
+    } else {
+      p = snapPointWithCtrlOrAngle({ x: cx, y: cy }, p);
     }
+  } else {
+    p = snapToMmGridWorld(p);
+  }
+
+  // Angle at cursor point
+  let aNow = Math.atan2(p.y - cy, p.x - cx);
+  if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
+
+  const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
+  const step = wrapSigned(aNow - (gesture.arcLastA || aNow));
+  gesture.arcAccum = (gesture.arcAccum || 0) + step;
+  gesture.arcLastA = aNow;
+
+  // Keep your fixed radius snapping for the actual arc object
+  const rFixed = Math.max(1, gesture.arcR || 1);
+  let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
+
+  const TWO_PI = Math.PI * 2;
+  const spanAbs = Math.abs(gesture.arcAccum || 0);
+  const snapTol = (10 * Math.PI) / 180; // 10°
+  let isCircle = false;
+
+  if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
+    isCircle = true;
+    a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
+  }
+
+  // Direction flag for export/draw
+  gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
+
+  // Update active arc object (uses fixed radius)
+  gesture.activeObj.cx = cx;
+  gesture.activeObj.cy = cy;
+  gesture.activeObj.r = rFixed;
+  gesture.activeObj.a1 = gesture.arcA1;
+  gesture.activeObj.a2 = a2;
+
+  // ---------- Tooltip (UPGRADED) ----------
+  // Live radius from cursor position (feels better while choosing radius)
+  const rLivePx = Math.max(1, Math.hypot(p.x - cx, p.y - cy));
+  const rLiveMm = rLivePx / pxPerMm();
+
+  // Live angle delta from accumulated sweep
+  const deltaRad = Math.abs(gesture.arcAccum || 0);
+  const deltaDeg = deltaRad * 180 / Math.PI;
+
+  // Length shown using the fixed arc radius (matches the actual arc you’re drawing)
+  const span = Math.abs(a2 - (gesture.arcA1 || 0));
+  const lenMm = (span * rFixed) / pxPerMm();
+
+  const dir = (gesture.arcAccum || 0) < 0 ? "CCW" : "CW";
+
+  const label = isCircle
+    ? `Circle • R ${Math.round(rLiveMm)} mm • 360°`
+    : `R ${Math.round(rLiveMm)} mm • Δθ ${Math.round(deltaDeg)}° ${dir} • L ${Math.round(lenMm)} mm`;
+
+  // Tip stays at cursor (your measureTip already has a 10px offset via CSS transform)
+  showMeasureTip(sx, sy, label);
+  redrawAll();
+  return;
+}
 
     // Drawing: stroke / erase
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
