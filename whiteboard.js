@@ -2548,33 +2548,37 @@ document.addEventListener("keydown", (e) => {
   const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
   // SVG reveal controls (when an SVG has been imported as ink)
-  if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-    e.preventDefault();
-    const total = svgReveal.partIndices.length;
-    if (!total) return;
+if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+  e.preventDefault();
+  const total = svgReveal.partIndices.length;
+  if (!total) return;
 
-    if (e.key === "ArrowRight") {
-      if (svgReveal.revealed >= total) { showToast(`SVG: ${total}/${total}`); return; }
+  if (e.key === "ArrowRight") {
+    // Skip any missing indices (objects may have been deleted/undone)
+    while (svgReveal.revealed < total) {
       const idx = svgReveal.partIndices[svgReveal.revealed];
       const obj = state.objects[idx];
-      if (obj) obj.hidden = false;
       svgReveal.revealed += 1;
-      redrawAll();
-      showToast(`SVG: ${svgReveal.revealed}/${total}`);
-      return;
+      if (obj) { obj.hidden = false; break; }
     }
+    redrawAll();
+    showToast(`SVG: ${Math.min(svgReveal.revealed, total)}/${total}`);
+    return;
+  }
 
-    if (e.key === "ArrowLeft") {
-      if (svgReveal.revealed <= 0) { showToast(`SVG: 0/${total}`); return; }
+  if (e.key === "ArrowLeft") {
+    // Skip any missing indices
+    while (svgReveal.revealed > 0) {
       svgReveal.revealed -= 1;
       const idx = svgReveal.partIndices[svgReveal.revealed];
       const obj = state.objects[idx];
-      if (obj) obj.hidden = true;
-      redrawAll();
-      showToast(`SVG: ${svgReveal.revealed}/${total}`);
-      return;
+      if (obj) { obj.hidden = true; break; }
     }
+    redrawAll();
+    showToast(`SVG: ${Math.max(svgReveal.revealed, 0)}/${total}`);
+    return;
   }
+}
 
   // Delete removes selection (when not typing)
   if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
