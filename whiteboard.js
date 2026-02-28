@@ -586,12 +586,13 @@
     scaleOut.textContent = `1 mm = ${pxPerMm().toFixed(3)} px`;
   }
 
-  function setActiveTool(tool) {
-    state.tool = tool;
-    dockBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tool === tool));
-    updateCursorFromTool();
-    if (tool !== "arc") arcDraft.hasCenter = false;
-  }
+function setActiveTool(tool) {
+  hideMeasureTip(); // ✅ smallest fix: clear any leftover tooltip when switching tools
+  state.tool = tool;
+  dockBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tool === tool));
+  updateCursorFromTool();
+  if (tool !== "arc") arcDraft.hasCenter = false;
+}
 
   // Screen <-> World (screen coords are CSS px)
   function screenToWorld(sx, sy) {
@@ -2251,10 +2252,11 @@ if (!gesture.active) return;
       const t = b.dataset.tool;
 
       // ✅ If Arc is already active, clicking it again arms a new center pick
-      if (t === "arc" && state.tool === "arc") {
-        arcDraft.hasCenter = false;
-        showToast("Click to set arc center");
-      }
+    if (t === "arc" && state.tool === "arc") {
+  hideMeasureTip(); // ✅ clear old radius tip when re-arming arc
+  arcDraft.hasCenter = false;
+  showToast("Click to set arc center");
+}
 
       setActiveTool(t);
     })
