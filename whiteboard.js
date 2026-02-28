@@ -3029,20 +3029,36 @@ if (e.key === "Control" || e.key === "Meta") {
   };
 }
 
-newBoardBtn?.addEventListener("click", async () => {
-  // Ask to save current board first
-  const doSave = confirm("Save the current canvas before starting a new one?");
-  if (doSave) {
-    const name = prompt("Save board as name:", boardSelect.value || "");
-    if (name) {
-      const index = loadBoardsIndex();
-      index[name] = snapshotBoard();
-      saveBoardsIndex(index);
-      refreshBoardSelect();
-      boardSelect.value = name;
-      showToast("Board saved");
+newBoardBtn?.addEventListener("click", (e) => {
+  // Prevent form-submit / navigation accidents
+  if (e && typeof e.preventDefault === "function") e.preventDefault();
+  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+
+  try {
+    // 1) Ask to save
+    const doSave = window.confirm("Save the current canvas before starting a new one?");
+    if (doSave) {
+      const name = window.prompt("Save board as name:", boardSelect?.value || "");
+      if (name && name.trim()) {
+        const index = loadBoardsIndex();
+        index[name.trim()] = snapshotBoard();
+        saveBoardsIndex(index);
+        refreshBoardSelect();
+        if (boardSelect) boardSelect.value = name.trim();
+        showToast("Board saved");
+      }
     }
+
+    // 2) Fresh board (DO NOT await; applyBoard already redraws)
+    applyBoard(freshBoardSnapshot());
+
+    if (boardSelect) boardSelect.value = "";
+    showToast("New board");
+  } catch (err) {
+    console.error("newBoard failed:", err);
+    showToast("New board failed (see console)");
   }
+});
 
   // Start a fresh board (blank canvas)
   await applyBoard(freshBoardSnapshot());
