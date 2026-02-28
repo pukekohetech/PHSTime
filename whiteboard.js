@@ -1,4 +1,4 @@
- /* =========================================================
+/* =========================================================
    whiteboard.js — background as DOM image (no zoom artefacts)
 
    ADDITIONS (requested):
@@ -11,7 +11,7 @@
 
    Existing:
      + Line/Arrow precision snapping:
-       - Default: end point snaps to nearest millimetre grid
+       - Default: end point snaps to nearest whole-millimetre LENGTH
        - Ctrl/Cmd: snaps to nearby endpoints/intersections; if none nearby, angle-snaps (0/30/45/60/90 etc.)
      ✅ DPR-safe transforms & pointer mapping using inkCanvas rect
 
@@ -22,9 +22,10 @@
      ✅ SVG import: if SVG contains <image>, restore it as background (visible)
      ✅ Removed accidental SVG reveal handler from paste() (was using e.key in paste event)
      ✅ New board matches initial zoomed-out view
+     ✅ Line/Arrow default snapping changed from "whole-mm grid" to "whole-mm length"
    ========================================================= */
 
- (() => {
+(() => {
   // ---------- DOM ----------
   const stage = document.getElementById("stage");
 
@@ -38,7 +39,8 @@
   measureTip.style.borderRadius = "10px";
   measureTip.style.background = "rgba(0,0,0,0.72)";
   measureTip.style.color = "#fff";
-  measureTip.style.font = "12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  measureTip.style.font =
+    "12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
   measureTip.style.boxShadow = "0 8px 20px rgba(0,0,0,0.22)";
   measureTip.style.transform = "translate(10px, 10px)";
   measureTip.style.display = "none";
@@ -50,9 +52,9 @@
 
   // Canvases
   const inkCanvas = document.getElementById("inkCanvas");
-  const uiCanvas  = document.getElementById("uiCanvas");
+  const uiCanvas = document.getElementById("uiCanvas");
   const inkCtx = inkCanvas.getContext("2d");
-  const uiCtx  = uiCanvas.getContext("2d");
+  const uiCtx = uiCanvas.getContext("2d");
 
   const toast = document.getElementById("toast");
 
@@ -119,7 +121,7 @@
     title: "",
 
     // Scale (world px per mm)
-    pxPerMm: (96 / 25.4),
+    pxPerMm: 96 / 25.4,
 
     // Background (world coords)
     bg: {
@@ -156,7 +158,7 @@
   // Handle geometry cached each redraw (screen coords)
   const uiHandles = {
     visible: false,
-    box: null,    // {x,y,w,h}
+    box: null, // {x,y,w,h}
     rotate: null, // {x,y,r}
     corners: null // [{name,x,y,s}]
   };
@@ -173,10 +175,14 @@
   }
 
   // Sizing uses the stage
-  function stageRect() { return stage.getBoundingClientRect(); }
+  function stageRect() {
+    return stage.getBoundingClientRect();
+  }
 
   // Pointer mapping MUST use the canvas rect
-  function canvasRect() { return inkCanvas.getBoundingClientRect(); }
+  function canvasRect() {
+    return inkCanvas.getBoundingClientRect();
+  }
 
   // ✅ SINGLE correct clientToScreen
   function clientToScreen(evt) {
@@ -184,7 +190,7 @@
     return { sx: evt.clientX - r.left, sy: evt.clientY - r.top };
   }
 
-    // ---------- Keyboard size + camera helpers ----------
+  // ---------- Keyboard size + camera helpers ----------
   function nudgePan(dx, dy) {
     state.panX += dx;
     state.panY += dy;
@@ -197,10 +203,10 @@
     setBrushSize(v);
     showToast(`Stroke ${v}px`);
   }
-  
+
   function formatMm(mm) {
     if (!isFinite(mm)) return "0 mm";
-    // Show 0 decimals when close to an integer (common with mm-grid snap); otherwise 1 decimal.
+    // Show 0 decimals when close to an integer (common with mm snaps); otherwise 1 decimal.
     const nearInt = Math.abs(mm - Math.round(mm)) < 0.05;
     return (nearInt ? Math.round(mm).toString() : mm.toFixed(1)) + " mm";
   }
@@ -219,12 +225,11 @@
   // --- Angle snapping helpers (Ctrl/Cmd) ---
   function snapAngleRad(angleRad) {
     const snapsDeg = [
-      0,
-      30, 45, 60, 90, 120, 135, 150,
-     -30,-45,-60,-90,-120,-135,-150,
+      0, 30, 45, 60, 90, 120, 135, 150,
+      -30, -45, -60, -90, -120, -135, -150,
       180
     ];
-    const snaps = snapsDeg.map(d => d * Math.PI / 180);
+    const snaps = snapsDeg.map((d) => (d * Math.PI) / 180);
 
     // Normalize to [-PI, PI)
     const a = Math.atan2(Math.sin(angleRad), Math.cos(angleRad));
@@ -234,7 +239,10 @@
 
     for (const s of snaps) {
       const diff = Math.abs(Math.atan2(Math.sin(a - s), Math.cos(a - s)));
-      if (diff < bestDiff) { bestDiff = diff; best = s; }
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = s;
+      }
     }
     return best;
   }
@@ -258,7 +266,7 @@
   // World units are in CSS pixels at zoom=1.
   // Default approximation: 96dpi => 96px per inch => 96/25.4 px per mm.
   const DEFAULT_PX_PER_MM = 96 / 25.4; // ≈3.7795 px per mm
-  const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
+  const SNAP_RADIUS_PX = 12; // screen-space radius to grab endpoints/intersections
 
   function pxPerMm() {
     const v = Number(state.pxPerMm);
@@ -278,10 +286,36 @@
     };
   }
 
+  // ✅ NEW: snap endpoint so the *LENGTH* (from start) is whole-mm, direction preserved
+  function snapToWholeMmLength(start, rawPt) {
+    const dx = rawPt.x - start.x;
+    const dy = rawPt.y - start.y;
+    const lenPx = Math.hypot(dx, dy);
+    if (!isFinite(lenPx) || lenPx < 1e-6) return { x: rawPt.x, y: rawPt.y };
+
+    const mm = lenPx / pxPerMm();
+    const mmInt = Math.max(1, Math.round(mm));
+    const newLenPx = mmInt * pxPerMm();
+
+    const ux = dx / lenPx;
+    const uy = dy / lenPx;
+
+    return {
+      x: start.x + ux * newLenPx,
+      y: start.y + uy * newLenPx
+    };
+  }
+
   function segIntersection(a, b) {
     // Segment intersection (including touching endpoints).
-    const x1 = a.x1, y1 = a.y1, x2 = a.x2, y2 = a.y2;
-    const x3 = b.x1, y3 = b.y1, x4 = b.x2, y4 = b.y2;
+    const x1 = a.x1,
+      y1 = a.y1,
+      x2 = a.x2,
+      y2 = a.y2;
+    const x3 = b.x1,
+      y3 = b.y1,
+      x4 = b.x2,
+      y4 = b.y2;
 
     const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
     if (Math.abs(den) < 1e-12) return null; // parallel/collinear
@@ -295,69 +329,81 @@
   }
 
   function rotateAround(x, y, cx, cy, ang) {
-    const dx = x - cx, dy = y - cy;
-    const c = Math.cos(ang), s = Math.sin(ang);
+    const dx = x - cx,
+      dy = y - cy;
+    const c = Math.cos(ang),
+      s = Math.sin(ang);
     return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c };
   }
 
   // --- Arc helpers ---
-  function normAngle(a){
+  function normAngle(a) {
     let x = a % (Math.PI * 2);
     if (x < 0) x += Math.PI * 2;
     return x;
   }
-  function arcDelta(a1, a2){
+  function arcDelta(a1, a2) {
     let d = normAngle(a2) - normAngle(a1);
     if (d < 0) d += Math.PI * 2;
     return d;
   }
-  function pointOnArc(obj, which){
-    const a = (which === "start") ? obj.a1 : obj.a2;
+  function pointOnArc(obj, which) {
+    const a = which === "start" ? obj.a1 : obj.a2;
     return { x: obj.cx + Math.cos(a) * obj.r, y: obj.cy + Math.sin(a) * obj.r };
   }
-  function isAngleOnArc(a, a1, a2){
+  function isAngleOnArc(a, a1, a2) {
     const aa = normAngle(a);
     const s = normAngle(a1);
     const e = normAngle(a2);
     if (s <= e) return aa >= s && aa <= e;
     return aa >= s || aa <= e; // wrap
   }
-  function arcBounds(obj){
+  function arcBounds(obj) {
     const pts = [];
     const steps = 48;
     const d = arcDelta(obj.a1, obj.a2);
     const n = Math.max(6, Math.min(steps, Math.ceil(steps * (d / (Math.PI * 2)))));
-    for (let i=0;i<=n;i++){
-      const t = obj.a1 + (d * (i / n));
+    for (let i = 0; i <= n; i++) {
+      const t = obj.a1 + d * (i / n);
       pts.push({ x: obj.cx + Math.cos(t) * obj.r, y: obj.cy + Math.sin(t) * obj.r });
     }
-    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    for (const p of pts){
-      minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
-      maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y);
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const p of pts) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
     }
     const pad = (obj.size || 4) * 1.0;
     return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
   }
 
   function rectEdges(obj) {
-    const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
-    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+    const x1 = obj.x1,
+      y1 = obj.y1,
+      x2 = obj.x2,
+      y2 = obj.y2;
+    const cx = (x1 + x2) / 2,
+      cy = (y1 + y2) / 2;
+    const w = Math.abs(x2 - x1),
+      h = Math.abs(y2 - y1);
     const ang = obj.rot || 0;
 
     const pts = [
-      { x: cx - w/2, y: cy - h/2 }, // nw
-      { x: cx + w/2, y: cy - h/2 }, // ne
-      { x: cx + w/2, y: cy + h/2 }, // se
-      { x: cx - w/2, y: cy + h/2 }, // sw
-    ].map(p => ang ? rotateAround(p.x, p.y, cx, cy, ang) : p);
+      { x: cx - w / 2, y: cy - h / 2 }, // nw
+      { x: cx + w / 2, y: cy - h / 2 }, // ne
+      { x: cx + w / 2, y: cy + h / 2 }, // se
+      { x: cx - w / 2, y: cy + h / 2 } // sw
+    ].map((p) => (ang ? rotateAround(p.x, p.y, cx, cy, ang) : p));
 
     return [
       { x1: pts[0].x, y1: pts[0].y, x2: pts[1].x, y2: pts[1].y },
       { x1: pts[1].x, y1: pts[1].y, x2: pts[2].x, y2: pts[2].y },
       { x1: pts[2].x, y1: pts[2].y, x2: pts[3].x, y2: pts[3].y },
-      { x1: pts[3].x, y1: pts[3].y, x2: pts[0].x, y2: pts[0].y },
+      { x1: pts[3].x, y1: pts[3].y, x2: pts[0].x, y2: pts[0].y }
     ];
   }
 
@@ -397,14 +443,15 @@
 
       if (obj.kind === "text") {
         const m = textMetrics(obj);
-        const cx = obj.x + m.w/2, cy = obj.y + m.h/2;
+        const cx = obj.x + m.w / 2,
+          cy = obj.y + m.h / 2;
         const ang = obj.rot || 0;
         const corners = [
-          { x: obj.x,       y: obj.y },
-          { x: obj.x+m.w,   y: obj.y },
-          { x: obj.x+m.w,   y: obj.y+m.h },
-          { x: obj.x,       y: obj.y+m.h },
-        ].map(p => ang ? rotateAround(p.x, p.y, cx, cy, ang) : p);
+          { x: obj.x, y: obj.y },
+          { x: obj.x + m.w, y: obj.y },
+          { x: obj.x + m.w, y: obj.y + m.h },
+          { x: obj.x, y: obj.y + m.h }
+        ].map((p) => (ang ? rotateAround(p.x, p.y, cx, cy, ang) : p));
         pts.push(...corners);
         continue;
       }
@@ -425,8 +472,8 @@
         const d = arcDelta(obj.a1, obj.a2);
         const steps = Math.max(6, Math.min(36, Math.ceil(36 * (d / (Math.PI * 2)))));
         let prev = { x: obj.cx + Math.cos(obj.a1) * obj.r, y: obj.cy + Math.sin(obj.a1) * obj.r };
-        for (let i=1;i<=steps;i++){
-          const t = obj.a1 + d * (i/steps);
+        for (let i = 1; i <= steps; i++) {
+          const t = obj.a1 + d * (i / steps);
           const cur = { x: obj.cx + Math.cos(t) * obj.r, y: obj.cy + Math.sin(t) * obj.r };
           segs.push({ x1: prev.x, y1: prev.y, x2: cur.x, y2: cur.y });
           prev = cur;
@@ -474,7 +521,10 @@
 
     for (const c of candidates) {
       const d = Math.hypot(pt.x - c.x, pt.y - c.y);
-      if (d <= bestD) { bestD = d; best = c; }
+      if (d <= bestD) {
+        bestD = d;
+        best = c;
+      }
     }
     return best ? { x: best.x, y: best.y } : null;
   }
@@ -495,16 +545,24 @@
     const d2 = Math.hypot(pt.x - hit2.x, pt.y - hit2.y);
     return d2 < d1 ? hit2 : hit1;
   }
-  // Ctrl/Cmd snapping: prefer endpoint/intersection; otherwise constrain to common angles then snap to whole-mm grid.
+
+  // Ctrl/Cmd snapping (rect/circle/etc): prefer endpoint/intersection; otherwise constrain to common angles then snap to mm GRID.
   function snapPointWithCtrlOrAngle(start, rawPt) {
     const hit = snapPointWithCtrl(rawPt);
     if (hit) return hit;
 
-    // Angle snap around start point, then snap to mm grid
     const s = snapEndpointToAngles(start.x, start.y, rawPt.x, rawPt.y);
     return snapToMmGridWorld({ x: s.x2, y: s.y2 });
   }
 
+  // ✅ NEW: Ctrl/Cmd snapping for LINE/ARROW: prefer endpoint/intersection; otherwise angle-snap THEN whole-mm LENGTH
+  function snapLinePointWithCtrlOrAngle(start, rawPt) {
+    const hit = snapPointWithCtrl(rawPt);
+    if (hit) return hit;
+
+    const s = snapEndpointToAngles(start.x, start.y, rawPt.x, rawPt.y);
+    return snapToWholeMmLength(start, { x: s.x2, y: s.y2 });
+  }
 
   function updateSwatch() {
     swatchLive.style.background = state.color;
@@ -523,7 +581,6 @@
     brushOut.textContent = String(state.size);
   }
 
-
   function updateScaleOut() {
     if (!scaleOut) return;
     scaleOut.textContent = `1 mm = ${pxPerMm().toFixed(3)} px`;
@@ -531,7 +588,7 @@
 
   function setActiveTool(tool) {
     state.tool = tool;
-    dockBtns.forEach(b => b.classList.toggle("is-active", b.dataset.tool === tool));
+    dockBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tool === tool));
     updateCursorFromTool();
     if (tool !== "arc") arcDraft.hasCenter = false;
   }
@@ -592,10 +649,10 @@
     state.title = snap.title || "";
     titleInput.value = state.title;
 
-    state.pxPerMm = Number(snap.pxPerMm || state.pxPerMm || (96/25.4));
+    state.pxPerMm = Number(snap.pxPerMm || state.pxPerMm || 96 / 25.4);
     updateScaleOut();
 
-    const bg = snap.bg || { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
+    const bg = snap.bg || { src: "", natW: 0, natH: 0, x: 0, y: 0, scale: 1, rot: 0 };
     state.bg = { ...bg };
 
     state.objects = Array.isArray(snap.objects) ? deepClone(snap.objects) : [];
@@ -609,7 +666,9 @@
     state.undo.push(JSON.stringify(snapshot()));
     if (state.undo.length > 120) state.undo.shift();
   }
-  function clearRedo() { state.redo.length = 0; }
+  function clearRedo() {
+    state.redo.length = 0;
+  }
 
   function undo() {
     if (!state.undo.length) return;
@@ -668,7 +727,7 @@
 
   // ---------- Rendering ----------
   function clearCtx(ctx, canvas) {
-    ctx.setTransform(1,0,0,1,0,0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
@@ -748,7 +807,10 @@
     const h = y2 - y1;
 
     if (obj.kind === "line") {
-      inkCtx.beginPath(); inkCtx.moveTo(x1, y1); inkCtx.lineTo(x2, y2); inkCtx.stroke();
+      inkCtx.beginPath();
+      inkCtx.moveTo(x1, y1);
+      inkCtx.lineTo(x2, y2);
+      inkCtx.stroke();
     } else if (obj.kind === "rect") {
       const cx = (x1 + x2) / 2;
       const cy = (y1 + y2) / 2;
@@ -758,7 +820,7 @@
       inkCtx.save();
       inkCtx.translate(cx, cy);
       if (ang) inkCtx.rotate(ang);
-      inkCtx.strokeRect(-rw/2, -rh/2, rw, rh);
+      inkCtx.strokeRect(-rw / 2, -rh / 2, rw, rh);
       inkCtx.restore();
     } else if (obj.kind === "circle") {
       const cx = (x1 + x2) / 2;
@@ -780,7 +842,10 @@
       inkCtx.stroke();
       inkCtx.restore();
     } else if (obj.kind === "arrow") {
-      inkCtx.beginPath(); inkCtx.moveTo(x1, y1); inkCtx.lineTo(x2, y2); inkCtx.stroke();
+      inkCtx.beginPath();
+      inkCtx.moveTo(x1, y1);
+      inkCtx.lineTo(x2, y2);
+      inkCtx.stroke();
       const ang = Math.atan2(y2 - y1, x2 - x1);
       const headLen = Math.max(10, obj.size * 3);
       const a1 = ang + Math.PI * 0.85;
@@ -820,37 +885,51 @@
       const ang = obj.rot || 0;
 
       const corners = [
-        { x: -w/2, y: -h/2 },
-        { x:  w/2, y: -h/2 },
-        { x:  w/2, y:  h/2 },
-        { x: -w/2, y:  h/2 },
-      ].map(p => {
-        const cos = Math.cos(ang), sin = Math.sin(ang);
+        { x: -w / 2, y: -h / 2 },
+        { x: w / 2, y: -h / 2 },
+        { x: w / 2, y: h / 2 },
+        { x: -w / 2, y: h / 2 }
+      ].map((p) => {
+        const cos = Math.cos(ang),
+          sin = Math.sin(ang);
         return { x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos };
       });
 
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
       for (const p of corners) {
-        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
       }
       return { minX, minY, maxX, maxY };
     }
 
     if (obj.kind === "stroke" || obj.kind === "erase") {
       const pts = obj.points || [];
-      if (!pts.length) return { minX:0, minY:0, maxX:0, maxY:0 };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      if (!pts.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
       for (const p of pts) {
-        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
       }
       const pad = (obj.size || 6) * 0.8;
       return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
     }
 
     if (obj.kind === "rect") {
-      const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
+      const x1 = obj.x1,
+        y1 = obj.y1,
+        x2 = obj.x2,
+        y2 = obj.y2;
       const cx = (x1 + x2) / 2;
       const cy = (y1 + y2) / 2;
       const rw = Math.abs(x2 - x1);
@@ -858,42 +937,57 @@
       const ang = obj.rot || 0;
 
       const corners = [
-        { x: -rw/2, y: -rh/2 },
-        { x:  rw/2, y: -rh/2 },
-        { x:  rw/2, y:  rh/2 },
-        { x: -rw/2, y:  rh/2 },
-      ].map(p => {
-        const cos = Math.cos(ang), sin = Math.sin(ang);
+        { x: -rw / 2, y: -rh / 2 },
+        { x: rw / 2, y: -rh / 2 },
+        { x: rw / 2, y: rh / 2 },
+        { x: -rw / 2, y: rh / 2 }
+      ].map((p) => {
+        const cos = Math.cos(ang),
+          sin = Math.sin(ang);
         return { x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos };
       });
 
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
       for (const p of corners) {
-        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
       }
       const pad = (obj.size || 4) * 1.0;
       return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
     }
 
     if (obj.kind === "circle") {
-      const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
+      const x1 = obj.x1,
+        y1 = obj.y1,
+        x2 = obj.x2,
+        y2 = obj.y2;
       const cx = (x1 + x2) / 2;
       const cy = (y1 + y2) / 2;
       const rx = Math.abs(x2 - x1) / 2;
       const ry = Math.abs(y2 - y1) / 2;
       const ang = obj.rot || 0;
 
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      const cosA = Math.cos(ang),
+        sinA = Math.sin(ang);
       for (let i = 0; i < 16; i++) {
         const t = (i / 16) * Math.PI * 2;
         const ex = Math.cos(t) * rx;
         const ey = Math.sin(t) * ry;
         const px = cx + ex * cosA - ey * sinA;
         const py = cy + ex * sinA + ey * cosA;
-        minX = Math.min(minX, px); minY = Math.min(minY, py);
-        maxX = Math.max(maxX, px); maxY = Math.max(maxY, py);
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
       }
       const pad = (obj.size || 4) * 1.0;
       return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
@@ -912,9 +1006,10 @@
   }
 
   function distToSeg(px, py, x1, y1, x2, y2) {
-    const dx = x2 - x1, dy = y2 - y1;
+    const dx = x2 - x1,
+      dy = y2 - y1;
     if (dx === 0 && dy === 0) return Math.hypot(px - x1, py - y1);
-    const t = ((px - x1) * dx + (py - y1) * dy) / (dx*dx + dy*dy);
+    const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
     const tt = clamp(t, 0, 1);
     const cx = x1 + tt * dx;
     const cy = y1 + tt * dy;
@@ -932,7 +1027,7 @@
     if (obj.kind === "stroke" || obj.kind === "erase") {
       const pts = obj.points || [];
       for (let i = 1; i < pts.length; i++) {
-        if (distToSeg(wx, wy, pts[i-1].x, pts[i-1].y, pts[i].x, pts[i].y) <= tol) return true;
+        if (distToSeg(wx, wy, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) <= tol) return true;
       }
       return false;
     }
@@ -948,7 +1043,8 @@
       const rh = Math.abs(obj.y2 - obj.y1);
       const ang = obj.rot || 0;
 
-      const cos = Math.cos(-ang), sin = Math.sin(-ang);
+      const cos = Math.cos(-ang),
+        sin = Math.sin(-ang);
       const lx = (wx - cx) * cos - (wy - cy) * sin;
       const ly = (wx - cx) * sin + (wy - cy) * cos;
 
@@ -963,13 +1059,14 @@
       if (rx < 1 || ry < 1) return false;
 
       const ang = obj.rot || 0;
-      const cos = Math.cos(-ang), sin = Math.sin(-ang);
+      const cos = Math.cos(-ang),
+        sin = Math.sin(-ang);
       const lx = (wx - cx) * cos - (wy - cy) * sin;
       const ly = (wx - cx) * sin + (wy - cy) * cos;
 
       const nx = lx / rx;
       const ny = ly / ry;
-      return (nx*nx + ny*ny) <= 1.2;
+      return nx * nx + ny * ny <= 1.2;
     }
 
     if (obj.kind === "arc") {
@@ -994,13 +1091,27 @@
   }
 
   function moveObject(obj, dx, dy) {
-    if (obj.kind === "text") { obj.x += dx; obj.y += dy; return; }
-    if (obj.kind === "arc") { obj.cx += dx; obj.cy += dy; return; }
-    if (obj.kind === "stroke" || obj.kind === "erase") {
-      (obj.points || []).forEach(p => { p.x += dx; p.y += dy; });
+    if (obj.kind === "text") {
+      obj.x += dx;
+      obj.y += dy;
       return;
     }
-    obj.x1 += dx; obj.y1 += dy; obj.x2 += dx; obj.y2 += dy;
+    if (obj.kind === "arc") {
+      obj.cx += dx;
+      obj.cy += dy;
+      return;
+    }
+    if (obj.kind === "stroke" || obj.kind === "erase") {
+      (obj.points || []).forEach((p) => {
+        p.x += dx;
+        p.y += dy;
+      });
+      return;
+    }
+    obj.x1 += dx;
+    obj.y1 += dy;
+    obj.x2 += dx;
+    obj.y2 += dy;
   }
 
   function scaleObjectXY(obj, fx, fy, ax, ay) {
@@ -1019,7 +1130,7 @@
     }
 
     if (obj.kind === "stroke" || obj.kind === "erase") {
-      (obj.points || []).forEach(p => {
+      (obj.points || []).forEach((p) => {
         p.x = ax + (p.x - ax) * fx;
         p.y = ay + (p.y - ay) * fy;
       });
@@ -1073,22 +1184,27 @@
     }
 
     if (obj.kind === "stroke" || obj.kind === "erase") {
-      (obj.points || []).forEach(p => {
+      (obj.points || []).forEach((p) => {
         const r = rotatePoint(p.x, p.y, cx, cy, angle);
-        p.x = r.x; p.y = r.y;
+        p.x = r.x;
+        p.y = r.y;
       });
       return;
     }
 
     const p1 = rotatePoint(obj.x1, obj.y1, cx, cy, angle);
     const p2 = rotatePoint(obj.x2, obj.y2, cx, cy, angle);
-    obj.x1 = p1.x; obj.y1 = p1.y;
-    obj.x2 = p2.x; obj.y2 = p2.y;
+    obj.x1 = p1.x;
+    obj.y1 = p1.y;
+    obj.x2 = p2.x;
+    obj.y2 = p2.y;
   }
 
   function drawInk() {
     clearCtx(inkCtx, inkCanvas);
-    for (const obj of state.objects) { if (obj && !obj.hidden) drawInkObject(obj); }
+    for (const obj of state.objects) {
+      if (obj && !obj.hidden) drawInkObject(obj);
+    }
   }
 
   function computeHandles() {
@@ -1106,18 +1222,20 @@
 
     const b = objectBounds(obj);
 
-    const hasOwnRot = (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "text") && (obj.rot || 0);
+    const hasOwnRot =
+      (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "text") && (obj.rot || 0);
 
     if (hasOwnRot) {
-      let w = (b.maxX - b.minX);
-      let h = (b.maxY - b.minY);
+      let w = b.maxX - b.minX;
+      let h = b.maxY - b.minY;
 
       if (obj.kind === "rect" || obj.kind === "circle") {
         w = Math.abs(obj.x2 - obj.x1);
         h = Math.abs(obj.y2 - obj.y1);
       } else if (obj.kind === "text") {
         const m = textMetrics(obj);
-        w = m.w; h = m.h;
+        w = m.w;
+        h = m.h;
       }
 
       const cx = (b.minX + b.maxX) / 2;
@@ -1125,35 +1243,39 @@
       const ang = obj.rot || 0;
 
       const cornersW = [
-        { x: -w/2, y: -h/2 },
-        { x:  w/2, y: -h/2 },
-        { x:  w/2, y:  h/2 },
-        { x: -w/2, y:  h/2 },
-      ].map(p => {
-        const cos = Math.cos(ang), sin = Math.sin(ang);
+        { x: -w / 2, y: -h / 2 },
+        { x: w / 2, y: -h / 2 },
+        { x: w / 2, y: h / 2 },
+        { x: -w / 2, y: h / 2 }
+      ].map((p) => {
+        const cos = Math.cos(ang),
+          sin = Math.sin(ang);
         return { x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos };
       });
 
-      const cornersS = cornersW.map(p => worldToScreen(p.x, p.y));
+      const cornersS = cornersW.map((p) => worldToScreen(p.x, p.y));
 
-      const topMid = { x: (cornersS[0].x + cornersS[1].x)/2, y: (cornersS[0].y + cornersS[1].y)/2 };
+      const topMid = { x: (cornersS[0].x + cornersS[1].x) / 2, y: (cornersS[0].y + cornersS[1].y) / 2 };
       const edge = { x: cornersS[1].x - cornersS[0].x, y: cornersS[1].y - cornersS[0].y };
       const elen = Math.hypot(edge.x, edge.y) || 1;
       const nx = -(edge.y / elen);
-      const ny =  (edge.x / elen);
+      const ny = edge.x / elen;
       const rotatePt = { x: topMid.x + nx * 28, y: topMid.y + ny * 28 };
 
       const s = 10;
       uiHandles.visible = true;
       uiHandles.poly = cornersS;
       uiHandles.corners = [
-        { name:"nw", x: cornersS[0].x, y: cornersS[0].y, s },
-        { name:"ne", x: cornersS[1].x, y: cornersS[1].y, s },
-        { name:"se", x: cornersS[2].x, y: cornersS[2].y, s },
-        { name:"sw", x: cornersS[3].x, y: cornersS[3].y, s },
+        { name: "nw", x: cornersS[0].x, y: cornersS[0].y, s },
+        { name: "ne", x: cornersS[1].x, y: cornersS[1].y, s },
+        { name: "se", x: cornersS[2].x, y: cornersS[2].y, s },
+        { name: "sw", x: cornersS[3].x, y: cornersS[3].y, s }
       ];
       uiHandles.rotate = { x: rotatePt.x, y: rotatePt.y, r: 7 };
-      uiHandles.center = { x: (cornersS[0].x + cornersS[2].x)/2, y: (cornersS[0].y + cornersS[2].y)/2 };
+      uiHandles.center = {
+        x: (cornersS[0].x + cornersS[2].x) / 2,
+        y: (cornersS[0].y + cornersS[2].y) / 2
+      };
       return;
     }
 
@@ -1166,16 +1288,16 @@
     const h = Math.abs(p2.y - p1.y);
 
     const s = 10;
-    const cx = x + w/2;
+    const cx = x + w / 2;
     const top = y;
 
     uiHandles.visible = true;
     uiHandles.box = { x, y, w, h };
     uiHandles.corners = [
-      { name:"nw", x:x,   y:y,   s },
-      { name:"ne", x:x+w, y:y,   s },
-      { name:"se", x:x+w, y:y+h, s },
-      { name:"sw", x:x,   y:y+h, s },
+      { name: "nw", x: x, y: y, s },
+      { name: "ne", x: x + w, y: y, s },
+      { name: "se", x: x + w, y: y + h, s },
+      { name: "sw", x: x, y: y + h, s }
     ];
     uiHandles.rotate = { x: cx, y: top - 22, r: 7 };
   }
@@ -1186,33 +1308,35 @@
     if (uiHandles.rotate) {
       const dx = sx - uiHandles.rotate.x;
       const dy = sy - uiHandles.rotate.y;
-      if (Math.hypot(dx, dy) <= uiHandles.rotate.r + 6) return { kind:"rotate" };
+      if (Math.hypot(dx, dy) <= uiHandles.rotate.r + 6) return { kind: "rotate" };
     }
 
     if (uiHandles.corners) {
       for (const c of uiHandles.corners) {
         const half = c.s;
         if (sx >= c.x - half && sx <= c.x + half && sy >= c.y - half && sy <= c.y + half) {
-          return { kind:"scale", corner: c.name };
+          return { kind: "scale", corner: c.name };
         }
       }
     }
 
     if (uiHandles.box) {
       const b = uiHandles.box;
-      if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) return { kind:"move" };
+      if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) return { kind: "move" };
     }
 
     if (uiHandles.poly) {
       const poly = uiHandles.poly;
       let inside = false;
-      for (let i=0, j=poly.length-1; i<poly.length; j=i++) {
-        const xi=poly[i].x, yi=poly[i].y;
-        const xj=poly[j].x, yj=poly[j].y;
-        const intersect = ((yi>sy)!==(yj>sy)) && (sx < (xj-xi)*(sy-yi)/(yj-yi+1e-12) + xi);
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i].x,
+          yi = poly[i].y;
+        const xj = poly[j].x,
+          yj = poly[j].y;
+        const intersect = yi > sy !== yj > sy && sx < ((xj - xi) * (sy - yi)) / (yj - yi + 1e-12) + xi;
         if (intersect) inside = !inside;
       }
-      if (inside) return { kind:"move" };
+      if (inside) return { kind: "move" };
     }
 
     return null;
@@ -1232,7 +1356,7 @@
       const pad = 14;
       const w = uiCtx.measureText(state.title).width;
       uiCtx.fillStyle = "rgba(255,255,255,0.72)";
-      uiCtx.fillRect(pad, pad, Math.min(w + 16, state.viewW - pad*2), 30);
+      uiCtx.fillRect(pad, pad, Math.min(w + 16, state.viewW - pad * 2), 30);
       uiCtx.fillStyle = "rgba(0,0,0,0.88)";
       uiCtx.fillText(state.title, pad + 8, pad + 5);
       uiCtx.restore();
@@ -1255,7 +1379,7 @@
       const p = uiHandles.poly;
       uiCtx.beginPath();
       uiCtx.moveTo(p[0].x, p[0].y);
-      for (let i=1;i<p.length;i++) uiCtx.lineTo(p[i].x, p[i].y);
+      for (let i = 1; i < p.length; i++) uiCtx.lineTo(p[i].x, p[i].y);
       uiCtx.closePath();
       uiCtx.stroke();
     }
@@ -1264,10 +1388,10 @@
     // rotate handle line
     uiCtx.beginPath();
     if (!uiHandles.poly) {
-      uiCtx.moveTo(b.x + b.w/2, b.y);
+      uiCtx.moveTo(b.x + b.w / 2, b.y);
     } else {
       const p = uiHandles.poly;
-      uiCtx.moveTo((p[0].x+p[1].x)/2, (p[0].y+p[1].y)/2);
+      uiCtx.moveTo((p[0].x + p[1].x) / 2, (p[0].y + p[1].y) / 2);
     }
     uiCtx.lineTo(uiHandles.rotate.x, uiHandles.rotate.y);
     uiCtx.stroke();
@@ -1275,7 +1399,7 @@
     // rotate handle circle
     uiCtx.fillStyle = "rgba(255,255,255,0.95)";
     uiCtx.beginPath();
-    uiCtx.arc(uiHandles.rotate.x, uiHandles.rotate.y, uiHandles.rotate.r, 0, Math.PI*2);
+    uiCtx.arc(uiHandles.rotate.x, uiHandles.rotate.y, uiHandles.rotate.r, 0, Math.PI * 2);
     uiCtx.fill();
     uiCtx.stroke();
 
@@ -1285,7 +1409,7 @@
       uiCtx.strokeStyle = "rgba(46, 204, 113, 0.95)";
       uiCtx.lineWidth = 2;
       uiCtx.beginPath();
-      uiCtx.rect(c.x - c.s, c.y - c.s, c.s*2, c.s*2);
+      uiCtx.rect(c.x - c.s, c.y - c.s, c.s * 2, c.s * 2);
       uiCtx.fill();
       uiCtx.stroke();
     }
@@ -1361,7 +1485,14 @@
 
   // ---------- Cursor UX ----------
   function updateCursorFromTool() {
-    if (state.tool === "pen" || state.tool === "line" || state.tool === "rect" || state.tool === "circle" || state.tool === "arc" || state.tool === "arrow") {
+    if (
+      state.tool === "pen" ||
+      state.tool === "line" ||
+      state.tool === "rect" ||
+      state.tool === "circle" ||
+      state.tool === "arc" ||
+      state.tool === "arrow"
+    ) {
       inkCanvas.style.cursor = "crosshair";
       return;
     }
@@ -1394,13 +1525,25 @@
 
   function updateHoverCursor(sx, sy) {
     if (gesture.active) return;
-    if (state.tool !== "select") { updateCursorFromTool(); return; }
+    if (state.tool !== "select") {
+      updateCursorFromTool();
+      return;
+    }
 
     const h = hitHandle(sx, sy);
-    if (!h) { inkCanvas.style.cursor = "default"; return; }
+    if (!h) {
+      inkCanvas.style.cursor = "default";
+      return;
+    }
 
-    if (h.kind === "rotate") { inkCanvas.style.cursor = "grab"; return; }
-    if (h.kind === "move")   { inkCanvas.style.cursor = "move"; return; }
+    if (h.kind === "rotate") {
+      inkCanvas.style.cursor = "grab";
+      return;
+    }
+    if (h.kind === "move") {
+      inkCanvas.style.cursor = "move";
+      return;
+    }
 
     if (h.corner === "nw" || h.corner === "se") inkCanvas.style.cursor = "nwse-resize";
     else inkCanvas.style.cursor = "nesw-resize";
@@ -1411,7 +1554,8 @@
     const idx = state.selectionIndex;
     if (idx < 0) return false;
 
-    pushUndo(); clearRedo();
+    pushUndo();
+    clearRedo();
 
     gesture.selIndex = idx;
     gesture.selStartObj = deepClone(state.objects[idx]);
@@ -1446,7 +1590,8 @@
 
   function beginBgTransform(mode, w) {
     if (!state.bg.src) return false;
-    pushUndo(); clearRedo();
+    pushUndo();
+    clearRedo();
     gesture.bgStart = { ...state.bg };
     gesture.startWorld = w;
     gesture.mode = mode; // bgMove/bgScale/bgRotate
@@ -1456,7 +1601,8 @@
   // Tools ↔ ⤡ ⟲ act on selection if selected; otherwise background
   function beginToolTransformForSelectionOrBg(tool, w) {
     if (state.selectionIndex >= 0) {
-      pushUndo(); clearRedo();
+      pushUndo();
+      clearRedo();
       gesture.selIndex = state.selectionIndex;
       gesture.selStartObj = deepClone(state.objects[state.selectionIndex]);
 
@@ -1511,7 +1657,8 @@
       const text = prompt("Enter text:");
       if (!text) return;
 
-      pushUndo(); clearRedo();
+      pushUndo();
+      clearRedo();
       state.objects.push({
         kind: "text",
         x: w.x,
@@ -1571,7 +1718,9 @@
         arcDraft.cx = c.x;
         arcDraft.cy = c.y;
 
-        try { inkCanvas.releasePointerCapture(e.pointerId); } catch {}
+        try {
+          inkCanvas.releasePointerCapture(e.pointerId);
+        } catch {}
         gesture.active = false;
         gesture.mode = "none";
 
@@ -1582,7 +1731,8 @@
       }
 
       // start arc
-      pushUndo(); clearRedo();
+      pushUndo();
+      clearRedo();
       state.selectionIndex = -1;
 
       let p1 = w;
@@ -1615,7 +1765,8 @@
     }
 
     // Drawing tools
-    pushUndo(); clearRedo();
+    pushUndo();
+    clearRedo();
     state.selectionIndex = -1;
 
     if (state.tool === "pen") {
@@ -1636,9 +1787,9 @@
       return;
     }
 
-    if (["line","rect","circle","arrow"].includes(state.tool)) {
+    if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
       let p0 = w;
-      const isSnapShape = (state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle");
+      const isSnapShape = state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle";
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (isSnapShape) {
@@ -1710,7 +1861,8 @@
       const hasOwnRot = (obj0.kind === "rect" || obj0.kind === "circle" || obj0.kind === "text") && (obj0.rot || 0);
       if (hasOwnRot) {
         const ang = obj0.rot || 0;
-        const cos = Math.cos(-ang), sin = Math.sin(-ang);
+        const cos = Math.cos(-ang),
+          sin = Math.sin(-ang);
 
         const v0x = (start.x - ax) * cos - (start.y - ay) * sin;
         const v0y = (start.x - ax) * sin + (start.y - ay) * cos;
@@ -1718,8 +1870,8 @@
         const v1x = (w.x - ax) * cos - (w.y - ay) * sin;
         const v1y = (w.x - ax) * sin + (w.y - ay) * cos;
 
-        const fxRaw = (Math.abs(v0x) < 0.001) ? 1 : (v1x / v0x);
-        const fyRaw = (Math.abs(v0y) < 0.001) ? 1 : (v1y / v0y);
+        const fxRaw = Math.abs(v0x) < 0.001 ? 1 : v1x / v0x;
+        const fyRaw = Math.abs(v0y) < 0.001 ? 1 : v1y / v0y;
 
         let fx = fxRaw;
         let fy = fyRaw;
@@ -1728,7 +1880,8 @@
           const l0 = Math.hypot(v0x, v0y) || 1;
           const l1 = Math.hypot(v1x, v1y) || 1;
           const f = l1 / l0;
-          fx = f; fy = f;
+          fx = f;
+          fy = f;
         }
 
         state.objects[gesture.selIndex] = deepClone(obj0);
@@ -1739,15 +1892,17 @@
           obj.fontSize = Math.max(6, obj0.fontSize * uni);
 
           const m0 = textMetrics(obj0);
-          obj.x = ax - (m0.w / 2);
-          obj.y = ay - (m0.h / 2);
+          obj.x = ax - m0.w / 2;
+          obj.y = ay - m0.h / 2;
         } else if (obj.kind === "rect" || obj.kind === "circle") {
           const w0 = Math.abs(obj0.x2 - obj0.x1);
           const h0 = Math.abs(obj0.y2 - obj0.y1);
           const w1 = Math.max(1, w0 * fx);
           const h1 = Math.max(1, h0 * fy);
-          obj.x1 = ax - w1/2; obj.x2 = ax + w1/2;
-          obj.y1 = ay - h1/2; obj.y2 = ay + h1/2;
+          obj.x1 = ax - w1 / 2;
+          obj.x2 = ax + w1 / 2;
+          obj.y1 = ay - h1 / 2;
+          obj.y2 = ay + h1 / 2;
         }
 
         redrawAll();
@@ -1757,8 +1912,8 @@
       const v0 = { x: start.x - ax, y: start.y - ay };
       const v1 = { x: w.x - ax, y: w.y - ay };
 
-      const fxRaw = (Math.abs(v0.x) < 0.001) ? 1 : (v1.x / v0.x);
-      const fyRaw = (Math.abs(v0.y) < 0.001) ? 1 : (v1.y / v0.y);
+      const fxRaw = Math.abs(v0.x) < 0.001 ? 1 : v1.x / v0.x;
+      const fyRaw = Math.abs(v0.y) < 0.001 ? 1 : v1.y / v0.y;
 
       let fx = fxRaw;
       let fy = fyRaw;
@@ -1787,7 +1942,7 @@
       let delta = a1 - a0;
 
       if (e.shiftKey) {
-        const step = 15 * Math.PI / 180;
+        const step = (15 * Math.PI) / 180;
         delta = Math.round(delta / step) * step;
       }
 
@@ -1799,7 +1954,6 @@
 
     // Background transforms (stable from snapshot, CENTER-based)
     if ((gesture.mode === "bgMove" || gesture.mode === "bgScale" || gesture.mode === "bgRotate") && gesture.bgStart && gesture.startWorld) {
-
       const start = gesture.startWorld;
       const bg0 = gesture.bgStart;
 
@@ -1891,7 +2045,7 @@
 
       const TWO_PI = Math.PI * 2;
       const spanAbs = Math.abs(gesture.arcAccum || 0);
-      const snapTol = 10 * Math.PI / 180; // 10°
+      const snapTol = (10 * Math.PI) / 180; // 10°
       let isCircle = false;
 
       if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
@@ -1903,7 +2057,7 @@
 
       gesture.activeObj.cx = cx;
       gesture.activeObj.cy = cy;
-      gesture.activeObj.r  = rFixed;
+      gesture.activeObj.r = rFixed;
       gesture.activeObj.a1 = gesture.arcA1;
       gesture.activeObj.a2 = a2;
 
@@ -1911,9 +2065,7 @@
       const span = Math.abs(a2 - (gesture.arcA1 || 0));
       const lenMm = (span * rFixed) / pxPerMm();
 
-      const label = isCircle
-        ? `Circle • R ${Math.round(rMm)} mm`
-        : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
+      const label = isCircle ? `Circle • R ${Math.round(rMm)} mm` : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
 
       showMeasureTip(sx, sy, label);
       redrawAll();
@@ -1935,15 +2087,23 @@
       const k = gesture.activeObj.kind;
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
-      // Whole-mm snapping is always on. Ctrl/Cmd additionally enables:
-      //   1) snap to nearby endpoints/intersections (highest priority)
-      //   2) if none nearby, constrain direction to common angles (0/30/45/60/90/...)
       const startPt = { x: gesture.activeObj.x1, y: gesture.activeObj.y1 };
       const rawPt = { x: x2, y: y2 };
 
-      if (k === "line" || k === "arrow" || k === "rect" || k === "circle") {
+      // ✅ Line/Arrow: default = whole-mm LENGTH.
+      // Ctrl/Cmd: endpoint/intersection; else angle snap + whole-mm LENGTH.
+      if (k === "line" || k === "arrow") {
+        const p2 = ctrlHeld ? snapLinePointWithCtrlOrAngle(startPt, rawPt) : snapToWholeMmLength(startPt, rawPt);
+        x2 = p2.x;
+        y2 = p2.y;
+      }
+
+      // Rect/Circle: default = mm GRID.
+      // Ctrl/Cmd: endpoint/intersection; else angle snap + mm GRID.
+      if (k === "rect" || k === "circle") {
         const p2 = ctrlHeld ? snapPointWithCtrlOrAngle(startPt, rawPt) : snapToMmGridWorld(rawPt);
-        x2 = p2.x; y2 = p2.y;
+        x2 = p2.x;
+        y2 = p2.y;
       }
 
       if (k === "circle") {
@@ -1957,12 +2117,12 @@
           x2 = gesture.activeObj.x1 + sgnX * d;
           y2 = gesture.activeObj.y1 + sgnY * d;
 
-          // Re-snap to whole mm after uniform constraint
+          // Re-snap to mm grid after uniform constraint
           const mm2 = snapToMmGridWorld({ x: x2, y: y2 });
-          x2 = mm2.x; y2 = mm2.y;
+          x2 = mm2.x;
+          y2 = mm2.y;
         }
       }
-      
 
       gesture.activeObj.x2 = x2;
       gesture.activeObj.y2 = y2;
@@ -2001,11 +2161,12 @@
       return;
     }
   }
-    
 
   function onPointerUp() {
     if (!gesture.active) return;
-    try { inkCanvas.releasePointerCapture(gesture.pointerId); } catch {}
+    try {
+      inkCanvas.releasePointerCapture(gesture.pointerId);
+    } catch {}
     hardResetGesture();
     updateCursorFromTool();
   }
@@ -2015,13 +2176,17 @@
   inkCanvas.addEventListener("pointerup", onPointerUp);
   inkCanvas.addEventListener("pointercancel", onPointerUp);
 
-  inkCanvas.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const { sx, sy } = clientToScreen(e);
-    const dir = Math.sign(e.deltaY);
-    const step = dir > 0 ? 0.90 : 1.10;
-    setZoomTo(state.zoom * step, sx, sy);
-  }, { passive: false });
+  inkCanvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const { sx, sy } = clientToScreen(e);
+      const dir = Math.sign(e.deltaY);
+      const step = dir > 0 ? 0.9 : 1.1;
+      setZoomTo(state.zoom * step, sx, sy);
+    },
+    { passive: false }
+  );
 
   // ---------- Colour popover ----------
   function toggleColorPop(open) {
@@ -2061,20 +2226,23 @@
   });
 
   // ---------- Tool buttons ----------
-  dockBtns.forEach(b => b.addEventListener("click", () => {
-    const t = b.dataset.tool;
+  dockBtns.forEach((b) =>
+    b.addEventListener("click", () => {
+      const t = b.dataset.tool;
 
-    // ✅ If Arc is already active, clicking it again arms a new center pick
-    if (t === "arc" && state.tool === "arc") {
-      arcDraft.hasCenter = false;
-      showToast("Click to set arc center");
-    }
+      // ✅ If Arc is already active, clicking it again arms a new center pick
+      if (t === "arc" && state.tool === "arc") {
+        arcDraft.hasCenter = false;
+        showToast("Click to set arc center");
+      }
 
-    setActiveTool(t);
-  }));
+      setActiveTool(t);
+    })
+  );
 
   clearBtn.addEventListener("click", () => {
-    pushUndo(); clearRedo();
+    pushUndo();
+    clearRedo();
     hardResetGesture();
     state.objects = [];
     state.selectionIndex = -1;
@@ -2083,7 +2251,8 @@
   });
 
   applyTitleBtn.addEventListener("click", () => {
-    pushUndo(); clearRedo();
+    pushUndo();
+    clearRedo();
     state.title = (titleInput.value || "").trim();
     redrawAll();
   });
@@ -2091,7 +2260,8 @@
   function setBackgroundFromDataURL(dataURL) {
     const img = new Image();
     img.onload = () => {
-      pushUndo(); clearRedo();
+      pushUndo();
+      clearRedo();
       hardResetGesture();
 
       state.bg.src = String(dataURL || "");
@@ -2128,7 +2298,8 @@
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        pushUndo(); clearRedo();
+        pushUndo();
+        clearRedo();
         hardResetGesture();
 
         state.bg.src = String(reader.result || "");
@@ -2159,9 +2330,10 @@
   });
 
   clearBgBtn.addEventListener("click", () => {
-    pushUndo(); clearRedo();
+    pushUndo();
+    clearRedo();
     hardResetGesture();
-    state.bg = { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
+    state.bg = { src: "", natW: 0, natH: 0, x: 0, y: 0, scale: 1, rot: 0 };
     bgImg.removeAttribute("src");
     applyBgTransform();
     redrawAll();
@@ -2169,7 +2341,7 @@
 
   // ---------- Import SVG as ink (step through elements with arrow keys) ----------
   function parseNumberAttr(v) {
-    const n = parseFloat(String(v || "").replace(/px$/,""));
+    const n = parseFloat(String(v || "").replace(/px$/, ""));
     return isFinite(n) ? n : null;
   }
 
@@ -2201,322 +2373,367 @@
     document.body.appendChild(host);
     return host;
   }
-function parseCamTransform(transformStr) {
-  // Matches: translate(px py) scale(z)
-  const s = String(transformStr || "").trim();
-  const m = s.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)/i);
-  if (!m) return null;
-  const panX = parseFloat(m[1]);
-  const panY = parseFloat(m[2]);
-  const zoom = parseFloat(m[3]);
-  if (![panX, panY, zoom].every(Number.isFinite) || zoom === 0) return null;
-  return { panX, panY, zoom };
-}
+  function parseCamTransform(transformStr) {
+    // Matches: translate(px py) scale(z)
+    const s = String(transformStr || "").trim();
+    const m = s.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)/i);
+    if (!m) return null;
+    const panX = parseFloat(m[1]);
+    const panY = parseFloat(m[2]);
+    const zoom = parseFloat(m[3]);
+    if (![panX, panY, zoom].every(Number.isFinite) || zoom === 0) return null;
+    return { panX, panY, zoom };
+  }
 
-function invCamPoint(p, cam) {
-  // Inverse of: screen = world*zoom + pan
-  return { x: (p.x - cam.panX) / cam.zoom, y: (p.y - cam.panY) / cam.zoom };
-}
-  
-function importSvgInkFromText(svgText) {
-  const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
-  const parsedSvg = doc.querySelector("svg");
-  if (!parsedSvg) { showToast("SVG not valid"); return; }
+  function invCamPoint(p, cam) {
+    // Inverse of: screen = world*zoom + pan
+    return { x: (p.x - cam.panX) / cam.zoom, y: (p.y - cam.panY) / cam.zoom };
+  }
 
-  const host = ensureHiddenSvgHost();
-  host.innerHTML = "";
+  function importSvgInkFromText(svgText) {
+    const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
+    const parsedSvg = doc.querySelector("svg");
+    if (!parsedSvg) {
+      showToast("SVG not valid");
+      return;
+    }
 
-  const svg = parsedSvg.cloneNode(true);
-  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-  host.appendChild(svg);
+    const host = ensureHiddenSvgHost();
+    host.innerHTML = "";
 
-// Detect round-trip export from *this* app: first child <g transform="translate(pan) scale(zoom)">
-const camGroup = svg.querySelector(":scope > g[transform]");
-const cam = camGroup ? parseCamTransform(camGroup.getAttribute("transform")) : null;
-const isRoundTrip = !!cam;
- 
-  const rootBox = getSvgRootBox(svg);
+    const svg = parsedSvg.cloneNode(true);
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    host.appendChild(svg);
 
-  // ---- Background image (DEFER applying until we know the same transform we apply to ink) ----
-  let pendingBg = null;
-  {
-    const imgEl = svg.querySelector("image");
-    if (imgEl) {
-      const href = imgEl.getAttribute("href") || imgEl.getAttribute("xlink:href") || "";
-      const wAttr = parseNumberAttr(imgEl.getAttribute("width"));
-      const hAttr = parseNumberAttr(imgEl.getAttribute("height"));
-      if (href) {
-        // NOTE: exporter writes x/y in the transform string; we preserve those
-        const tf = (imgEl.getAttribute("transform") || "").trim();
-        let x = 0, y = 0, rot = 0, scale = 1;
+    // Detect round-trip export from *this* app: first child <g transform="translate(pan) scale(zoom)">
+    const camGroup = svg.querySelector(":scope > g[transform]");
+    const cam = camGroup ? parseCamTransform(camGroup.getAttribute("transform")) : null;
+    const isRoundTrip = !!cam;
+
+    const rootBox = getSvgRootBox(svg);
+
+    // ---- Background image (DEFER applying until we know the same transform we apply to ink) ----
+    let pendingBg = null;
+    {
+      const imgEl = svg.querySelector("image");
+      if (imgEl) {
+        const href = imgEl.getAttribute("href") || imgEl.getAttribute("xlink:href") || "";
+        const wAttr = parseNumberAttr(imgEl.getAttribute("width"));
+        const hAttr = parseNumberAttr(imgEl.getAttribute("height"));
+        if (href) {
+          // NOTE: exporter writes x/y in the transform string; we preserve those
+          const tf = (imgEl.getAttribute("transform") || "").trim();
+          let x = 0,
+            y = 0,
+            rot = 0,
+            scale = 1;
+          try {
+            const m = tf.match(
+              /translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*rotate\(\s*([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*$/i
+            );
+            if (m) {
+              x = parseFloat(m[1]) || 0;
+              y = parseFloat(m[2]) || 0;
+              rot = ((parseFloat(m[5]) || 0) * Math.PI) / 180;
+              scale = parseFloat(m[6]) || 1;
+            }
+          } catch {}
+
+          pendingBg = {
+            src: String(href),
+            natW: wAttr ?? rootBox.w ?? 0,
+            natH: hAttr ?? rootBox.h ?? 0,
+            x,
+            y,
+            rot,
+            scale
+          };
+        }
+      }
+    }
+
+    const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
+    if (!els.length && !pendingBg) {
+      showToast("No SVG paths");
+      return;
+    }
+
+    const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
+
+    const parts = [];
+    const boundsPts = [];
+
+    function pushPart(obj, ptsForBounds) {
+      parts.push(obj);
+      if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
+    }
+
+    const isNone = (v) => {
+      const s = String(v || "").trim().toLowerCase();
+      return !s || s === "none" || s === "transparent";
+    };
+
+    function strokeOf(el) {
+      const stroke = el.getAttribute("stroke");
+      if (!isNone(stroke)) return stroke;
+      return "#111111";
+    }
+
+    function strokeWidthOf(el) {
+      const sw = parseNumberAttr(el.getAttribute("stroke-width"));
+      return Math.max(1, sw ?? 3);
+    }
+
+    function mapCTM(el, x, y) {
+      if (rootPt && el.getCTM) {
+        const m = el.getCTM();
+        rootPt.x = x;
+        rootPt.y = y;
+        const p = rootPt.matrixTransform(m); // includes cam group if present
+        if (isRoundTrip) return invCamPoint({ x: p.x, y: p.y }, cam); // remove camera
+        return { x: p.x, y: p.y };
+      }
+      const p = { x, y };
+      if (isRoundTrip) return invCamPoint(p, cam);
+      return p;
+    }
+
+    // ---- Build ink parts; SKIP fill-only exporter background shapes (the "random box") ----
+    for (const el of els) {
+      const tag = el.tagName.toLowerCase();
+
+      // Exporter background is: <rect ... fill="white" stroke="none"> (or no stroke)
+      // We never want to import that as ink.
+      const strokeAttr = el.getAttribute("stroke");
+      const fillAttr = el.getAttribute("fill");
+      const strokeIsNone = isNone(strokeAttr);
+      const fillIsWhiteish = (() => {
+        const f = String(fillAttr || "").trim().toLowerCase();
+        return f === "white" || f === "#fff" || f === "#ffffff" || f === "rgb(255,255,255)";
+      })();
+
+      // If it's a big rect with no stroke and white fill, ignore it (this removes the random box)
+      if (tag === "rect" && strokeIsNone && (fillIsWhiteish || !fillAttr)) {
+        continue;
+      }
+
+      // If there is truly no stroke on a shape, skip it (we only import strokes as ink)
+      if (
+        (tag === "rect" ||
+          tag === "circle" ||
+          tag === "ellipse" ||
+          tag === "path" ||
+          tag === "line" ||
+          tag === "polyline" ||
+          tag === "polygon") &&
+        strokeIsNone
+      ) {
+        continue;
+      }
+
+      const stroke = strokeOf(el);
+      const size = strokeWidthOf(el);
+
+      if (tag === "line") {
+        const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
+        const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
+        const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
+        const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
+        const p1 = mapCTM(el, x1, y1);
+        const p2 = mapCTM(el, x2, y2);
+        pushPart({ kind: "line", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+        continue;
+      }
+
+      if (tag === "rect") {
+        const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
+        const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
+        const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
+        const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
+        const p1 = mapCTM(el, x, y);
+        const p2 = mapCTM(el, x + w, y + h);
+        pushPart({ kind: "rect", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+        continue;
+      }
+
+      if (tag === "circle") {
+        const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+        const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+        const r = parseNumberAttr(el.getAttribute("r")) ?? 0;
+        const p1 = mapCTM(el, cx - r, cy - r);
+        const p2 = mapCTM(el, cx + r, cy + r);
+        pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+        continue;
+      }
+
+      if (tag === "ellipse") {
+        const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
+        const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
+        const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
+        const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
+        const p1 = mapCTM(el, cx - rx, cy - ry);
+        const p2 = mapCTM(el, cx + rx, cy + ry);
+        pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+        continue;
+      }
+
+      if (tag === "polyline" || tag === "polygon") {
+        const ptsAttr = (el.getAttribute("points") || "").trim();
+        if (!ptsAttr) continue;
+        const nums = ptsAttr.split(/[\s,]+/).map(Number).filter((n) => isFinite(n));
+        if (nums.length < 4) continue;
+        const pts = [];
+        for (let i = 0; i < nums.length - 1; i += 2) {
+          pts.push(mapCTM(el, nums[i], nums[i + 1]));
+        }
+        if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
+        pushPart({ kind: "stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+        continue;
+      }
+
+      if (tag === "path") {
+        if (!el.getTotalLength) continue;
+        let total = 0;
         try {
-          const m = tf.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*rotate\(\s*([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)\s*\)\s*translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*$/i);
-          if (m) {
-            x = parseFloat(m[1]) || 0;
-            y = parseFloat(m[2]) || 0;
-            rot = (parseFloat(m[5]) || 0) * Math.PI / 180;
-            scale = parseFloat(m[6]) || 1;
+          total = el.getTotalLength();
+        } catch {
+          total = 0;
+        }
+        if (!isFinite(total) || total <= 0) continue;
+
+        const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
+        const pts = [];
+        for (let i = 0; i <= steps; i++) {
+          const t = (i / steps) * total;
+          let p;
+          try {
+            p = el.getPointAtLength(t);
+          } catch {
+            p = null;
           }
-        } catch {}
-
-        pendingBg = {
-          src: String(href),
-          natW: (wAttr ?? rootBox.w ?? 0),
-          natH: (hAttr ?? rootBox.h ?? 0),
-          x, y, rot, scale
-        };
+          if (!p) continue;
+          pts.push(mapCTM(el, p.x, p.y));
+        }
+        if (pts.length < 2) continue;
+        pushPart({ kind: "stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
+        continue;
       }
     }
-  }
 
-  const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
-  if (!els.length && !pendingBg) { showToast("No SVG paths"); return; }
-
-  const rootPt = svg.createSVGPoint ? svg.createSVGPoint() : null;
-
-  const parts = [];
-  const boundsPts = [];
-
-  function pushPart(obj, ptsForBounds) {
-    parts.push(obj);
-    if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
-  }
-
-  const isNone = (v) => {
-    const s = String(v || "").trim().toLowerCase();
-    return !s || s === "none" || s === "transparent";
-  };
-
-  function strokeOf(el) {
-    const stroke = el.getAttribute("stroke");
-    if (!isNone(stroke)) return stroke;
-    return "#111111";
-  }
-
-  function strokeWidthOf(el) {
-    const sw = parseNumberAttr(el.getAttribute("stroke-width"));
-    return Math.max(1, sw ?? 3);
-  }
-
-function mapCTM(el, x, y) {
-  if (rootPt && el.getCTM) {
-    const m = el.getCTM();
-    rootPt.x = x; rootPt.y = y;
-    const p = rootPt.matrixTransform(m); // includes cam group if present
-    if (isRoundTrip) return invCamPoint({ x: p.x, y: p.y }, cam); // remove camera
-    return { x: p.x, y: p.y };
-  }
-  const p = { x, y };
-  if (isRoundTrip) return invCamPoint(p, cam);
-  return p;
-}
-  // ---- Build ink parts; SKIP fill-only exporter background shapes (the "random box") ----
-  for (const el of els) {
-    const tag = el.tagName.toLowerCase();
-
-    // Exporter background is: <rect ... fill="white" stroke="none"> (or no stroke)
-    // We never want to import that as ink.
-    const strokeAttr = el.getAttribute("stroke");
-    const fillAttr = el.getAttribute("fill");
-    const strokeIsNone = isNone(strokeAttr);
-    const fillIsWhiteish = (() => {
-      const f = String(fillAttr || "").trim().toLowerCase();
-      return f === "white" || f === "#fff" || f === "#ffffff" || f === "rgb(255,255,255)";
-    })();
-
-    // If it's a big rect with no stroke and white fill, ignore it (this removes the random box)
-    if (tag === "rect" && strokeIsNone && (fillIsWhiteish || !fillAttr)) {
-      continue;
+    if (!parts.length && !pendingBg) {
+      showToast("No supported SVG shapes");
+      return;
     }
 
-    // If there is truly no stroke on a shape, skip it (we only import strokes as ink)
-    if ((tag === "rect" || tag === "circle" || tag === "ellipse" || tag === "path" || tag === "line" || tag === "polyline" || tag === "polygon")
-        && strokeIsNone) {
-      // allow line/path/etc that explicitly rely on stroke; if stroke is none, it's not ink.
-      continue;
+    // ---- Bounds (for recenter/scale) ----
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    const use = boundsPts.length
+      ? boundsPts
+      : [
+          { x: rootBox.x, y: rootBox.y },
+          { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
+        ];
+    for (const p of use) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
     }
 
-    const stroke = strokeOf(el);
-    const size = strokeWidthOf(el);
+    const bw = Math.max(1, maxX - minX);
+    const bh = Math.max(1, maxY - minY);
 
-    if (tag === "line") {
-      const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
-      const y1 = parseNumberAttr(el.getAttribute("y1")) ?? 0;
-      const x2 = parseNumberAttr(el.getAttribute("x2")) ?? 0;
-      const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
-      const p1 = mapCTM(el, x1, y1);
-      const p2 = mapCTM(el, x2, y2);
-      pushPart({ kind:"line", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
+    let viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
+    let s = clamp(Math.min(((state.viewW / state.zoom) * 0.9) / bw, ((state.viewH / state.zoom) * 0.9) / bh), 0.02, 50);
+
+    let cx0 = minX + bw / 2;
+    let cy0 = minY + bh / 2;
+
+    if (isRoundTrip) {
+      // Keep original world coords, no refit/recenter
+      viewCenter = { x: 0, y: 0 };
+      s = 1;
+      cx0 = 0;
+      cy0 = 0;
     }
 
-    if (tag === "rect") {
-      const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
-      const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
-      const w = parseNumberAttr(el.getAttribute("width")) ?? 0;
-      const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
-      const p1 = mapCTM(el, x, y);
-      const p2 = mapCTM(el, x + w, y + h);
-      pushPart({ kind:"rect", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
+    const groupId = "svg_" + Date.now();
+
+    pushUndo();
+    clearRedo();
+    hardResetGesture();
+
+    // ---- Apply SAME recenter/scale to background image (so bg + ink align) ----
+    if (pendingBg) {
+      state.bg.src = pendingBg.src;
+      state.bg.natW = pendingBg.natW;
+      state.bg.natH = pendingBg.natH;
+
+      state.bg.rot = pendingBg.rot;
+      state.bg.scale = pendingBg.scale * s;
+
+      // map the image's top-left (world coords) through the same transform
+      state.bg.x = viewCenter.x + (pendingBg.x - cx0) * s;
+      state.bg.y = viewCenter.y + (pendingBg.y - cy0) * s;
+
+      bgImg.src = state.bg.src;
+      applyBgTransform();
     }
 
-    if (tag === "circle") {
-      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
-      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
-      const r  = parseNumberAttr(el.getAttribute("r")) ?? 0;
-      const p1 = mapCTM(el, cx - r, cy - r);
-      const p2 = mapCTM(el, cx + r, cy + r);
-      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
-    }
+    const startIndex = state.objects.length;
 
-    if (tag === "ellipse") {
-      const cx = parseNumberAttr(el.getAttribute("cx")) ?? 0;
-      const cy = parseNumberAttr(el.getAttribute("cy")) ?? 0;
-      const rx = parseNumberAttr(el.getAttribute("rx")) ?? 0;
-      const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
-      const p1 = mapCTM(el, cx - rx, cy - ry);
-      const p2 = mapCTM(el, cx + rx, cy + ry);
-      pushPart({ kind:"circle", color: stroke, size, x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, rot:0 }, [p1,p2]);
-      continue;
-    }
+    for (const o of parts) {
+      const obj = JSON.parse(JSON.stringify(o));
+      obj.svgGroupId = groupId;
+      obj.hidden = true;
 
-    if (tag === "polyline" || tag === "polygon") {
-      const ptsAttr = (el.getAttribute("points") || "").trim();
-      if (!ptsAttr) continue;
-      const nums = ptsAttr.split(/[\s,]+/).map(Number).filter(n=>isFinite(n));
-      if (nums.length < 4) continue;
-      const pts = [];
-      for (let i=0;i<nums.length-1;i+=2){
-        pts.push(mapCTM(el, nums[i], nums[i+1]));
+      if (obj.kind === "stroke" || obj.kind === "erase") {
+        obj.points = (obj.points || []).map((p) => ({
+          x: viewCenter.x + (p.x - cx0) * s,
+          y: viewCenter.y + (p.y - cy0) * s
+        }));
+      } else {
+        obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
+        obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
+        obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
+        obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
       }
-      if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
-      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-      continue;
+
+      state.objects.push(obj);
     }
 
-    if (tag === "path") {
-      if (!el.getTotalLength) continue;
-      let total = 0;
-      try { total = el.getTotalLength(); } catch { total = 0; }
-      if (!isFinite(total) || total <= 0) continue;
+    svgReveal.active = true;
+    svgReveal.groupId = groupId;
+    svgReveal.partIndices = [];
+    svgReveal.revealed = 0;
+    for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
 
-      const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
-      const pts = [];
-      for (let i=0;i<=steps;i++){
-        const t = (i/steps) * total;
-        let p;
-        try { p = el.getPointAtLength(t); } catch { p = null; }
-        if (!p) continue;
-        pts.push(mapCTM(el, p.x, p.y));
-      }
-      if (pts.length < 2) continue;
-      pushPart({ kind:"stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-      continue;
-    }
-  }
+    state.selectionIndex = -1;
+    setActiveTool("select");
 
-  if (!parts.length && !pendingBg) { showToast("No supported SVG shapes"); return; }
-
-  // ---- Bounds (for recenter/scale) ----
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const use = boundsPts.length ? boundsPts : [
-    { x: rootBox.x, y: rootBox.y },
-    { x: rootBox.x + rootBox.w, y: rootBox.y + rootBox.h }
-  ];
-  for (const p of use) {
-    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-  }
-
-  const bw = Math.max(1, maxX - minX);
-  const bh = Math.max(1, maxY - minY);
-
-let viewCenter = screenToWorld(state.viewW / 2, state.viewH / 2);
-let s = clamp(Math.min(((state.viewW / state.zoom) * 0.9) / bw, ((state.viewH / state.zoom) * 0.9) / bh), 0.02, 50);
-
-let cx0 = minX + bw/2;
-let cy0 = minY + bh/2;
-
-if (isRoundTrip) {
-  // Keep original world coords, no refit/recenter
-  viewCenter = { x: 0, y: 0 };
-  s = 1;
-  cx0 = 0;
-  cy0 = 0;
-}
- 
-
-  const groupId = "svg_" + Date.now();
-
-  pushUndo(); clearRedo();
-  hardResetGesture();
-
-  // ---- Apply SAME recenter/scale to background image (so bg + ink align) ----
-  if (pendingBg) {
-    state.bg.src = pendingBg.src;
-    state.bg.natW = pendingBg.natW;
-    state.bg.natH = pendingBg.natH;
-
-    state.bg.rot = pendingBg.rot;
-    state.bg.scale = pendingBg.scale * s;
-
-    // map the image's top-left (world coords) through the same transform
-    state.bg.x = viewCenter.x + (pendingBg.x - cx0) * s;
-    state.bg.y = viewCenter.y + (pendingBg.y - cy0) * s;
-
-    bgImg.src = state.bg.src;
-    applyBgTransform();
-  }
-
-  const startIndex = state.objects.length;
-
-  for (const o of parts) {
-    const obj = JSON.parse(JSON.stringify(o));
-    obj.svgGroupId = groupId;
-    obj.hidden = true;
-
-    if (obj.kind === "stroke" || obj.kind === "erase") {
-      obj.points = (obj.points || []).map(p => ({
-        x: viewCenter.x + (p.x - cx0) * s,
-        y: viewCenter.y + (p.y - cy0) * s
-      }));
-    } else {
-      obj.x1 = viewCenter.x + (obj.x1 - cx0) * s;
-      obj.y1 = viewCenter.y + (obj.y1 - cy0) * s;
-      obj.x2 = viewCenter.x + (obj.x2 - cx0) * s;
-      obj.y2 = viewCenter.y + (obj.y2 - cy0) * s;
+    if (isRoundTrip) {
+      state.zoom = cam.zoom;
+      state.panX = cam.panX;
+      state.panY = cam.panY;
     }
 
-    state.objects.push(obj);
+    redrawAll();
+    showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
   }
-
-  svgReveal.active = true;
-  svgReveal.groupId = groupId;
-  svgReveal.partIndices = [];
-  svgReveal.revealed = 0;
-  for (let i = startIndex; i < state.objects.length; i++) svgReveal.partIndices.push(i);
-
-  state.selectionIndex = -1;
-  setActiveTool("select");
-
-if (isRoundTrip) {
-  state.zoom = cam.zoom;
-  state.panX = cam.panX;
-  state.panY = cam.panY;
-}
- 
-  redrawAll();
-  showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
-}
 
   function clearImportedSvgInk() {
-    if (!svgReveal.active || !svgReveal.groupId) { showToast("No SVG ink"); return; }
-    pushUndo(); clearRedo();
+    if (!svgReveal.active || !svgReveal.groupId) {
+      showToast("No SVG ink");
+      return;
+    }
+    pushUndo();
+    clearRedo();
     const gid = svgReveal.groupId;
-    state.objects = state.objects.filter(o => !(o && o.svgGroupId === gid));
+    state.objects = state.objects.filter((o) => !(o && o.svgGroupId === gid));
     svgReveal.active = false;
     svgReveal.groupId = null;
     svgReveal.partIndices = [];
@@ -2551,7 +2768,7 @@ if (isRoundTrip) {
       const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
       if (!items.length) return;
 
-      const imgItem = items.find(it => it.type && it.type.startsWith("image/"));
+      const imgItem = items.find((it) => it.type && it.type.startsWith("image/"));
       if (!imgItem) return;
 
       const file = imgItem.getAsFile();
@@ -2567,217 +2784,224 @@ if (isRoundTrip) {
     }
   });
 
- // ---------- Keyboard ----------
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    openSettings(false);
-    toggleColorPop(false);
-    arcDraft.hasCenter = false;
-    hideMeasureTip();
-  }
-
-  if (e.code === "Space") {
-    spacePanning = true;
-    e.preventDefault();
-    if (gesture.active && gesture.mode === "pan") inkCanvas.style.cursor = "grabbing";
-  }
-
-  const tag = (document.activeElement && document.activeElement.tagName) || "";
-  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-
-  // SVG reveal controls (when an SVG has been imported as ink)
-if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-  e.preventDefault();
-  const total = svgReveal.partIndices.length;
-  if (!total) return;
-
-  if (e.key === "ArrowRight") {
-    // Skip any missing indices (objects may have been deleted/undone)
-    while (svgReveal.revealed < total) {
-      const idx = svgReveal.partIndices[svgReveal.revealed];
-      const obj = state.objects[idx];
-      svgReveal.revealed += 1;
-      if (obj) { obj.hidden = false; break; }
+  // ---------- Keyboard ----------
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      openSettings(false);
+      toggleColorPop(false);
+      arcDraft.hasCenter = false;
+      hideMeasureTip();
     }
-    redrawAll();
-    showToast(`SVG: ${Math.min(svgReveal.revealed, total)}/${total}`);
-    return;
-  }
 
-  if (e.key === "ArrowLeft") {
-    // Skip any missing indices
-    while (svgReveal.revealed > 0) {
-      svgReveal.revealed -= 1;
-      const idx = svgReveal.partIndices[svgReveal.revealed];
-      const obj = state.objects[idx];
-      if (obj) { obj.hidden = true; break; }
-    }
-    redrawAll();
-    showToast(`SVG: ${Math.max(svgReveal.revealed, 0)}/${total}`);
-    return;
-  }
-}
-
-  // Delete removes selection (when not typing)
-  if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
-    if (state.selectionIndex >= 0) {
-      pushUndo(); clearRedo();
-      state.objects.splice(state.selectionIndex, 1);
-      state.selectionIndex = -1;
-      redrawAll();
-      showToast("Deleted");
-    }
-  }
-
-  // Tool hotkeys
-  if (!typing) {
-    const k = e.key.toLowerCase();
-    if (k === "v") setActiveTool("select");
-    if (k === "p") setActiveTool("pen");
-    if (k === "l") setActiveTool("line");
-    if (k === "r") setActiveTool("rect");
-    if (k === "c") setActiveTool("circle");
-    if (k === "g") setActiveTool("arc");
-    if (k === "a") setActiveTool("arrow");
-    if (k === "t") setActiveTool("text");
-    if (k === "e") setActiveTool("eraser");
-  }
-
-  // Undo/redo shortcuts
-  const isMac = navigator.platform.toUpperCase().includes("MAC");
-  const mod = isMac ? e.metaKey : e.ctrlKey;
-
-  if (mod) {
-    const key = e.key.toLowerCase();
-    if (key === "z" && !e.shiftKey) {
+    if (e.code === "Space") {
+      spacePanning = true;
       e.preventDefault();
-      hardResetGesture();
-      undo();
-      return;
-    } else if (key === "y" || (key === "z" && e.shiftKey)) {
-      e.preventDefault();
-      hardResetGesture();
-      redo();
-      return;
-    }
-  }
-
-  // ----- Ctrl/Cmd + NUMBER / +/- / ARROWS helpers -----
-  if (!typing && (e.ctrlKey || e.metaKey)) {
-    // Top row digits + numpad digits
-    const digit = (/^[0-9]$/).test(e.key) ? Number(e.key) : null;
-
-    if (digit !== null) {
-      e.preventDefault();
-      // map 0 => 10, 1..9 => 1..9
-      const size = (digit === 0) ? 13 : digit;
-      setBrushSizeFromHotkey(size);
-      return;
+      if (gesture.active && gesture.mode === "pan") inkCanvas.style.cursor = "grabbing";
     }
 
-    // Ctrl/Cmd + = / - : quick size up/down
-    if (e.key === "=" || e.key === "+") {
+    const tag = (document.activeElement && document.activeElement.tagName) || "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+    // SVG reveal controls (when an SVG has been imported as ink)
+    if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
       e.preventDefault();
-      setBrushSizeFromHotkey(state.size + (e.shiftKey ? 8 : 16));
-      return;
-    }
-    if (e.key === "-" || e.key === "_") {
-      e.preventDefault();
-      setBrushSizeFromHotkey(state.size - (e.shiftKey ? 8 : 16));
-      return;
+      const total = svgReveal.partIndices.length;
+      if (!total) return;
+
+      if (e.key === "ArrowRight") {
+        // Skip any missing indices (objects may have been deleted/undone)
+        while (svgReveal.revealed < total) {
+          const idx = svgReveal.partIndices[svgReveal.revealed];
+          const obj = state.objects[idx];
+          svgReveal.revealed += 1;
+          if (obj) {
+            obj.hidden = false;
+            break;
+          }
+        }
+        redrawAll();
+        showToast(`SVG: ${Math.min(svgReveal.revealed, total)}/${total}`);
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        // Skip any missing indices
+        while (svgReveal.revealed > 0) {
+          svgReveal.revealed -= 1;
+          const idx = svgReveal.partIndices[svgReveal.revealed];
+          const obj = state.objects[idx];
+          if (obj) {
+            obj.hidden = true;
+            break;
+          }
+        }
+        redrawAll();
+        showToast(`SVG: ${Math.max(svgReveal.revealed, 0)}/${total}`);
+        return;
+      }
     }
 
-    // Ctrl/Cmd + ARROWS = pan camera
-    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-      const step = (e.shiftKey ? 160 : 60); // px per tap (Shift = faster)
-      if (e.key === "ArrowUp")    nudgePan(0, step);
-      if (e.key === "ArrowDown")  nudgePan(0, -step);
-      if (e.key === "ArrowLeft")  nudgePan(step, 0);
-      if (e.key === "ArrowRight") nudgePan(-step, 0);
-      return;
+    // Delete removes selection (when not typing)
+    if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
+      if (state.selectionIndex >= 0) {
+        pushUndo();
+        clearRedo();
+        state.objects.splice(state.selectionIndex, 1);
+        state.selectionIndex = -1;
+        redrawAll();
+        showToast("Deleted");
+      }
     }
-  }
-});
 
-document.addEventListener("keyup", (e) => {
-  if (e.code === "Space") {
-    spacePanning = false;
-    updateCursorFromTool();
-  }
-});
+    // Tool hotkeys
+    if (!typing) {
+      const k = e.key.toLowerCase();
+      if (k === "v") setActiveTool("select");
+      if (k === "p") setActiveTool("pen");
+      if (k === "l") setActiveTool("line");
+      if (k === "r") setActiveTool("rect");
+      if (k === "c") setActiveTool("circle");
+      if (k === "g") setActiveTool("arc");
+      if (k === "a") setActiveTool("arrow");
+      if (k === "t") setActiveTool("text");
+      if (k === "e") setActiveTool("eraser");
+    }
 
+    // Undo/redo shortcuts
+    const isMac = navigator.platform.toUpperCase().includes("MAC");
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+
+    if (mod) {
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        hardResetGesture();
+        undo();
+        return;
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        hardResetGesture();
+        redo();
+        return;
+      }
+    }
+
+    // ----- Ctrl/Cmd + NUMBER / +/- / ARROWS helpers -----
+    if (!typing && (e.ctrlKey || e.metaKey)) {
+      // Top row digits + numpad digits
+      const digit = /^[0-9]$/.test(e.key) ? Number(e.key) : null;
+
+      if (digit !== null) {
+        e.preventDefault();
+        // map 0 => 10, 1..9 => 1..9
+        const size = digit === 0 ? 13 : digit;
+        setBrushSizeFromHotkey(size);
+        return;
+      }
+
+      // Ctrl/Cmd + = / - : quick size up/down
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        setBrushSizeFromHotkey(state.size + (e.shiftKey ? 8 : 16));
+        return;
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        setBrushSizeFromHotkey(state.size - (e.shiftKey ? 8 : 16));
+        return;
+      }
+
+      // Ctrl/Cmd + ARROWS = pan camera
+      if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const step = e.shiftKey ? 160 : 60; // px per tap (Shift = faster)
+        if (e.key === "ArrowUp") nudgePan(0, step);
+        if (e.key === "ArrowDown") nudgePan(0, -step);
+        if (e.key === "ArrowLeft") nudgePan(step, 0);
+        if (e.key === "ArrowRight") nudgePan(-step, 0);
+        return;
+      }
+    }
+  });
+
+  document.addEventListener("keyup", (e) => {
+    if (e.code === "Space") {
+      spacePanning = false;
+      updateCursorFromTool();
+    }
+  });
 
   // ---------- Boards ----------
-  // ---------- Boards ----------
-const LS_KEY = "PHS_WHITEBOARD_BOARDS_v8";
+  const LS_KEY = "PHS_WHITEBOARD_BOARDS_v8";
 
-function loadBoardsIndex() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
-  catch { return {}; }
-}
-function saveBoardsIndex(index) {
-  localStorage.setItem(LS_KEY, JSON.stringify(index));
-}
-function refreshBoardSelect() {
-  const index = loadBoardsIndex();
-  const names = Object.keys(index).sort((a,b) => a.localeCompare(b));
-  boardSelect.innerHTML = "";
-  const opt0 = document.createElement("option");
-  opt0.value = ""; opt0.textContent = "— select —";
-  boardSelect.appendChild(opt0);
-  for (const name of names) {
-    const opt = document.createElement("option");
-    opt.value = name; opt.textContent = name;
-    boardSelect.appendChild(opt);
+  function loadBoardsIndex() {
+    try {
+      return JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    } catch {
+      return {};
+    }
   }
-}
+  function saveBoardsIndex(index) {
+    localStorage.setItem(LS_KEY, JSON.stringify(index));
+  }
+  function refreshBoardSelect() {
+    const index = loadBoardsIndex();
+    const names = Object.keys(index).sort((a, b) => a.localeCompare(b));
+    boardSelect.innerHTML = "";
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "— select —";
+    boardSelect.appendChild(opt0);
+    for (const name of names) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      boardSelect.appendChild(opt);
+    }
+  }
 
-function snapshotBoard() {
-  return { v: 8, savedAt: new Date().toISOString(), ...snapshot() };
-}
+  function snapshotBoard() {
+    return { v: 8, savedAt: new Date().toISOString(), ...snapshot() };
+  }
 
-async function applyBoard(data) {
-  hardResetGesture();
-  state.undo = [];
-  state.redo = [];
-  applySnapshot(data);
+  async function applyBoard(data) {
+    hardResetGesture();
+    state.undo = [];
+    state.redo = [];
+    applySnapshot(data);
 
-  if (state.bg && state.bg.src) bgImg.src = state.bg.src;
-  else bgImg.removeAttribute("src");
+    if (state.bg && state.bg.src) bgImg.src = state.bg.src;
+    else bgImg.removeAttribute("src");
 
-  applyBgTransform();
-  redrawAll();
-}
+    applyBgTransform();
+    redrawAll();
+  }
 
-saveBoardBtn?.addEventListener("click", () => {
-  const name = prompt("Save board as name:", boardSelect.value || "");
-  if (!name) return;
-  const index = loadBoardsIndex();
-  index[name] = snapshotBoard();
-  saveBoardsIndex(index);
+  saveBoardBtn?.addEventListener("click", () => {
+    const name = prompt("Save board as name:", boardSelect.value || "");
+    if (!name) return;
+    const index = loadBoardsIndex();
+    index[name] = snapshotBoard();
+    saveBoardsIndex(index);
+    refreshBoardSelect();
+    boardSelect.value = name;
+    showToast("Board saved");
+  });
+
+  loadBoardBtn?.addEventListener("click", async () => {
+    const name = boardSelect.value;
+    if (!name) return;
+    const index = loadBoardsIndex();
+    if (!index[name]) return;
+    await applyBoard(index[name]);
+    showToast("Board loaded");
+  });
+
   refreshBoardSelect();
-  boardSelect.value = name;
-  showToast("Board saved");
-});
-
-loadBoardBtn?.addEventListener("click", async () => {
-  const name = boardSelect.value;
-  if (!name) return;
-  const index = loadBoardsIndex();
-  if (!index[name]) return;
-  await applyBoard(index[name]);
-  showToast("Board loaded");
-});
-
-
-
-
-refreshBoardSelect();
 
   // ---------- Scale calibration ----------
   function getLineForCalibration() {
-    const sel = (state.selectionIndex >= 0) ? state.objects[state.selectionIndex] : null;
+    const sel = state.selectionIndex >= 0 ? state.objects[state.selectionIndex] : null;
     if (sel && (sel.kind === "line" || sel.kind === "arrow")) return sel;
     for (let i = state.objects.length - 1; i >= 0; i--) {
       const o = state.objects[i];
@@ -2788,14 +3012,24 @@ refreshBoardSelect();
 
   setScaleBtn?.addEventListener("click", () => {
     const o = getLineForCalibration();
-    if (!o) { showToast("Draw/select a line first"); return; }
-    const lenPx = Math.hypot((o.x2 - o.x1), (o.y2 - o.y1));
-    if (!isFinite(lenPx) || lenPx < 1) { showToast("Line too short"); return; }
+    if (!o) {
+      showToast("Draw/select a line first");
+      return;
+    }
+    const lenPx = Math.hypot(o.x2 - o.x1, o.y2 - o.y1);
+    if (!isFinite(lenPx) || lenPx < 1) {
+      showToast("Line too short");
+      return;
+    }
     const mmStr = prompt("Enter the real length of that line (mm):", "100");
     if (mmStr == null) return;
     const mm = parseFloat(String(mmStr).replace(/[^0-9.+-]/g, ""));
-    if (!isFinite(mm) || mm <= 0) { showToast("Invalid mm"); return; }
-    pushUndo(); clearRedo();
+    if (!isFinite(mm) || mm <= 0) {
+      showToast("Invalid mm");
+      return;
+    }
+    pushUndo();
+    clearRedo();
     state.pxPerMm = lenPx / mm;
     updateScaleOut();
     redrawAll();
@@ -2803,8 +3037,9 @@ refreshBoardSelect();
   });
 
   resetScaleBtn?.addEventListener("click", () => {
-    pushUndo(); clearRedo();
-    state.pxPerMm = (96 / 25.4);
+    pushUndo();
+    clearRedo();
+    state.pxPerMm = 96 / 25.4;
     updateScaleOut();
     redrawAll();
     showToast("Scale reset");
@@ -2813,10 +3048,16 @@ refreshBoardSelect();
   // ---------- Delete saved boards ----------
   deleteBoardBtn?.addEventListener("click", () => {
     const name = boardSelect.value;
-    if (!name) { showToast("Select a board"); return; }
+    if (!name) {
+      showToast("Select a board");
+      return;
+    }
     if (!confirm(`Delete saved board “${name}”?`)) return;
     const index = loadBoardsIndex();
-    if (!index[name]) { showToast("Not found"); return; }
+    if (!index[name]) {
+      showToast("Not found");
+      return;
+    }
     delete index[name];
     saveBoardsIndex(index);
     refreshBoardSelect();
@@ -2827,7 +3068,10 @@ refreshBoardSelect();
   deleteAllBoardsBtn?.addEventListener("click", () => {
     const index = loadBoardsIndex();
     const names = Object.keys(index);
-    if (!names.length) { showToast("No saved boards"); return; }
+    if (!names.length) {
+      showToast("No saved boards");
+      return;
+    }
     if (!confirm(`Delete ALL saved boards (${names.length})?`)) return;
     localStorage.removeItem(LS_KEY);
     refreshBoardSelect();
@@ -2836,41 +3080,42 @@ refreshBoardSelect();
   });
 
   // ---------- Export SVG (vector) ----------
-  function svgEscape(s){
+  function svgEscape(s) {
     return String(s)
-      .replace(/&/g,"&amp;")
-      .replace(/</g,"&lt;")
-      .replace(/>/g,"&gt;")
-      .replace(/"/g,"&quot;")
-      .replace(/'/g,"&#39;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
-  function pathFromPoints(pts){
+  function pathFromPoints(pts) {
     if (!pts || pts.length < 2) return "";
     let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
-    for (let i=1;i<pts.length;i++){
+    for (let i = 1; i < pts.length; i++) {
       d += ` L ${pts[i].x.toFixed(2)} ${pts[i].y.toFixed(2)}`;
     }
     return d;
   }
 
-  function exportSVG(){
+  function exportSVG() {
     const W = state.viewW;
     const H = state.viewH;
 
     const cam = `translate(${state.panX.toFixed(3)} ${state.panY.toFixed(3)}) scale(${state.zoom.toFixed(6)})`;
 
     let bgMarkup = "";
-    if (state.bg.src){
+    if (state.bg.src) {
       const natW = state.bg.natW || 0;
       const natH = state.bg.natH || 0;
-      const cx = natW/2, cy = natH/2;
+      const cx = natW / 2,
+        cy = natH / 2;
       const t = [
         `translate(${state.bg.x.toFixed(3)} ${state.bg.y.toFixed(3)})`,
         `translate(${cx.toFixed(3)} ${cy.toFixed(3)})`,
-        `rotate(${(state.bg.rot * 180/Math.PI).toFixed(6)})`,
+        `rotate(${((state.bg.rot * 180) / Math.PI).toFixed(6)})`,
         `scale(${state.bg.scale.toFixed(6)})`,
-        `translate(${-cx.toFixed(3)} ${-cy.toFixed(3)})`
+        `translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`
       ].join(" ");
       // ✅ include xlink:href for compatibility
       bgMarkup = `<image href="${state.bg.src}" xlink:href="${state.bg.src}" x="0" y="0" width="${natW}" height="${natH}" transform="${t}" />`;
@@ -2881,7 +3126,7 @@ refreshBoardSelect();
     let currentLayer = "";
     let maskCount = 0;
 
-    function wrapWithEraseMask(erasePathD, eraseSize){
+    function wrapWithEraseMask(erasePathD, eraseSize) {
       maskCount += 1;
       const id = `m${maskCount}`;
       const strokeW = Math.max(1, eraseSize || 20);
@@ -2897,70 +3142,78 @@ refreshBoardSelect();
       currentLayer = "";
     }
 
-    for (const obj of state.objects){
-      if (obj.kind === "erase"){
+    for (const obj of state.objects) {
+      if (obj.kind === "erase") {
         const d = pathFromPoints(obj.points || []);
         if (d) wrapWithEraseMask(d, obj.size);
         continue;
       }
 
-      if (obj.kind === "stroke"){
+      if (obj.kind === "stroke") {
         const d = pathFromPoints(obj.points || []);
         if (!d) continue;
         currentLayer += `<path d="${d}" fill="none" stroke="${obj.color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="${obj.size}"/>`;
         continue;
       }
 
-      if (obj.kind === "text"){
+      if (obj.kind === "text") {
         const m = textMetrics(obj);
-        const cx = obj.x + m.w/2;
-        const cy = obj.y + m.h/2;
-        const ang = (obj.rot || 0) * 180/Math.PI;
-        const t = `translate(${cx.toFixed(3)} ${cy.toFixed(3)}) rotate(${ang.toFixed(6)}) translate(${(-m.w/2).toFixed(3)} ${(-m.h/2).toFixed(3)})`;
-        currentLayer += `<text x="0" y="0" transform="${t}" fill="${obj.color}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${m.fontSize}">${svgEscape(obj.text||"")}</text>`;
+        const cx = obj.x + m.w / 2;
+        const cy = obj.y + m.h / 2;
+        const ang = ((obj.rot || 0) * 180) / Math.PI;
+        const t = `translate(${cx.toFixed(3)} ${cy.toFixed(3)}) rotate(${ang.toFixed(6)}) translate(${(-m.w / 2).toFixed(3)} ${(-m.h / 2).toFixed(3)})`;
+        currentLayer += `<text x="0" y="0" transform="${t}" fill="${obj.color}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${m.fontSize}">${svgEscape(obj.text || "")}</text>`;
         continue;
       }
 
-      const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
-      const w = x2 - x1, h = y2 - y1;
+      const x1 = obj.x1,
+        y1 = obj.y1,
+        x2 = obj.x2,
+        y2 = obj.y2;
+      const w = x2 - x1,
+        h = y2 - y1;
 
-      if (obj.kind === "line"){
+      if (obj.kind === "line") {
         currentLayer += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" />`;
         continue;
       }
 
-      if (obj.kind === "arrow"){
-        const ang = Math.atan2(y2-y1, x2-x1);
+      if (obj.kind === "arrow") {
+        const ang = Math.atan2(y2 - y1, x2 - x1);
         const headLen = Math.max(10, obj.size * 3);
         const a1 = ang + Math.PI * 0.85;
         const a2 = ang - Math.PI * 0.85;
-        const hx1 = x2 + Math.cos(a1)*headLen;
-        const hy1 = y2 + Math.sin(a1)*headLen;
-        const hx2 = x2 + Math.cos(a2)*headLen;
-        const hy2 = y2 + Math.sin(a2)*headLen;
+        const hx1 = x2 + Math.cos(a1) * headLen;
+        const hy1 = y2 + Math.sin(a1) * headLen;
+        const hx2 = x2 + Math.cos(a2) * headLen;
+        const hy2 = y2 + Math.sin(a2) * headLen;
         currentLayer += `<path d="M ${x1} ${y1} L ${x2} ${y2} M ${x2} ${y2} L ${hx1} ${hy1} M ${x2} ${y2} L ${hx2} ${hy2}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" stroke-linecap="round" stroke-linejoin="round" />`;
         continue;
       }
 
-      if (obj.kind === "rect"){
-        const cx = (x1+x2)/2, cy=(y1+y2)/2;
-        const rw = Math.abs(w), rh=Math.abs(h);
-        const ang = (obj.rot || 0) * 180/Math.PI;
+      if (obj.kind === "rect") {
+        const cx = (x1 + x2) / 2,
+          cy = (y1 + y2) / 2;
+        const rw = Math.abs(w),
+          rh = Math.abs(h);
+        const ang = ((obj.rot || 0) * 180) / Math.PI;
         const t = `translate(${cx} ${cy}) rotate(${ang})`;
-        currentLayer += `<rect x="${-rw/2}" y="${-rh/2}" width="${rw}" height="${rh}" transform="${t}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
+        currentLayer += `<rect x="${-rw / 2}" y="${-rh / 2}" width="${rw}" height="${rh}" transform="${t}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
         continue;
       }
 
-      if (obj.kind === "circle"){
-        const cx = (x1+x2)/2, cy=(y1+y2)/2;
-        const rx = Math.abs(w)/2, ry=Math.abs(h)/2;
-        const ang = (obj.rot || 0) * 180/Math.PI;
+      if (obj.kind === "circle") {
+        const cx = (x1 + x2) / 2,
+          cy = (y1 + y2) / 2;
+        const rx = Math.abs(w) / 2,
+          ry = Math.abs(h) / 2;
+        const ang = ((obj.rot || 0) * 180) / Math.PI;
         const t = `translate(${cx} ${cy}) rotate(${ang})`;
         currentLayer += `<ellipse cx="0" cy="0" rx="${rx}" ry="${ry}" transform="${t}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
         continue;
       }
 
-      if (obj.kind === "arc"){
+      if (obj.kind === "arc") {
         const a1 = obj.a1 || 0;
         const a2 = obj.a2 || 0;
         const ccw = !!obj.ccw;
@@ -2969,7 +3222,7 @@ refreshBoardSelect();
         const span = ccw ? arcDelta(a2, a1) : arcDelta(a1, a2);
 
         // Full circle: SVG arc can't do 360° as one A command -> use <circle>
-        if (span >= (Math.PI * 2 - 1e-6)) {
+        if (span >= Math.PI * 2 - 1e-6) {
           currentLayer += `<circle cx="${obj.cx}" cy="${obj.cy}" r="${obj.r}" fill="none" stroke="${obj.color}" stroke-width="${obj.size}" />`;
           continue;
         }
@@ -3004,7 +3257,7 @@ refreshBoardSelect();
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.download = `whiteboard-${new Date().toISOString().slice(0,10)}.svg`;
+    a.download = `whiteboard-${new Date().toISOString().slice(0, 10)}.svg`;
     a.href = url;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -3026,7 +3279,10 @@ refreshBoardSelect();
     if (state.bg.src && state.bg.natW && state.bg.natH) {
       const img = new Image();
       img.src = state.bg.src;
-      await new Promise((res) => { img.onload = () => res(); img.onerror = () => res(); });
+      await new Promise((res) => {
+        img.onload = () => res();
+        img.onerror = () => res();
+      });
 
       octx.save();
       octx.translate(state.panX, state.panY);
@@ -3051,7 +3307,7 @@ refreshBoardSelect();
     octx.drawImage(uiCanvas, 0, 0, state.viewW, state.viewH);
 
     const a = document.createElement("a");
-    a.download = `whiteboard-${new Date().toISOString().slice(0,10)}.png`;
+    a.download = `whiteboard-${new Date().toISOString().slice(0, 10)}.png`;
     a.href = out.toDataURL("image/png");
     a.click();
   });
@@ -3070,15 +3326,15 @@ refreshBoardSelect();
 
     // ✅ start zoomed right out
     requestAnimationFrame(() => {
-      resizeAll();               // ensure viewW/viewH are correct
-      state.zoom = 0.25;         // pick how far out you want (0.25 = 25%)
-      state.panX = (state.viewW / 2);
-      state.panY = (state.viewH / 2);
+      resizeAll(); // ensure viewW/viewH are correct
+      state.zoom = 0.25; // pick how far out you want (0.25 = 25%)
+      state.panX = state.viewW / 2;
+      state.panY = state.viewH / 2;
       redrawAll();
     });
   }
 
   const ro = new ResizeObserver(() => resizeAll());
   ro.observe(stage);
-init();
+  init();
 })();
