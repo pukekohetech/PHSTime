@@ -1986,7 +1986,8 @@
       redrawAll();
       return;
     }
-  
+  }
+    
 
   function onPointerUp() {
     if (!gesture.active) return;
@@ -2943,5 +2944,5 @@ refreshBoardSelect();
 
   const ro = new ResizeObserver(() => resizeAll());
   ro.observe(stage);
- init();
+init();
 })();
