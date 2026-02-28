@@ -92,6 +92,15 @@
   const exportBtn = document.getElementById("exportBtn");
   const exportSvgBtn = document.getElementById("exportSvgBtn");
 
+  // Scale controls
+  const scaleOut = document.getElementById("scaleOut");
+  const setScaleBtn = document.getElementById("setScaleBtn");
+  const resetScaleBtn = document.getElementById("resetScaleBtn");
+
+  // Board delete controls
+  const deleteBoardBtn = document.getElementById("deleteBoardBtn");
+  const deleteAllBoardsBtn = document.getElementById("deleteAllBoardsBtn");
+
   // ---------- State ----------
   const state = {
     tool: "pen",
@@ -108,6 +117,9 @@
 
     // UI title
     title: "",
+
+    // Scale (world px per mm)
+    pxPerMm: (96 / 25.4),
 
     // Background (world coords)
     bg: {
@@ -228,15 +240,20 @@
     };
   }
 
-  // --- Precision snapping ---
-  // World units are in CSS pixels at zoom=1. We approximate 1mm in CSS pixels using 96dpi.
-  const PX_PER_MM = 96 / 25.4;         // ≈3.7795 px per mm
+  // --- Precision snapping + scale ---
+  // World units are in CSS pixels at zoom=1.
+  // Default approximation: 96dpi => 96px per inch => 96/25.4 px per mm.
+  const DEFAULT_PX_PER_MM = 96 / 25.4; // ≈3.7795 px per mm
   const SNAP_RADIUS_PX = 12;           // screen-space radius to grab endpoints/intersections
 
+  function pxPerMm() {
+    const v = Number(state.pxPerMm);
+    return isFinite(v) && v > 0 ? v : DEFAULT_PX_PER_MM;
+  }
+
   function mmStepWorld() {
-    // World coords are already de-zoomed (screen -> world divides by zoom),
-    // so 1mm is a constant PX_PER_MM in world space.
-    return PX_PER_MM;
+    // 1 mm in world space
+    return pxPerMm();
   }
 
   function snapToMmGridWorld(pt) {
@@ -473,12 +490,19 @@
     state.color = hex;
     colorInput.value = hex;
     updateSwatch();
+    updateScaleOut();
   }
 
   function setBrushSize(n) {
     state.size = Number(n);
     brushSize.value = String(state.size);
     brushOut.textContent = String(state.size);
+  }
+
+
+  function updateScaleOut() {
+    if (!scaleOut) return;
+    scaleOut.textContent = `1 mm = ${pxPerMm().toFixed(3)} px`;
   }
 
   function setActiveTool(tool) {
@@ -524,6 +548,7 @@
       panX: state.panX,
       panY: state.panY,
       title: state.title,
+      pxPerMm: pxPerMm(),
       bg: { ...state.bg },
       objects: deepClone(state.objects)
     };
@@ -542,6 +567,9 @@
 
     state.title = snap.title || "";
     titleInput.value = state.title;
+
+    state.pxPerMm = Number(snap.pxPerMm || state.pxPerMm || (96/25.4));
+    updateScaleOut();
 
     const bg = snap.bg || { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 };
     state.bg = { ...bg };
@@ -1545,7 +1573,7 @@
       const cy = arcDraft.cy;
       const a1 = Math.atan2(p1.y - cy, p1.x - cx);
       let r = Math.hypot(p1.x - cx, p1.y - cy);
-      r = Math.max(1, Math.round(r / PX_PER_MM) * PX_PER_MM);
+      r = Math.max(1, Math.round(r / pxPerMm()) * pxPerMm());
 
       const obj = { kind: "arc", color: state.color, size: state.size, cx, cy, r, a1, a2: a1, ccw: false };
       state.objects.push(obj);
@@ -1557,7 +1585,7 @@
       gesture.arcLastA = a1;
       gesture.arcAccum = 0;
 
-      showMeasureTip(sx, sy, `R ${Math.round(r / PX_PER_MM)} mm`);
+      showMeasureTip(sx, sy, `R ${Math.round(r / pxPerMm())} mm`);
       redrawAll();
       return;
     }
@@ -1592,7 +1620,7 @@
       if (isSnapShape) {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
-          if (hit) p0 = hit;
+          p0 = hit || snapToMmGridWorld(p0);
         } else {
           p0 = snapToMmGridWorld(p0);
         }
@@ -1851,9 +1879,9 @@
       gesture.activeObj.a1 = gesture.arcA1;
       gesture.activeObj.a2 = a2;
 
-      const rMm = rFixed / PX_PER_MM;
+      const rMm = rFixed / pxPerMm();
       const span = Math.abs(a2 - (gesture.arcA1 || 0));
-      const lenMm = (span * rFixed) / PX_PER_MM;
+      const lenMm = (span * rFixed) / pxPerMm();
 
       const label = isCircle
         ? `Circle • R ${Math.round(rMm)} mm`
@@ -1882,16 +1910,9 @@
       if (k === "line" || k === "arrow") {
         if (ctrlHeld) {
           const hit = snapPointWithCtrl({ x: x2, y: y2 });
-          if (hit) {
-            x2 = hit.x; y2 = hit.y;
-          } else {
-            const snapped = snapEndpointToAngles(
-              gesture.activeObj.x1, gesture.activeObj.y1,
-              x2, y2
-            );
-            x2 = snapped.x2;
-            y2 = snapped.y2;
-          }
+          const mm = snapToMmGridWorld({ x: x2, y: y2 });
+          x2 = (hit ? hit.x : mm.x);
+          y2 = (hit ? hit.y : mm.y);
         } else {
           const mm = snapToMmGridWorld({ x: x2, y: y2 });
           x2 = mm.x; y2 = mm.y;
@@ -1942,23 +1963,23 @@
         const dx = x2 - gesture.activeObj.x1;
         const dy = y2 - gesture.activeObj.y1;
         const lenPx = Math.hypot(dx, dy);
-        const lenMm = lenPx / PX_PER_MM;
+        const lenMm = lenPx / pxPerMm();
         showMeasureTip(sx, sy, formatMm(lenMm));
       }
 
       if (k === "rect") {
         const wPx = Math.abs(x2 - gesture.activeObj.x1);
         const hPx = Math.abs(y2 - gesture.activeObj.y1);
-        const wMm = wPx / PX_PER_MM;
-        const hMm = hPx / PX_PER_MM;
+        const wMm = wPx / pxPerMm();
+        const hMm = hPx / pxPerMm();
         showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
       }
 
       if (k === "circle") {
         const wPx = Math.abs(x2 - gesture.activeObj.x1);
         const hPx = Math.abs(y2 - gesture.activeObj.y1);
-        const wMm = wPx / PX_PER_MM;
-        const hMm = hPx / PX_PER_MM;
+        const wMm = wPx / pxPerMm();
+        const hMm = hPx / pxPerMm();
 
         if (Math.abs(wMm - hMm) <= 1) {
           const dMm = Math.round((wMm + hMm) / 2);
@@ -2557,7 +2578,7 @@
   });
 
   // ---------- Boards ----------
-  const LS_KEY = "PHS_WHITEBOARD_BOARDS_v7";
+  const LS_KEY = "PHS_WHITEBOARD_BOARDS_v8";
 
   function loadBoardsIndex() {
     try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
@@ -2581,7 +2602,7 @@
   }
 
   function snapshotBoard() {
-    return { v: 7, savedAt: new Date().toISOString(), ...snapshot() };
+    return { v: 8, savedAt: new Date().toISOString(), ...snapshot() };
   }
 
   async function applyBoard(data) {
@@ -2629,6 +2650,66 @@
     index[name] = snapshotBoard();
     saveBoardsIndex(index);
     refreshBoardSelect();
+
+  // ---------- Scale calibration ----------
+  function getLineForCalibration() {
+    const sel = (state.selectionIndex >= 0) ? state.objects[state.selectionIndex] : null;
+    if (sel && (sel.kind === "line" || sel.kind === "arrow")) return sel;
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+      const o = state.objects[i];
+      if (o && (o.kind === "line" || o.kind === "arrow")) return o;
+    }
+    return null;
+  }
+
+  setScaleBtn?.addEventListener("click", () => {
+    const o = getLineForCalibration();
+    if (!o) { showToast("Draw/select a line first"); return; }
+    const lenPx = Math.hypot((o.x2 - o.x1), (o.y2 - o.y1));
+    if (!isFinite(lenPx) || lenPx < 1) { showToast("Line too short"); return; }
+    const mmStr = prompt("Enter the real length of that line (mm):", "100");
+    if (mmStr == null) return;
+    const mm = parseFloat(String(mmStr).replace(/[^0-9.+-]/g, ""));
+    if (!isFinite(mm) || mm <= 0) { showToast("Invalid mm"); return; }
+    pushUndo(); clearRedo();
+    state.pxPerMm = lenPx / mm;
+    updateScaleOut();
+    redrawAll();
+    showToast("Scale set");
+  });
+
+  resetScaleBtn?.addEventListener("click", () => {
+    pushUndo(); clearRedo();
+    state.pxPerMm = (96 / 25.4);
+    updateScaleOut();
+    redrawAll();
+    showToast("Scale reset");
+  });
+
+  // ---------- Delete saved boards ----------
+  deleteBoardBtn?.addEventListener("click", () => {
+    const name = boardSelect.value;
+    if (!name) { showToast("Select a board"); return; }
+    if (!confirm(`Delete saved board “${name}”?`)) return;
+    const index = loadBoardsIndex();
+    if (!index[name]) { showToast("Not found"); return; }
+    delete index[name];
+    saveBoardsIndex(index);
+    refreshBoardSelect();
+    boardSelect.value = "";
+    showToast("Board deleted");
+  });
+
+  deleteAllBoardsBtn?.addEventListener("click", () => {
+    const index = loadBoardsIndex();
+    const names = Object.keys(index);
+    if (!names.length) { showToast("No saved boards"); return; }
+    if (!confirm(`Delete ALL saved boards (${names.length})?`)) return;
+    localStorage.removeItem(LS_KEY);
+    refreshBoardSelect();
+    boardSelect.value = "";
+    showToast("All boards deleted");
+  });
     boardSelect.value = name;
     showToast("Board saved");
   });
@@ -2643,6 +2724,66 @@
   });
 
   refreshBoardSelect();
+
+  // ---------- Scale calibration ----------
+  function getLineForCalibration() {
+    const sel = (state.selectionIndex >= 0) ? state.objects[state.selectionIndex] : null;
+    if (sel && (sel.kind === "line" || sel.kind === "arrow")) return sel;
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+      const o = state.objects[i];
+      if (o && (o.kind === "line" || o.kind === "arrow")) return o;
+    }
+    return null;
+  }
+
+  setScaleBtn?.addEventListener("click", () => {
+    const o = getLineForCalibration();
+    if (!o) { showToast("Draw/select a line first"); return; }
+    const lenPx = Math.hypot((o.x2 - o.x1), (o.y2 - o.y1));
+    if (!isFinite(lenPx) || lenPx < 1) { showToast("Line too short"); return; }
+    const mmStr = prompt("Enter the real length of that line (mm):", "100");
+    if (mmStr == null) return;
+    const mm = parseFloat(String(mmStr).replace(/[^0-9.+-]/g, ""));
+    if (!isFinite(mm) || mm <= 0) { showToast("Invalid mm"); return; }
+    pushUndo(); clearRedo();
+    state.pxPerMm = lenPx / mm;
+    updateScaleOut();
+    redrawAll();
+    showToast("Scale set");
+  });
+
+  resetScaleBtn?.addEventListener("click", () => {
+    pushUndo(); clearRedo();
+    state.pxPerMm = (96 / 25.4);
+    updateScaleOut();
+    redrawAll();
+    showToast("Scale reset");
+  });
+
+  // ---------- Delete saved boards ----------
+  deleteBoardBtn?.addEventListener("click", () => {
+    const name = boardSelect.value;
+    if (!name) { showToast("Select a board"); return; }
+    if (!confirm(`Delete saved board “${name}”?`)) return;
+    const index = loadBoardsIndex();
+    if (!index[name]) { showToast("Not found"); return; }
+    delete index[name];
+    saveBoardsIndex(index);
+    refreshBoardSelect();
+    boardSelect.value = "";
+    showToast("Board deleted");
+  });
+
+  deleteAllBoardsBtn?.addEventListener("click", () => {
+    const index = loadBoardsIndex();
+    const names = Object.keys(index);
+    if (!names.length) { showToast("No saved boards"); return; }
+    if (!confirm(`Delete ALL saved boards (${names.length})?`)) return;
+    localStorage.removeItem(LS_KEY);
+    refreshBoardSelect();
+    boardSelect.value = "";
+    showToast("All boards deleted");
+  });
 
   // ---------- Export SVG (vector) ----------
   function svgEscape(s){
@@ -2873,6 +3014,7 @@
 
     applyBgTransform();
     updateSwatch();
+    updateScaleOut();
 
     resizeAll();
 

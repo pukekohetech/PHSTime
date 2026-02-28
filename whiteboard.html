@@ -6,7 +6,7 @@
   <title>PHS Whiteboard</title>
 
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="whiteboard.css" />
+  <link rel="stylesheet" href="whiteboard.fixed.css" />
 </head>
 
 <body class="page-whiteboard">
@@ -126,13 +126,26 @@
               <div class="panel__note">Tip: after importing, use ← / → to hide/unhide SVG paths one-by-one (if enabled in your JS).</div>
             </div>
 
+            
             <div class="panel__group panel__group--wide">
+              <label class="panel__label">Scale</label>
+              <div class="panel__row panel__row--wrap" style="gap:8px; flex-wrap:wrap;">
+                <span id="scaleOut" class="panel__note">1 mm = 3.78 px</span>
+                <button id="setScaleBtn" class="panel__btn" type="button">Set from line</button>
+                <button id="resetScaleBtn" class="panel__btn" type="button">Reset</button>
+              </div>
+              <div class="panel__note">Draw a line (or select one), click “Set from line”, then enter its real length in mm.</div>
+            </div>
+
+<div class="panel__group panel__group--wide">
               <label class="panel__label">Boards</label>
               <div class="panel__row panel__row--wrap">
                 <select id="boardSelect" class="panel__select"></select>
                 <button id="newBoardBtn" class="panel__btn" type="button">New</button>
                 <button id="saveBoardBtn" class="panel__btn" type="button">Save</button>
                 <button id="loadBoardBtn" class="panel__btn" type="button">Load</button>
+                <button id="deleteBoardBtn" class="panel__btn panel__btn--danger" type="button">Delete</button>
+                <button id="deleteAllBoardsBtn" class="panel__btn panel__btn--danger" type="button">Delete all</button>
               </div>
             </div>
 
@@ -154,6 +167,6 @@
   </main>
 
   <!-- IMPORTANT: load the ARC-enabled JS -->
-  <script src="whiteboard.js"></script>
+  <script src="whiteboard.fixed.js"></script>
 </body>
 </html>
