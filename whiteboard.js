@@ -1557,11 +1557,11 @@
 
     // Arc tool (two-stage): click to set center, then click+drag to draw
     if (state.tool === "arc") {
-      const snapping = !(e.ctrlKey || e.metaKey);
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (!arcDraft.hasCenter) {
         let c = w;
-        if (!ctrlHeld) {
+        if (ctrlHeld) {
           const hit = snapPointWithCtrl(c);
           c = hit || snapToMmGridWorld(c);
         } else {
@@ -1586,7 +1586,7 @@
       state.selectionIndex = -1;
 
       let p1 = w;
-      if (!ctrlHeld) {
+      if (ctrlHeld) {
         const hit = snapPointWithCtrl(p1);
         p1 = hit || snapToMmGridWorld(p1);
       } else {
@@ -1642,7 +1642,7 @@
       const ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (isSnapShape) {
-        if (!ctrlHeld) {
+        if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
           p0 = hit || snapToMmGridWorld(p0);
         } else {
@@ -1867,7 +1867,7 @@
 
       let p = w;
       let snappedHit = null;
-      if (!ctrlHeld) {
+      if (ctrlHeld) {
         snappedHit = snapPointWithCtrl(p);
         if (snappedHit) {
           p = snappedHit;
@@ -2586,7 +2586,7 @@ document.addEventListener("keydown", (e) => {
   const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
   // SVG reveal controls (when an SVG has been imported as ink)
-if (!typing && svgReveal.active && (e.key === "." || e.key === ",")) {
+if (!typing && svgReveal.active && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
   e.preventDefault();
   const total = svgReveal.partIndices.length;
   if (!total) return;
