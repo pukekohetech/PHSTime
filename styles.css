@@ -1562,3 +1562,65 @@ PAGE: NOISE (noise.html)
 .presetBtn{
   min-width: 74px;
 }
+/* ===== Timer spacing + button comfort ===== */
+
+/* Give the timer card a little more internal spacing (optional) */
+.page-timer .timerCard{
+  padding: 26px;
+}
+
+/* Make action buttons and pill buttons less squished */
+.page-timer .timerControls button,
+.page-timer .nudgeBtn,
+.page-timer .presetBtn{
+  padding: 12px 16px;
+  min-height: 44px;          /* good touch target */
+  line-height: 1;
+  border-radius: 999px;
+}
+
+/* Add better spacing between rows */
+.page-timer .timerControls{ margin-top: 14px; gap: 12px; }
+.page-timer .nudgeRow{ margin-top: 14px; gap: 12px; }
+.page-timer .presetWrap{ margin-top: 16px; }
+.page-timer .presetRow{ gap: 12px; margin-top: 10px; }
+
+/* Make the nudge buttons wrap nicely and align */
+.page-timer .nudgeRow{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.page-timer .nudgeBtn{
+  min-width: 96px;           /* stops tiny pills */
+}
+
+/* Make presets consistent size */
+.page-timer .presetRow{
+  display: grid;
+  grid-template-columns: repeat(6, minmax(64px, 1fr));
+  justify-items: center;
+}
+.page-timer .presetBtn{
+  width: 100%;
+  max-width: 92px;
+}
+
+/* On smaller screens, drop to 3 columns */
+@media (max-width: 520px){
+  .page-timer .presetRow{
+    grid-template-columns: repeat(3, minmax(64px, 1fr));
+  }
+  .page-timer .presetBtn{
+    max-width: 120px;
+  }
+}
+
+/* Slider section spacing */
+.page-timer .sliderWrap{ margin-top: 18px; }
+.page-timer .sliderRow{ margin-bottom: 10px; }
+
+/* Optional: soften the “Preset set: 90s” line if it’s too prominent */
+.page-timer #presetHint{
+  opacity: 0.8;
+}
