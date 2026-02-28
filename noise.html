@@ -673,15 +673,15 @@ const KEY = {
 };
 
 function rmsToDbFS(rms){
-  // Bigger epsilon avoids -150ish readings in near-silence
-  const eps = 1e-4;
+  // Epsilon stops -Infinity in silence
+  const eps = 1e-6;
 
-  // Raw dBFS
+  // dBFS (negative numbers, closer to 0 = louder)
   let db = 20 * Math.log10(rms + eps);
 
-  // Clamp to a realistic mic floor/ceiling for classroom use
-  // (prevents insane negatives like -120)
-  db = clamp(db, -60, -80);
+  // Clamp to a realistic classroom mic range
+  // (quiet might be ~ -65 to -45 dBFS depending on device)
+  db = clamp(db, -80, -10);
 
   return db;
 }
