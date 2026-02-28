@@ -2977,6 +2977,44 @@
     redrawAll();
   }
 
+   function freshBoardSnapshot() {
+  return {
+    v: 8,
+    savedAt: new Date().toISOString(),
+    tool: "pen",
+    color: state.color || "#111111",
+    size: state.size || 5,
+    zoom: 0.25,
+    panX: (state.viewW / 2),
+    panY: (state.viewH / 2),
+    title: "",
+    pxPerMm: state.pxPerMm || (96/25.4),
+    bg: { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 },
+    objects: []
+  };
+}
+
+newBoardBtn?.addEventListener("click", async () => {
+  // Ask to save current board first
+  const doSave = confirm("Save the current canvas before starting a new one?");
+  if (doSave) {
+    const name = prompt("Save board as name:", boardSelect.value || "");
+    if (name) {
+      const index = loadBoardsIndex();
+      index[name] = snapshotBoard();
+      saveBoardsIndex(index);
+      refreshBoardSelect();
+      boardSelect.value = name;
+      showToast("Board saved");
+    }
+  }
+
+  // Start a fresh board (blank canvas)
+  await applyBoard(freshBoardSnapshot());
+  boardSelect.value = "";
+  showToast("New board");
+});
+
   saveBoardBtn?.addEventListener("click", () => {
     const name = prompt("Save board as name:", boardSelect.value || "");
     if (!name) return;
