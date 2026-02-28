@@ -104,9 +104,6 @@
   const deleteAllBoardsBtn = document.getElementById("deleteAllBoardsBtn");
 
   // ---------- State ----------
-
-let snapFeaturesEnabled = true; // default ON
-   
   const state = {
     tool: "pen",
     color: "#111111",
@@ -1707,11 +1704,11 @@ let snapFeaturesEnabled = true; // default ON
 
     // Arc tool (two-stage): click to set center, then click+drag to draw
     if (state.tool === "arc") {
-       
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (!arcDraft.hasCenter) {
         let c = w;
-        if (snapFeaturesEnabled) {
+        if (ctrlHeld) {
           const hit = snapPointWithCtrl(c);
           c = hit || snapToMmGridWorld(c);
         } else {
@@ -1739,7 +1736,7 @@ let snapFeaturesEnabled = true; // default ON
       state.selectionIndex = -1;
 
       let p1 = w;
-      if (snapFeaturesEnabled) {
+      if (ctrlHeld) {
         const hit = snapPointWithCtrl(p1);
         p1 = hit || snapToMmGridWorld(p1);
       } else {
@@ -1793,10 +1790,10 @@ let snapFeaturesEnabled = true; // default ON
     if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
       let p0 = w;
       const isSnapShape = state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle";
-       
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (isSnapShape) {
-        if (snapFeaturesEnabled) {
+        if (ctrlHeld) {
           const hit = snapPointWithCtrl(p0);
           p0 = hit || snapToMmGridWorld(p0);
         } else {
@@ -1826,7 +1823,6 @@ let snapFeaturesEnabled = true; // default ON
   }
 
   function onPointerMove(e) {
-     const ctrlHeld = e.ctrlKey || e.metaKey;
     const { sx, sy } = clientToScreen(e);
     updateHoverCursor(sx, sy);
 
@@ -2016,84 +2012,65 @@ let snapFeaturesEnabled = true; // default ON
       }
     }
 
- // Drawing: Arc (CW/CCW + full circle snap + length indicator)
-if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
-   
+    // Drawing: Arc (CW/CCW + full circle snap + length indicator)
+    if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
-  const cx = gesture.arcCenter.cx;
-  const cy = gesture.arcCenter.cy;
+      const cx = gesture.arcCenter.cx;
+      const cy = gesture.arcCenter.cy;
 
-  let p = w;
-  let snappedHit = null;
+      let p = w;
+      let snappedHit = null;
+      if (ctrlHeld) {
+        snappedHit = snapPointWithCtrl(p);
+        if (snappedHit) {
+          p = snappedHit;
+        } else {
+          p = snapPointWithCtrlOrAngle({ x: cx, y: cy }, p);
+        }
+      } else {
+        p = snapToMmGridWorld(p);
+      }
 
-  if (snapFeaturesEnabled) {
-    snappedHit = snapPointWithCtrl(p);
-    if (snappedHit) {
-      p = snappedHit;
-    } else {
-      p = snapPointWithCtrlOrAngle({ x: cx, y: cy }, p);
+      let aNow = Math.atan2(p.y - cy, p.x - cx);
+      if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
+
+      const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
+      const step = wrapSigned(aNow - (gesture.arcLastA || aNow));
+      gesture.arcAccum = (gesture.arcAccum || 0) + step;
+      gesture.arcLastA = aNow;
+
+      const rFixed = Math.max(1, gesture.arcR || 1);
+      let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
+
+      const TWO_PI = Math.PI * 2;
+      const spanAbs = Math.abs(gesture.arcAccum || 0);
+      const snapTol = (10 * Math.PI) / 180; // 10°
+      let isCircle = false;
+
+      if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
+        isCircle = true;
+        a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
+      }
+
+      gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
+
+      gesture.activeObj.cx = cx;
+      gesture.activeObj.cy = cy;
+      gesture.activeObj.r = rFixed;
+      gesture.activeObj.a1 = gesture.arcA1;
+      gesture.activeObj.a2 = a2;
+
+      const rMm = rFixed / pxPerMm();
+      const span = Math.abs(a2 - (gesture.arcA1 || 0));
+      const lenMm = (span * rFixed) / pxPerMm();
+
+      const label = isCircle ? `Circle • R ${Math.round(rMm)} mm` : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
+
+      showMeasureTip(sx, sy, label);
+      redrawAll();
+      return;
     }
-  } else {
-    p = snapToMmGridWorld(p);
-  }
-
-  // Angle at cursor point
-  let aNow = Math.atan2(p.y - cy, p.x - cx);
-  if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
-
-  const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
-  const step = wrapSigned(aNow - (gesture.arcLastA || aNow));
-  gesture.arcAccum = (gesture.arcAccum || 0) + step;
-  gesture.arcLastA = aNow;
-
-  // Keep your fixed radius snapping for the actual arc object
-  const rFixed = Math.max(1, gesture.arcR || 1);
-  let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
-
-  const TWO_PI = Math.PI * 2;
-  const spanAbs = Math.abs(gesture.arcAccum || 0);
-  const snapTol = (10 * Math.PI) / 180; // 10°
-  let isCircle = false;
-
-  if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
-    isCircle = true;
-    a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
-  }
-
-  // Direction flag for export/draw
-  gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
-
-  // Update active arc object (uses fixed radius)
-  gesture.activeObj.cx = cx;
-  gesture.activeObj.cy = cy;
-  gesture.activeObj.r = rFixed;
-  gesture.activeObj.a1 = gesture.arcA1;
-  gesture.activeObj.a2 = a2;
-
-  // ---------- Tooltip (UPGRADED) ----------
-  // Live radius from cursor position (feels better while choosing radius)
-  const rLivePx = Math.max(1, Math.hypot(p.x - cx, p.y - cy));
-  const rLiveMm = rLivePx / pxPerMm();
-
-  // Live angle delta from accumulated sweep
-  const deltaRad = Math.abs(gesture.arcAccum || 0);
-  const deltaDeg = deltaRad * 180 / Math.PI;
-
-  // Length shown using the fixed arc radius (matches the actual arc you’re drawing)
-  const span = Math.abs(a2 - (gesture.arcA1 || 0));
-  const lenMm = (span * rFixed) / pxPerMm();
-
-  const dir = (gesture.arcAccum || 0) < 0 ? "CCW" : "CW";
-
-  const label = isCircle
-    ? `Circle • R ${Math.round(rLiveMm)} mm • 360°`
-    : `R ${Math.round(rLiveMm)} mm • Δθ ${Math.round(deltaDeg)}° ${dir} • L ${Math.round(lenMm)} mm`;
-
-  // Tip stays at cursor (your measureTip already has a 10px offset via CSS transform)
-  showMeasureTip(sx, sy, label);
-  redrawAll();
-  return;
-}
 
     // Drawing: stroke / erase
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
@@ -2108,7 +2085,7 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
       let y2 = w.y;
 
       const k = gesture.activeObj.kind;
-       
+      const ctrlHeld = e.ctrlKey || e.metaKey;
 
       const startPt = { x: gesture.activeObj.x1, y: gesture.activeObj.y1 };
       const rawPt = { x: x2, y: y2 };
@@ -2808,8 +2785,6 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
   });
 
   // ---------- Keyboard ----------
-
-   
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       openSettings(false);
@@ -2817,12 +2792,7 @@ if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
       arcDraft.hasCenter = false;
       hideMeasureTip();
     }
-// Toggle snapping (press Ctrl/Cmd)
-if (e.key === "Control" || e.key === "Meta") {
-  snapFeaturesEnabled = !snapFeaturesEnabled;
-  showToast(snapFeaturesEnabled ? "Snapping: ON" : "Snapping: OFF");
-  return;
-}
+
     if (e.code === "Space") {
       spacePanning = true;
       e.preventDefault();
@@ -3007,7 +2977,7 @@ if (e.key === "Control" || e.key === "Meta") {
     redrawAll();
   }
 
-function freshBoardSnapshot() {
+   function freshBoardSnapshot() {
   return {
     v: 8,
     savedAt: new Date().toISOString(),
@@ -3015,41 +2985,29 @@ function freshBoardSnapshot() {
     color: state.color || "#111111",
     size: state.size || 5,
     zoom: 0.25,
-    panX: state.viewW / 2,
-    panY: state.viewH / 2,
+    panX: (state.viewW / 2),
+    panY: (state.viewH / 2),
     title: "",
-    pxPerMm: state.pxPerMm || (96 / 25.4),
-    bg: { src: "", natW: 0, natH: 0, x: 0, y: 0, scale: 1, rot: 0 },
+    pxPerMm: state.pxPerMm || (96/25.4),
+    bg: { src:"", natW:0, natH:0, x:0, y:0, scale:1, rot:0 },
     objects: []
   };
 }
 
-newBoardBtn?.addEventListener("click", async (e) => {
-  if (e?.preventDefault) e.preventDefault();
-  if (e?.stopPropagation) e.stopPropagation();
-
-  try {
-    const doSave = window.confirm("Save the current canvas before starting a new one?");
-    if (doSave) {
-      const name = window.prompt("Save board as name:", boardSelect?.value || "");
-      if (name && name.trim()) {
-        const index = loadBoardsIndex();
-        index[name.trim()] = snapshotBoard();
-        saveBoardsIndex(index);
-        refreshBoardSelect();
-        if (boardSelect) boardSelect.value = name.trim();
-        showToast("Board saved");
-      }
+newBoardBtn?.addEventListener("click", async () => {
+  // Ask to save current board first
+  const doSave = confirm("Save the current canvas before starting a new one?");
+  if (doSave) {
+    const name = prompt("Save board as name:", boardSelect.value || "");
+    if (name) {
+      const index = loadBoardsIndex();
+      index[name] = snapshotBoard();
+      saveBoardsIndex(index);
+      refreshBoardSelect();
+      boardSelect.value = name;
+      showToast("Board saved");
     }
-
-    await applyBoard(freshBoardSnapshot());
-    if (boardSelect) boardSelect.value = "";
-    showToast("New board");
-  } catch (err) {
-    console.error("newBoard failed:", err);
-    showToast("New board failed (see console)");
   }
-});
 
   // Start a fresh board (blank canvas)
   await applyBoard(freshBoardSnapshot());
