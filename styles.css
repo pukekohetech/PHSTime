@@ -1512,3 +1512,53 @@ PAGE: NOISE (noise.html)
   width: 100%;
   height: 100%;
 }
+
+/* ===== Timer upgrades: presets / nudges / dialog polish ===== */
+.noScroll { overflow: hidden; }
+
+/* SR-only */
+.srOnly{
+  position:absolute !important;
+  width:1px; height:1px;
+  padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0);
+  white-space:nowrap; border:0;
+}
+
+.timerSelect{
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.12);
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.85);
+}
+
+.nudgeRow{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.nudgeBtn{
+  min-width: 88px;
+}
+
+.presetWrap{
+  margin-top: 14px;
+}
+.presetLabelRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+.presetRow{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap: wrap;
+}
+.presetBtn{
+  min-width: 74px;
+}
