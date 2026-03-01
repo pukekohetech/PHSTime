@@ -2279,24 +2279,24 @@ if (!gesture.active) return;
     }
   }
 
-   function onPointerUp() {
-    if (!gesture.active) return;
-    try {
-      inkCanvas.releasePointerCapture(gesture.pointerId);
-    } catch {}
+ function onPointerUp(e) {
+  if (!gesture.active) return;
+  try {
+    inkCanvas.releasePointerCapture(gesture.pointerId);
+  } catch {}
 
-    // ✅ If this was a pen stroke and CapsLock smoothing was used, smooth the final points
-    if (gesture.activeObj && gesture.activeObj.kind === "stroke" && gesture.strokeSmooth) {
-      const obj = gesture.activeObj;
-      obj.points = smoothStrokePoints(obj.points || [], obj.size || state.size);
+  // ✅ If this was a pen stroke and CapsLock smoothing was used, smooth the final points
+  if (gesture.activeObj && gesture.activeObj.kind === "stroke" && gesture.strokeSmooth) {
+    const obj = gesture.activeObj;
+    obj.points = smoothStrokePoints(obj.points || [], obj.size || state.size);
 
-      // Optional: a tiny toast so you know it happened
-      // showToast("Smoothed");
-    }
-
-    hardResetGesture();
-    updateCursorFromTool();
+    // ✅ IMPORTANT: redraw after modifying points
+    redrawAll();
   }
+
+  hardResetGesture();
+  updateCursorFromTool();
+}
 
   inkCanvas.addEventListener("pointerdown", onPointerDown);
   inkCanvas.addEventListener("pointermove", onPointerMove);
