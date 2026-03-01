@@ -543,7 +543,7 @@ function createDefaultSetIfNone(){
   function makeSet(name, entries){
     const setId = uid();
     const students = entries.map((label, i) => ({
-      id: `${setId}::DEF:${i}`,
+      id: ${setId}::DEF:${i},
       sid: "",
       first: "",
       last: "",
@@ -688,6 +688,4885 @@ function parseStudentsFlexible(text, setId){
   const out=[];
   const seenKey=new Set();
 
+  function makeSetLocalId(seed){ return ${setId}::${seed}; }
+
+  for (let rIndex=0; rIndex<dataRows.length; rIndex++){
+    const r = dataRows[rIndex];
+
+    let sid="", first="", last="", full="", tutor="", tt="";
+
+    if (headerMode){
+      sid   = iID>=0 ? safeText(r[iID]) : "";
+      first = iFirst>=0 ? safeText(r[iFirst]) : "";
+      last  = iLast>=0 ? safeText(r[iLast]) : "";
+      full  = iName>=0 ? safeText(r[iName]) : "";
+      tutor = iTutor>=0 ? safeText(r[iTutor]) : "";
+      tt    = iTT>=0 ? safeText(r[iTT]) : "";
+
+      if (!full && (first || last)) full = (first + " " + last).trim();
+      if (full && (!first && !last)){
+        const p = splitNameSmart(full);
+        first = first || p.first;
+        last  = last  || p.last;
+      }
+    } else {
+      const joined = r.map(safeText).filter(Boolean).join(" ").trim();
+      if (!joined) continue;
+      const p = splitNameSmart(joined);
+      first = p.first; last = p.last;
+      full = (first + " " + last).trim() || joined;
+    }
+
+    if (!safeText(full)){
+      full = (safeText(first)+" "+safeText(last)).trim();
+    }
+    if (!safeText(full)) continue;
+
+    const id = sid ? makeSetLocalId("SID:"+sid) : makeSetLocalId("ROW:"+rIndex);
+    const dedupeKey = sid ? ("SID:"+sid) : ("NAME:"+full.toLowerCase());
+    if (seenKey.has(dedupeKey)) continue;
+    seenKey.add(dedupeKey);
+
+    out.push({
+      id,
+      sid: sid || "",
+      first,
+      last,
+      name: full,
+      form: tutor || "",
+      timetableClass: tt || ""
+    });
+  }
+
+  if (!out.length){
+    return {
+      ok:false,
+      reason:"Could not find any names. Paste needs at least one name per line.",
+      diag: headerMode ? headerMode=true delim=${delim} : headerMode=false delim=${delim}
+    };
+  }
+
+  return { ok:true, students: out };
+}
+
+/* ================= Add / Restore helpers ================= */
+function safeName(s){ return safeText(s).replace(/\\s+/g," ").trim(); }
+
+function makeNewEntry(name, setId){
+  const base = safeName(name);
+  const id = ${setId}::MAN:${Date.now().toString(16)}:${Math.random().toString(16).slice(2)};
+  return { id, sid:"", first:"", last:"", name: base, form:"", timetableClass:"" };
+}
+function addTextEntriesToSet(set, rawText){
+  normalizeSet(set);
+  const text = safeText(rawText);
+  if (!text) return 0;
+
+  const lines = text.split(/\\r?\\n/).map(safeName).filter(Boolean);
+  if (!lines.length) return 0;
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  let added = 0;
+
+  for (const line of lines){
+    const k = line.toLowerCase();
+    if (!k) continue;
+    if (existing.has(k)) continue;
+    existing.add(k);
+    set.students.push(makeNewEntry(line, set.id));
+    added++;
+  }
+  return added;
+}
+function restoreFromTrash(set, entryId){
+  normalizeSet(set);
+  const idx = set.trash.findIndex(x => x.id === entryId);
+  if (idx < 0) return false;
+
+  const item = set.trash.splice(idx, 1)[0];
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  const k = (item.name || "").trim().toLowerCase();
+  if (k && existing.has(k)) return true;
+
+  set.students.push(item);
+  return true;
+}
+function restoreAllTrash(set){
+  normalizeSet(set);
+  if (!set.trash.length) return 0;
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  let restored = 0;
+
+  const trashCopy = set.trash.slice().reverse();
+  set.trash = [];
+
+  for (const item of trashCopy){
+    const k = (item.name || "").trim().toLowerCase();
+    if (k && existing.has(k)) continue;
+    existing.add(k);
+    set.students.push(item);
+    restored++;
+  }
+  return restored;
+}
+
+/* ================= Set selection helpers ================= */
+function setActiveSet(id){
+  activeSetId = id;
+  saveActiveSet(activeSetId);
+}
+
+/* ================= UI: sets buttons & manager ================= */
+function renderSetButtons(){
+  const row=$("setRow");
+  row.innerHTML="";
+
+  if (!sets.length){
+    const b=document.createElement("button");
+    b.className="setBtn";
+    b.type="button";
+    b.textContent="No sets yet — paste one in Options (⚙️)";
+    b.style.cursor="default";
+    row.appendChild(b);
+    return;
+  }
+
+  for (const s0 of sets){
+    const s = normalizeSet(s0);
+
+    const b=document.createElement("button");
+    b.className="setBtn"+(s.id===activeSetId?" active":"");
+    b.type="button";
+    b.textContent=s.name;
+    b.title="Click to load this set";
+    b.addEventListener("click", ()=>{
+      if (spinning) { toast("Finish the spin 🙂"); return; }
+      setActiveSet(s.id);
+      displayPool=null;
+      pendingExcludeId=null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+      renderSetButtons();
+      renderSetManager();
+      refreshAll();
+      renderTrashList();
+      toast("Loaded");
+    });
+    row.appendChild(b);
+  }
+}
+
+function renderSetManager(){
+  const wrap=$("setManager");
+  wrap.innerHTML="";
+  if (!sets.length){
+    wrap.innerHTML=<div class="smallNote">No sets saved yet.</div>;
+    return;
+  }
+
+  for (const s0 of sets){
+    const s = normalizeSet(s0);
+
+    const box=document.createElement("div");
+    box.style.display="grid";
+    box.style.gridTemplateColumns="1fr auto auto";
+    box.style.gap="8px";
+    box.style.alignItems="center";
+
+    const inp=document.createElement("input");
+    inp.type="text";
+    inp.value=s.name;
+    inp.style.boxShadow="none";
+    inp.placeholder="Set label";
+    inp.addEventListener("input", ()=>{
+      s.name=(inp.value||"Untitled").trim();
+      renderSetButtons();
+      setStatus();
+      saveSetsDebounced();
+      // update print header if preview exists
+      if (lastGroups) renderGroupPreview(lastGroups);
+    });
+
+    const use=document.createElement("button");
+    use.type="button";
+    use.textContent="Use";
+    use.addEventListener("click", ()=>{
+      if (spinning) { toast("Finish the spin 🙂"); return; }
+      setActiveSet(s.id);
+      displayPool=null;
+      pendingExcludeId=null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+      renderSetButtons();
+      refreshAll();
+      renderTrashList();
+      toast("Loaded");
+    });
+
+    const del=document.createElement("button");
+    del.type="button";
+    del.textContent="Delete";
+    del.addEventListener("click", ()=>{
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+      if (!confirm(Delete "${s.name}"?)) return;
+      sets=sets.filter(x=>x.id!==s.id);
+      if (activeSetId===s.id) setActiveSet(sets[0]?.id || null);
+      saveSets();
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+      renderSetButtons();
+      renderSetManager();
+      displayPool=null;
+      pendingExcludeId=null;
+      refreshAll();
+      renderTrashList();
+      toast("Deleted");
+    });
+
+    box.appendChild(inp);
+    box.appendChild(use);
+    box.appendChild(del);
+    wrap.appendChild(box);
+  }
+}
+
+/* ================= Status / background ================= */
+function setBg(state){
+  if (state==="spinning") document.body.style.backgroundColor="var(--bgOrange)";
+  else if (state==="winner") document.body.style.backgroundColor="var(--bgGreen)";
+  else document.body.style.backgroundColor="var(--bgGrey)";
+}
+function setStatus(){
+  const set=getActiveSet();
+  if (!set){ $("statusChip").textContent="No set loaded"; return; }
+  normalizeSet(set);
+  const inc=includedStudents(set).length;
+  const exc=(set.students.length - inc);
+  $("statusChip").textContent=${set.name} • ${inc} in • ${exc} out;
+}
+
+/* ================= Wheel drawing ================= */
+const canvas=$("wheel");
+const ctx=canvas.getContext("2d");
+let rot=0;
+
+function hashColor(i){
+  const hue=(i*47)%360;
+  return hsl(${hue} 70% 60%);
+}
+function getLivePool(){
+  const set=getActiveSet();
+  if (!set) return [];
+  return includedStudents(set);
+}
+let displayPool = null;
+
+function drawWheel(rotation=0, pool=null){
+  const set=getActiveSet();
+  const arr = pool ?? (displayPool ?? getLivePool());
+
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2;
+  const rOuter=Math.min(W,H)*0.46;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx,cy,rOuter+7,0,Math.PI*2);
+  ctx.fillStyle="rgba(0,0,0,0.06)";
+  ctx.fill();
+  ctx.restore();
+
+  const n=Math.max(1, arr.length);
+  const arc=(Math.PI*2)/n;
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(rotation);
+
+  for (let i=0;i<n;i++){
+    const a0=i*arc, a1=a0+arc;
+
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,rOuter,a0,a1);
+    ctx.closePath();
+    ctx.fillStyle = arr.length ? hashColor(i) : "rgba(0,0,0,0.10)";
+    ctx.fill();
+
+    ctx.strokeStyle="rgba(0,0,0,0.16)";
+    ctx.lineWidth=2;
+    ctx.stroke();
+
+    const label = arr.length ? arr[i].name : (set ? "All excluded" : "Paste a class");
+
+    const mid=(a0+a1)/2;
+    ctx.save();
+    ctx.rotate(mid);
+
+    const startR=rOuter*0.18;
+    const endR=rOuter*0.92;
+    const avail=endR-startR;
+
+    ctx.translate(startR,0);
+    ctx.fillStyle="rgba(0,0,0,0.88)";
+    ctx.font="900 30px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign="left";
+    ctx.textBaseline="middle";
+
+    let shown=label;
+    while (shown.length && ctx.measureText(shown+"…").width > avail){
+      shown = shown.slice(0,-1);
+    }
+    if (shown !== label) shown += "…";
+    ctx.fillText(shown,0,0);
+
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  ctx.arc(0,0,rOuter*0.12,0,Math.PI*2);
+  ctx.fillStyle="rgba(255,255,255,0.86)";
+  ctx.fill();
+  ctx.strokeStyle="rgba(0,0,0,0.12)";
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/* ================= Confetti ================= */
+function popConfetti(){
+  const layer=$("confettiLayer");
+  layer.innerHTML="";
+  layer.classList.add("show");
+  const count=90;
+  for (let i=0;i<count;i++){
+    const s=document.createElement("span");
+    s.style.left=(Math.random()*100)+"%";
+    s.style.animationDuration=(1.3+Math.random()*1.4)+"s";
+    s.style.animationDelay=(Math.random()*0.25)+"s";
+    const hue=Math.floor(Math.random()*360);
+    s.style.background=hsl(${hue} 80% 60%);
+    layer.appendChild(s);
+  }
+  setTimeout(()=>layer.classList.remove("show"), 2400);
+}
+
+/* ================= Trash UI ================= */
+function renderTrashList(){
+  const set = getActiveSet();
+  const wrap = $("trashList");
+  const hint = $("trashHint");
+  const q = safeName($("trashSearch").value).toLowerCase();
+  wrap.innerHTML = "";
+
+  if (!set){
+    hint.textContent = "No set loaded.";
+    return;
+  }
+
+  normalizeSet(set);
+  let items = (set.trash || []).slice().reverse(); // newest first
+  if (q) items = items.filter(x => (x.name||"").toLowerCase().includes(q));
+
+  if (!set.trash.length){
+    hint.textContent = "No removed items.";
+    return;
+  }
+
+  hint.textContent = q
+    ? ${items.length} match${items.length===1?"":"es"} in removed items (total ${set.trash.length}).
+    : ${set.trash.length} removed item${set.trash.length===1?"":"s"} — click Restore.;
+
+  if (!items.length && q){
+    wrap.innerHTML = <div class="smallNote" style="padding:6px 0;">No matches.</div>;
+    return;
+  }
+
+  for (const st of items){
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "1fr auto";
+    row.style.gap = "8px";
+    row.style.alignItems = "center";
+
+    const label = document.createElement("div");
+    label.textContent = st.name || "(unnamed)";
+    label.style.fontWeight = "900";
+    label.style.opacity = "0.9";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Restore";
+    btn.addEventListener("click", ()=>{
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+      const ok = restoreFromTrash(set, st.id);
+      if (!ok){ toast("Not found"); return; }
+      if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      renderTrashList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast("Restored");
+    });
+
+    row.appendChild(label);
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+$("trashSearch").addEventListener("input", ()=> renderTrashList());
+
+$("restoreAllBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+  normalizeSet(set);
+
+  const n = restoreAllTrash(set);
+  if (!n){ toast("Nothing to restore"); return; }
+
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  renderTrashList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast(Restored ${n});
+});
+
+/* ================= Student list ================= */
+function renderStudentList(){
+  const set=getActiveSet();
+  const list=$("studentList");
+  list.innerHTML="";
+
+  if (!set){
+    list.innerHTML=<div style="padding:10px; font-weight:900; opacity:.7;">Paste a set in Options (⚙️).</div>;
+    $("includedCount").textContent="0";
+    $("excludedCount").textContent="0";
+    $("freezeHint").textContent="—";
+    return;
+  }
+
+  normalizeSet(set);
+
+  $("freezeHint").textContent = spinning ? "Changes take effect next spin." : "Ready.";
+
+  const q=($("searchBox").value||"").trim().toLowerCase();
+  const ex=set.excludedIds || {};
+  const inc=includedStudents(set).length;
+  const exc=set.students.length - inc;
+  $("includedCount").textContent=String(inc);
+  $("excludedCount").textContent=String(exc);
+
+  const shown=set.students.filter(st=>{
+    if (!q) return true;
+    const hay=(st.name+" "+(st.form||"")+" "+(st.timetableClass||"")).toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (!shown.length){
+    list.innerHTML=<div style="padding:10px; font-weight:900; opacity:.7;">No matches.</div>;
+    return;
+  }
+
+  for (const st of shown){
+    const excluded=!!ex[st.id];
+
+    const row=document.createElement("div");
+    row.className="row"+(excluded?" excluded":"");
+
+    const left=document.createElement("div");
+    left.className="rowLeft";
+
+    const dot=document.createElement("div");
+    dot.className="dot";
+    left.appendChild(dot);
+
+    const name=document.createElement("span");
+    name.className="nameText";
+    name.textContent=st.name;
+    left.appendChild(name);
+
+    const meta=document.createElement("span");
+    meta.className="meta";
+    const bits=[];
+    if (st.form) bits.push(st.form);
+    if (st.timetableClass) bits.push(st.timetableClass);
+    meta.textContent=bits.length ? (${bits.join(" • ")}) : "";
+    if (meta.textContent) left.appendChild(meta);
+
+    row.appendChild(left);
+
+    const del=document.createElement("button");
+    del.type="button";
+    del.className="rowDel";
+    del.textContent="✕";
+    del.title="Remove from set (restore in Options)";
+    del.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+
+      const ok = confirm(Remove "${st.name}" from this set?\n\nYou can restore it later in:\nOptions (⚙️) → Edit current set → Recently removed);
+      if (!ok) return;
+
+      set.students = set.students.filter(x => x.id !== st.id);
+      if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
+      set.trash.push(st);
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      renderTrashList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast("Removed (can restore)");
+    });
+    row.appendChild(del);
+
+    list.appendChild(row);
+
+    row.addEventListener("click", ()=>{
+      set.excludedIds = set.excludedIds || {};
+      if (set.excludedIds[st.id]) delete set.excludedIds[st.id];
+      else set.excludedIds[st.id]=true;
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast(spinning ? "Updated (next spin)" : "Updated");
+    });
+  }
+}
+$("searchBox").addEventListener("input", ()=> renderStudentList());
+
+$("includeAllBtn").addEventListener("click", ()=>{
+  const set=getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+  set.excludedIds={};
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool===null) drawWheel(rot,null);
+  toast(spinning ? "Included all (next spin)" : "Included all");
+});
+
+$("excludeAllBtn").addEventListener("click", ()=>{
+  const set=getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+  const ex={};
+  for (const st of set.students) ex[st.id]=true;
+  set.excludedIds=ex;
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool===null) drawWheel(rot,null);
+  toast(spinning ? "Excluded all (next spin)" : "Excluded all");
+});
+
+/* ================= Add entries buttons ================= */
+$("addEntriesBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+  const n = addTextEntriesToSet(set, $("editAddBox").value);
+  $("editAddBox").value = "";
+  if (!n){ toast("Nothing to add"); return; }
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast(Added ${n});
+});
+
+$("dedupeSetBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+
+  const seen = new Set();
+  const next = [];
+
+  for (const st of set.students){
+    const k = (st.name || "").trim().toLowerCase();
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    next.push(st);
+  }
+  set.students = next;
+
+  // clean excluded ids
+  const validIds = new Set(set.students.map(s => s.id));
+  const ex = set.excludedIds || {};
+  for (const id of Object.keys(ex)){
+    if (!validIds.has(id)) delete ex[id];
+  }
+
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("De-duped");
+});
+
+/* ================= Quick add ================= */
+function quickAdd(){
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+  const v = safeName($("quickAddInput").value);
+  if (!v){ toast("Type something first"); return; }
+  const added = addTextEntriesToSet(set, v);
+  if (!added){ toast("Already exists"); return; }
+  $("quickAddInput").value = "";
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("Added");
+}
+$("quickAddBtn").addEventListener("click", quickAdd);
+$("quickAddInput").addEventListener("keydown", (e)=>{
+  if (e.key === "Enter"){ e.preventDefault(); quickAdd(); }
+});
+
+/* ================= Spin logic (single winner) ================= */
+let spinning=false;
+let spinPool=null;
+let pendingExcludeId=null;
+let lastTickIndex=null;
+
+function angleToIndex(rotation, pool){
+  const arr=pool||[];
+  if (!arr.length) return null;
+  const n=arr.length;
+  const arc=(Math.PI*2)/n;
+  let a = (-Math.PI/2 - rotation) % (Math.PI*2);
+  if (a < 0) a += Math.PI*2;
+  return clamp(Math.floor(a/arc), 0, n-1);
+}
+function applyPendingExclude(){
+  if (!pendingExcludeId) return;
+  const set=getActiveSet();
+  if (!set){ pendingExcludeId=null; return; }
+  normalizeSet(set);
+  set.excludedIds=set.excludedIds||{};
+  set.excludedIds[pendingExcludeId]=true;
+  pendingExcludeId=null;
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+}
+function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
+function startSpin(){
+  if (spinning) return;
+
+  const set=getActiveSet();
+  if (!set){
+    $("winnerBox").textContent="Paste a class set first 🙂";
+    $("hintLine").textContent="Options (⚙️) → paste → create set";
+    return;
+  }
+
+  applyPendingExclude();
+
+  const pool=getLivePool();
+  if (!pool.length){
+    $("winnerBox").textContent="Everyone is excluded 🙂";
+    $("hintLine").textContent="Click entries to include.";
+    displayPool=null;
+    drawWheel(rot,null);
+    return;
+  }
+
+  spinning=true;
+  setBg("spinning");
+  $("spinBtn").disabled=true;
+  $("spinBtn").textContent="SPINNING…";
+  $("winnerBox").textContent="Spinning…";
+  $("hintLine").textContent="Good luck 🍀";
+
+  spinPool = pool.slice();
+
+  const winIndex = Math.floor(Math.random()*spinPool.length);
+  const n=spinPool.length;
+  const arc=(Math.PI*2)/n;
+  const centerOfIndex = winIndex*arc + arc/2;
+  const desiredRotation = -Math.PI/2 - centerOfIndex;
+
+  const speed = Number($("spinSpeed").value)||20;
+  const durationMs = clamp(2400 - speed*160, 900, 2200);
+
+  const minTurns = 1;
+  const extraTurns = clamp(Math.round((10 - speed) * 0.35) + 1, 1, 3);
+  const turns = minTurns + extraTurns;
+
+  const extra = (Math.random()*0.18 - 0.09);
+
+  const startRot = rot;
+  const endRot = desiredRotation + (Math.PI*2*turns) + extra;
+
+  lastTickIndex = angleToIndex(rot, spinPool);
+
+  let startTime=null;
+  function frame(t){
+    if (!spinning) return;
+    if (!startTime) startTime=t;
+    const p = clamp((t-startTime)/durationMs, 0, 1);
+    const eased = easeOutCubic(p);
+    rot = startRot + (endRot-startRot)*eased;
+
+    const idx = angleToIndex(rot, spinPool);
+    if ($("tickSoundOn").checked && idx !== null && idx !== lastTickIndex){
+      tick();
+      lastTickIndex = idx;
+    }
+
+    drawWheel(rot, spinPool);
+
+    if (p < 1) requestAnimationFrame(frame);
+    else finishSpin();
+  }
+  requestAnimationFrame(frame);
+}
+
+function finishSpin(){
+  spinning=false;
+  setBg("winner");
+  $("spinBtn").disabled=false;
+  $("spinBtn").textContent="SPIN!";
+
+  const idx = angleToIndex(rot, spinPool);
+  const winner = (idx!==null && spinPool) ? spinPool[idx] : null;
+
+  if ($("confettiOn").checked) popConfetti();
+  winChime();
+
+  if (!winner){
+    $("winnerBox").textContent="No eligible entries 🙂";
+    $("hintLine").textContent="Include someone.";
+    spinPool=null;
+    displayPool=null;
+    drawWheel(rot,null);
+    return;
+  }
+
+  const bits=[];
+  if (winner.form) bits.push(winner.form);
+  if (winner.timetableClass) bits.push(winner.timetableClass);
+  const meta = bits.length ?  • ${bits.join(" • ")} : "";
+
+  $("winnerBox").textContent = 🎉 ${winner.name}${meta} 🎉;
+
+  displayPool = spinPool.slice();
+
+  if ($("excludeWinnerOn").checked){
+    pendingExcludeId = winner.id;
+    $("hintLine").textContent = "Winner will be excluded on the NEXT spin";
+  } else {
+    pendingExcludeId = null;
+    $("hintLine").innerHTML = Click the wheel (or press <b>Space</b>);
+  }
+
+  spinPool=null;
+  drawWheel(rot, displayPool);
+  renderStudentList();
+}
+
+/* ================= Spin bindings ================= */
+$("spinBtn").addEventListener("click", startSpin);
+$("wheelStage").addEventListener("click", startSpin);
+
+/* FIX: spacebar should NOT spin while typing, OR when Options open */
+function isTypingTarget(el){
+  if (!el) return false;
+  const tag = (el.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+  if (el.closest && el.closest("[contenteditable='true']")) return true;
+  return false;
+}
+document.addEventListener("keydown",(e)=>{
+  if (e.key !== " ") return;
+
+  // Options open? let space type normally.
+  if (!optionsMenu.classList.contains("hidden")) return;
+
+  // Typing in a field? let space type normally.
+  if (isTypingTarget(document.activeElement)) return;
+
+  e.preventDefault();
+  startSpin();
+});
+
+/* ================= Create set from paste ================= */
+function createSetFromStudents(name, students){
+  const newSet = normalizeSet({
+    id: uid(),
+    name: (name||"Untitled").trim(),
+    students,
+    excludedIds: {},
+    trash: []
+  });
+  sets.unshift(newSet);
+  setActiveSet(newSet.id);
+  saveSets();
+  displayPool=null;
+  pendingExcludeId=null;
+  lastGroups = null;
+  $("printGroupsBtn").disabled = true;
+  renderGroupPreview(null);
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+}
+
+$("importPasteBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+
+  const text=$("pasteBox").value||"";
+  const name=($("pasteSetName").value||"").trim() || "Pasted set";
+  const tempSetId = "import_" + Date.now().toString(16);
+
+  const res=parseStudentsFlexible(text, tempSetId);
+
+  if (!res.ok){
+    alert(Paste import failed:\n${res.reason}\n\n${res.diag ? ("Details:\n"+res.diag) : ""});
+    return;
+  }
+
+  createSetFromStudents(name, res.students);
+  $("pasteBox").value="";
+  $("pasteSetName").value="";
+  toast(Created "${name}" (${res.students.length}));
+  closeMenu();
+});
+
+/* ================= Reset / Clear ================= */
+$("resetOptionsBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  localStorage.removeItem(PREF_KEY);
+  loadPrefs();
+  savePrefs();
+  toast("Options reset");
+});
+
+$("clearSetsBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  if (!confirm("Delete ALL saved class sets?")) return;
+  sets=[]; setActiveSet(null);
+  saveSets();
+  displayPool=null;
+  pendingExcludeId=null;
+  lastGroups = null;
+  $("printGroupsBtn").disabled = true;
+  renderGroupPreview(null);
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+  toast("Cleared");
+});
+
+/* ================= Export / Import (Full Backup) ================= */
+function buildFullBackup(){
+  let prefs = {};
+  if (storageOK()){
+    try { prefs = JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); }
+    catch(e){ prefs = {}; }
+  }
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    prefs,
+    sets,
+    activeSetId
+  };
+}
+
+function downloadJSON(filename, dataObj){
+  const blob = new Blob([JSON.stringify(dataObj, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+$("exportWheelBtn").addEventListener("click", ()=>{
+  if (!sets.length){ toast("Nothing to export"); return; }
+  const backup = buildFullBackup();
+  const filename = wheel-backup-${new Date().toISOString().slice(0,10)}.json;
+  downloadJSON(filename, backup);
+  toast("Backup exported");
+});
+
+$("importWheelBtn").addEventListener("click", ()=> $("importWheelFile").click());
+
+$("importWheelFile").addEventListener("change", (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = JSON.parse(String(evt.target.result || ""));
+      if (!data || !Array.isArray(data.sets)){
+        alert("Invalid backup file (missing sets).");
+        e.target.value = "";
+        return;
+      }
+
+      const ok = confirm("Importing will REPLACE all current sets and settings.\n\nContinue?");
+      if (!ok){ e.target.value = ""; return; }
+
+      // restore sets
+      sets = data.sets.map(normalizeSet);
+
+      // restore active set
+      activeSetId = data.activeSetId || sets[0]?.id || null;
+
+      // restore prefs
+      if (storageOK()){
+        try{
+          localStorage.setItem(PREF_KEY, JSON.stringify(data.prefs || {}));
+        }catch(err){}
+      }
+
+      saveSets();
+      saveActiveSet(activeSetId);
+      loadPrefs();
+
+      displayPool = null;
+      pendingExcludeId = null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+
+      renderSetButtons();
+      renderSetManager();
+      refreshAll();
+      renderTrashList();
+
+      toast("Backup imported");
+    }catch(err){
+      alert("Import failed — invalid JSON file.");
+    } finally {
+      e.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+});
+
+/* ================= Group maker ================= */
+let lastGroups = null;
+
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i=a.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Balanced grouping:
+ * - Base size = groupSize
+ * - Remainder distributed: first R groups get +1
+ */
+function makeBalancedGroups(items, groupSize){
+  const n = items.length;
+  if (n === 0) return [];
+
+  const size = clamp(Number(groupSize)||2, 2, 50);
+  const baseGroupCount = Math.max(1, Math.floor(n / size));
+  const rem = n - (baseGroupCount * size);
+
+  // If size > n, just one group
+  if (baseGroupCount === 0) return [items.slice()];
+
+  const groups = [];
+  let idx = 0;
+
+  // Build groups with base size, distribute remainder as +1 to first rem groups
+  for (let g=0; g<baseGroupCount; g++){
+    const extra = g < rem ? 1 : 0;
+    const take = size + extra;
+    groups.push(items.slice(idx, idx+take));
+    idx += take;
+  }
+
+  // Safety: if anything left (shouldn't), append to last group
+  if (idx < n){
+    groups[groups.length-1].push(...items.slice(idx));
+  }
+
+  // If we ended up with a tiny last group (e.g. size 5, n 6 -> baseGroupCount=1 rem=1 => group of 6 ok)
+  return groups.filter(g => g.length);
+}
+
+function renderGroupPreview(groups){
+  const wrap = $("groupPreview");
+  const hint = $("groupPreviewHint");
+  wrap.innerHTML = "";
+
+  const set = getActiveSet();
+  const setName = set?.name || "No set loaded";
+
+  if (!groups || !groups.length){
+    hint.textContent = "No groups yet.";
+    return;
+  }
+
+  const total = groups.reduce((a,g)=>a+g.length, 0);
+  const sizes = groups.map(g=>g.length);
+  const minS = Math.min(...sizes);
+  const maxS = Math.max(...sizes);
+
+  hint.textContent = ${setName} • ${groups.length} group${groups.length===1?"":"s"} • ${total} student${total===1?"":"s"} (size ${minS}${minS===maxS?"":("–"+maxS)});
+
+  for (let i=0; i<groups.length; i++){
+    const card = document.createElement("div");
+    card.style.background = "rgba(255,255,255,0.86)";
+    card.style.borderRadius = "14px";
+    card.style.padding = "10px 12px";
+    card.style.boxShadow = "0 10px 26px rgba(0,0,0,0.10)";
+    card.style.display = "grid";
+    card.style.gap = "8px";
+
+    const head = document.createElement("div");
+    head.style.display = "flex";
+    head.style.justifyContent = "space-between";
+    head.style.alignItems = "center";
+
+    const title = document.createElement("div");
+    title.textContent = Group ${i+1};
+    title.style.fontWeight = "1000";
+    title.style.letterSpacing = "0.2px";
+
+    const pill = document.createElement("span");
+    pill.className = "valuePill";
+    pill.textContent = ${groups[i].length};
+
+    head.appendChild(title);
+    head.appendChild(pill);
+
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gridTemplateColumns = "1fr 1fr";
+    list.style.gap = "6px 12px";
+
+    const sorted = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    for (const name of sorted){
+      const item = document.createElement("div");
+      item.textContent = name;
+      item.style.fontWeight = "800";
+      item.style.opacity = "0.92";
+      list.appendChild(item);
+    }
+
+    card.appendChild(head);
+    card.appendChild(list);
+    wrap.appendChild(card);
+  }
+}
+
+function getGroupPool(){
+  const set = getActiveSet();
+  if (!set) return [];
+  const useIncluded = $("groupUseIncluded").checked;
+  normalizeSet(set);
+  if (useIncluded) return includedStudents(set);
+  return set.students.slice();
+}
+
+/* A short "spin effect" for group making (no winner) */
+function spinAnimation(pool, ms=1200){
+  return new Promise((resolve)=>{
+    const startRot = rot;
+    const extraTurns = 2 + Math.random()*2;
+    const endRot = startRot + (Math.PI*2*extraTurns);
+    const startTime = performance.now();
+
+    lastTickIndex = angleToIndex(rot, pool);
+
+    function frame(t){
+      const p = clamp((t-startTime)/ms, 0, 1);
+      const eased = easeOutCubic(p);
+      rot = startRot + (endRot-startRot)*eased;
+
+      const idx = angleToIndex(rot, pool);
+      if ($("tickSoundOn").checked && idx !== null && idx !== lastTickIndex){
+        tick();
+        lastTickIndex = idx;
+      }
+
+      drawWheel(rot, pool);
+
+      if (p < 1) requestAnimationFrame(frame);
+      else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+$("makeGroupsBtn").addEventListener("click", async ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){
+    toast("No set loaded");
+    return;
+  }
+
+  const size = clamp(Number($("groupSize").value)||4, 2, 20);
+
+  // Apply "exclude winner next spin" pending state before groups
+  applyPendingExclude();
+
+  const pool = getGroupPool();
+  if (pool.length < 2){
+    toast("Need at least 2 students");
+    return;
+  }
+  if (pool.length < size){
+    // allow: one group with all
+    // still ok
+  }
+
+  spinning = true;
+  setBg("spinning");
+  $("spinBtn").disabled = true;
+  $("makeGroupsBtn").disabled = true;
+  $("winnerBox").textContent = "Making groups…";
+  $("hintLine").textContent = "Randomising 🍀";
+
+  // Keep wheel showing the pool used for groups
+  displayPool = pool.slice();
+
+  await spinAnimation(displayPool, clamp(1400 - (Number($("spinSpeed").value)||20)*25, 650, 1400));
+
+  const shuffled = shuffle(pool);
+  const groups = makeBalancedGroups(shuffled, size);
+
+  spinning = false;
+  setBg("idle");
+  $("spinBtn").disabled = false;
+  $("makeGroupsBtn").disabled = false;
+
+  lastGroups = groups;
+  $("printGroupsBtn").disabled = !lastGroups.length;
+
+  // nice feedback
+  $("winnerBox").textContent = Groups made ✅ (${groups.length} group${groups.length===1?"":"s"});
+  $("hintLine").innerHTML = Open Options (⚙️) → Group maker → <b>Print groups</b>;
+
+  renderGroupPreview(groups);
+
+  // redraw wheel in whatever state it was (keep pool shown)
+  drawWheel(rot, displayPool);
+  toast("Groups created");
+});
+
+function buildPrintHTML(groups){
+  const set = getActiveSet();
+  const setName = (set?.name || "Class Groups").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const when = new Date().toLocaleString();
+
+  // Build columns that flow nicely when printed
+  let body = "";
+  for (let i=0; i<groups.length; i++){
+    const names = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    const lis = names.map(n => <li>${escapeHTML(n)}</li>).join("");
+    body += 
+      <section class="card">
+        <div class="cardHead">
+          <div class="groupTitle">Group ${i+1}</div>
+          <div class="pill">${names.length}</div>
+        </div>
+        <ol class="names">${lis}</ol>
+      </section>
+    ;
+  }
+
+  return <!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${setName} — Groups</title>
+    <style>
+      :root{
+        --ink:#111;
+        --muted:#666;
+        --card:#ffffff;
+        --line:#e7e7e7;
+      }
+      html,body{ margin:0; padding:0; color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      .page{ padding: 24px; }
+      .header{
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-end;
+        gap:16px;
+        border-bottom: 2px solid var(--line);
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+      .title{
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: .2px;
+      }
+      .sub{
+        color:var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .meta{
+        text-align:right;
+        color:var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .grid{
+        display:grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card{
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 14px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        background: var(--card);
+      }
+      .cardHead{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom: 10px;
+      }
+      .groupTitle{
+        font-weight: 1000;
+        font-size: 16px;
+      }
+      .pill{
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-weight: 900;
+        font-size: 12px;
+        color: #222;
+      }
+      .names{
+        margin: 0;
+        padding-left: 18px;
+        columns: 2;
+        column-gap: 18px;
+      }
+      .names li{
+        margin: 4px 0;
+        font-weight: 800;
+        font-size: 13px;
+        break-inside: avoid;
+      }
+      @media print{
+        .page{ padding: 0; }
+        .grid{ gap: 10px; }
+        .card{ border-color: #ddd; }
+      }
+      @page{ margin: 12mm; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header">
+        <div>
+          <div class="title">${setName} — Random Groups</div>
+          <div class="sub">Made with PHS Wheel • Balanced sizes • Sorted names</div>
+        </div>
+        <div class="meta">
+          ${escapeHTML(when)}<br/>
+          ${groups.length} group${groups.length===1?"":"s"} • ${groups.reduce((a,g)=>a+g.length,0)} student${groups.reduce((a,g)=>a+g.length,0)===1?"":"s"}
+        </div>
+      </div>
+      <div class="grid">
+        ${body}
+      </div>
+    </div>
+  </body>
+  </html>;
+}
+
+function escapeHTML(s){
+  return String(s ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+$("printGroupsBtn").addEventListener("click", ()=>{
+  if (!lastGroups || !lastGroups.length){
+    toast("No groups to print");
+    return;
+  }
+  const win = window.open("", "_blank");
+  if (!win){
+    alert("Pop-up blocked. Allow pop-ups for printing.");
+    return;
+  }
+  win.document.open();
+  win.document.write(buildPrintHTML(lastGroups));
+  win.document.close();
+
+  // Try to print automatically after load
+  win.onload = ()=>{
+    try{ win.focus(); win.print(); }catch(e){}
+  };
+});
+
+/* ================= Refresh all ================= */
+function refreshAll(){
+  setStatus();
+  renderStudentList();
+
+  const set=getActiveSet();
+  if (!set){
+    $("winnerBox").textContent="Ready to spin 🎡";
+    $("hintLine").textContent="Options (⚙️) → paste a class set";
+    setBg("idle");
+    displayPool=null;
+    drawWheel(rot, null);
+    return;
+  }
+
+  normalizeSet(set);
+
+  if (!set.students.length){
+    $("winnerBox").textContent="This set is empty 🙂";
+    $("hintLine").textContent="Paste a class list in Options (⚙️).";
+    setBg("idle");
+    displayPool=null;
+    drawWheel(rot, null);
+    return;
+  }
+
+  $("winnerBox").textContent="Ready to spin 🎡";
+  $("hintLine").innerHTML=Click the wheel (or press <b>Space</b>);
+  setBg("idle");
+
+  if (displayPool === null) drawWheel(rot, null);
+  else drawWheel(rot, displayPool);
+}
+
+/* ================= Init ================= */
+function init(){
+  loadPrefs();
+  savePrefs();
+
+  loadSets();
+  createDefaultSetIfNone();
+
+  const remembered = loadActiveSet();
+  if (remembered && sets.some(s => s.id === remembered)) {
+    activeSetId = remembered;
+  } else {
+    activeSetId = sets[0]?.id || null;
+    saveActiveSet(activeSetId);
+  }
+
+  // init group preview area
+  renderGroupPreview(null);
+  $("printGroupsBtn").disabled = true;
+
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+  drawWheel(rot, null);
+}
+init();
+  </script>
+</body>
+</html>
+
+ChatGPT said:
+
+Thought for 21s
+This is almost certainly your global CSS (often * { user-select: none; -webkit-touch-callout: none; } in styles.css) blocking text selection + the iOS/Chromebook “Paste” callout inside <textarea>.
+
+Fix: add a small override so inputs/textareas are selectable + paste menu is allowed. I also made the Options button focus the paste box when you open the menu (nice on touch screens).
+
+Here’s your file with the minimal safe fixes (search for /* ✅ COPY/PASTE FIX */):
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Class Wheel of Fortune</title>
+
+  <!-- Single external stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- ✅ COPY/PASTE FIX (overrides any global user-select:none / touch-callout:none) -->
+  <style>
+    input, textarea, select, button {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+      -webkit-touch-callout: default !important; /* iOS paste/copy menu */
+    }
+    textarea, input, select {
+      -webkit-user-modify: read-write-plaintext-only; /* helps iOS sometimes */
+    }
+  </style>
+</head>
+
+<body class="page-wheel">
+  <nav class="appNav" aria-label="PHS Classroom Tools">
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
+    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
+    <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
+  </nav>
+
+  <div class="toast" id="toast">Saved</div>
+
+  <!-- OPTIONS MENU -->
+  <div class="controls">
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+        <div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
+        </div>
+        <button id="closeMenu" type="button" title="Close">✕</button>
+      </div>
+
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn" type="button">Full screen</button>
+          <button id="goPHSTimerBtn" type="button">Open PHSTimer →</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Spin speed</div>
+              <div class="smallNote">Short + snappy (still at least 1 full turn).</div>
+            </div>
+            <span class="valuePill"><span id="speedLabel">10</span>/30</span>
+          </div>
+          <input id="spinSpeed" class="u-w-100 u-mt-8" type="range" min="10" max="30" value="20" />
+        </div>
+
+        <div>
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Volume</div>
+              <div class="smallNote">Tick + win chime.</div>
+            </div>
+            <span class="valuePill"><span id="volLabel">40</span>%</span>
+          </div>
+          <input id="volume" class="u-w-100 u-mt-8" type="range" min="0" max="100" value="40" />
+        </div>
+
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Add / edit class sets (paste)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Paste anything: full export OR just names</div>
+          <div class="smallNote u-mt-8">
+            Works with: headers / partial columns / tab exports / CSV / or just a list like:
+            <b>Jake Jones</b><br>
+            <b>David Smith</b>
+          </div>
+
+          <div class="u-h-8"></div>
+          <textarea id="pasteBox" spellcheck="false" placeholder="Paste here…"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <input
+              id="pasteSetName"
+              type="text"
+              class="u-flex-1 u-minw-180"
+              placeholder="Set label (e.g. 11TEC1)"
+            />
+            <button id="importPasteBtn" type="button">Create set</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: sets save on this device. Exclusions apply only to the currently selected set.
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Relabel / delete sets</div>
+          <div id="setManager" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
+        <details>
+          <summary>Edit current set (add/remove entries)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Add entries (one per line)</div>
+          <div class="smallNote u-mt-8">Works for student names OR wheel options.</div>
+
+          <div class="u-h-8"></div>
+          <textarea
+            id="editAddBox"
+            spellcheck="false"
+            placeholder="e.g.
+Jake Jones
+Cleanup Duty
+Mana Award"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="addEntriesBtn" type="button">Add to current set</button>
+            <button id="dedupeSetBtn" type="button" title="Remove duplicates by name">De-dupe</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: Remove an item with the ✕ next to it in the list. You can restore removed items below.
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Recently removed</div>
+              <div class="smallNote">Restore items deleted with ✕ (per set).</div>
+            </div>
+            <button id="restoreAllBtn" type="button" title="Restore all removed items for this set">Restore all</button>
+          </div>
+
+          <div class="u-h-8"></div>
+          <input
+            id="trashSearch"
+            type="text"
+            class="searchBox"
+            placeholder="Search removed items…"
+            style="box-shadow:none;"
+          />
+
+          <div class="u-h-8"></div>
+          <div id="trashList" class="u-grid-gap-8"></div>
+          <div class="smallNote u-mt-8" id="trashHint">No removed items.</div>
+        </details>
+
+        <div class="divider"></div>
+
+        <!-- ✅ Group maker -->
+        <details>
+          <summary>Group maker (random groups + print)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Group size</div>
+          <div class="smallNote u-mt-8">Choose a size, then “Spin to make groups”. Remainders are balanced (some groups get +1).</div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow" style="gap:8px;">
+            <input id="groupSize" type="number" min="2" max="20" value="4" class="u-minw-180" style="box-shadow:none;" />
+            <span class="pillBtn" title="Only students currently included on the wheel">
+              <input id="groupUseIncluded" type="checkbox" checked />
+              <label for="groupUseIncluded">Use included only</label>
+            </span>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="makeGroupsBtn" type="button">Spin to make groups</button>
+            <button id="printGroupsBtn" type="button" disabled>Print groups</button>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Preview</div>
+          <div class="smallNote u-mt-8" id="groupPreviewHint">No groups yet.</div>
+          <div class="u-h-8"></div>
+          <div id="groupPreview" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
+        <!-- ✅ Backup / Restore (Export + Import) -->
+        <div>
+          <div class="miniLabel">Backup / Restore</div>
+          <div class="smallNote u-mt-8">
+            Export or import ALL wheel data (sets + options).
+          </div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow">
+            <button id="exportWheelBtn" type="button">Export backup</button>
+            <button id="importWheelBtn" type="button">Import backup</button>
+            <input id="importWheelFile" type="file" accept=".json" style="display:none;" />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="menuRow">
+          <button id="resetOptionsBtn" type="button" title="Reset wheel options (keeps sets)">Reset options</button>
+          <button id="clearSetsBtn" class="danger" type="button" title="Delete all saved class sets">Clear all sets</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP -->
+  <div class="topBar">
+    <div class="titleWrap">
+      <p class="title">Class Wheel of Fortune</p>
+    </div>
+    <div class="chip" id="statusChip">No set loaded</div>
+  </div>
+
+  <div class="setRow" id="setRow" aria-label="Class set buttons"></div>
+
+  <!-- MAIN -->
+  <div class="grid">
+    <div class="wheelPanel">
+      <div class="confetti" id="confettiLayer" aria-hidden="true"></div>
+
+      <div class="wheelStage" id="wheelStage" title="Click to spin">
+        <div class="pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="1100" height="1100" aria-label="Wheel"></canvas>
+      </div>
+
+      <div class="winnerBox" id="winnerBox">Ready to spin 🎡</div>
+      <div class="hintLine" id="hintLine">Click the wheel (or press <b>Space</b>)</div>
+
+      <div class="btnRow">
+        <button class="primary" id="spinBtn" type="button">SPIN!</button>
+        <button id="includeAllBtn" type="button">Include all</button>
+        <button id="excludeAllBtn" type="button">Exclude all</button>
+      </div>
+    </div>
+
+    <div class="sidePanel">
+      <div class="miniLabel">Click an entry to include/exclude (✕ deletes)</div>
+
+      <div class="menuRow u-mt-8" style="gap:8px;">
+        <input
+          id="quickAddInput"
+          class="u-flex-1"
+          type="text"
+          placeholder="Quick add entry…"
+          style="min-width: 0;"
+        />
+        <button id="quickAddBtn" type="button" title="Add to current set">Add</button>
+      </div>
+      <div class="smallNote u-mt-8">Adds immediately to the current set (student name or wheel option).</div>
+
+      <div class="u-h-10"></div>
+
+      <input
+        id="searchBox"
+        class="searchBox"
+        type="text"
+        placeholder="Search name or option (e.g. 11HRI)"
+      />
+
+      <div class="statRow">
+        <div>Included: <span class="valuePill"><span id="includedCount">0</span></span></div>
+        <div>Excluded: <span class="valuePill"><span id="excludedCount">0</span></span></div>
+      </div>
+
+      <div class="toggleRow">
+        <span class="pillBtn" title="Tick sounds while spinning">
+          <input id="tickSoundOn" type="checkbox" />
+          <label for="tickSoundOn">Click sounds</label>
+        </span>
+
+        <span class="pillBtn" title="Confetti celebration">
+          <input id="confettiOn" type="checkbox" />
+          <label for="confettiOn">Confetti</label>
+        </span>
+
+        <span class="pillBtn" title="Winner will be excluded NEXT spin">
+          <input id="excludeWinnerOn" type="checkbox" />
+          <label for="excludeWinnerOn">Exclude winner</label>
+        </span>
+      </div>
+
+      <div class="list" id="studentList"></div>
+
+      <div class="footerRow smallNote">
+        <span id="freezeHint">Ready.</span>
+        <span><b>Space</b> to spin</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+/* =========================================================
+   Class Wheel – full working version
+   ========================================================= */
+
+const $ = (id) => document.getElementById(id);
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const safeText = (s) => (s ?? "").toString().trim();
+const stripBOM = (s) => (s ?? "").toString().replace(/^\uFEFF/, "");
+
+function storageOK(){
+  try{
+    const k="__storage_test__";
+    localStorage.setItem(k,"1");
+    localStorage.removeItem(k);
+    return true;
+  } catch(e){ return false; }
+}
+function debounce(fn, wait=250){
+  let t=null;
+  return (...args)=>{
+    clearTimeout(t);
+    t=setTimeout(()=>fn(...args), wait);
+  };
+}
+
+/* ================= Toast ================= */
+let toastTimer = null;
+function toast(msg){
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove("show"), 1100);
+}
+
+/* ================= Options menu ================= */
+const optionsBtn = $("optionsBtn");
+const optionsMenu = $("optionsMenu");
+const closeMenuBtn = $("closeMenu");
+const menuHeader = $("menuHeader");
+
+function openMenu(){
+  optionsMenu.classList.remove("hidden");
+  optionsBtn.setAttribute("aria-expanded","true");
+
+  // ✅ COPY/PASTE FIX: focus paste box so paste works immediately on touch devices
+  setTimeout(()=> {
+    const pb = $("pasteBox");
+    if (pb) pb.focus({ preventScroll:true });
+  }, 0);
+}
+function closeMenu(){ optionsMenu.classList.add("hidden"); optionsBtn.setAttribute("aria-expanded","false"); }
+function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
+
+optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); });
+["pointerdown","click"].forEach(evt=>{
+  closeMenuBtn.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
+});
+document.addEventListener("pointerdown",(e)=>{
+  if (optionsMenu.classList.contains("hidden")) return;
+  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+});
+document.addEventListener("keydown",(e)=>{ if (e.key==="Escape") closeMenu(); });
+
+let dragStartY=null;
+menuHeader.addEventListener("pointerdown",(e)=>{ dragStartY=e.clientY; menuHeader.setPointerCapture(e.pointerId); });
+menuHeader.addEventListener("pointermove",(e)=>{
+  if (dragStartY===null) return;
+  if ((e.clientY - dragStartY) > 70){ dragStartY=null; closeMenu(); }
+});
+menuHeader.addEventListener("pointerup",()=> dragStartY=null);
+menuHeader.addEventListener("pointercancel",()=> dragStartY=null);
+
+/* ================= Fullscreen + nav ================= */
+$("fullscreenBtn").addEventListener("click", async ()=>{
+  try{
+    if (!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      $("fullscreenBtn").textContent = "Exit full screen";
+    } else {
+      await document.exitFullscreen();
+      $("fullscreenBtn").textContent = "Full screen";
+    }
+  } catch(e){ alert("Fullscreen blocked. Try F11."); }
+});
+document.addEventListener("fullscreenchange", ()=>{
+  $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+});
+$("goPHSTimerBtn").addEventListener("click", ()=> window.location.href="index.html");
+
+/* ================= Preferences ================= */
+const PREF_KEY="wheel_prefs_v3";
+const SETS_KEY="wheel_sets_v3";
+const ACTIVE_SET_KEY="wheel_active_set_v3";
+
+function loadPrefs(){
+  try{
+    const raw=localStorage.getItem(PREF_KEY);
+    const p=raw?JSON.parse(raw):{};
+    $("tickSoundOn").checked = p.tick ?? true;
+    $("confettiOn").checked  = p.conf ?? true;
+    $("excludeWinnerOn").checked = p.exw ?? false;
+    $("spinSpeed").value = String(p.speed ?? 20);
+    $("volume").value = String(p.vol ?? 40);
+  }catch(e){
+    $("tickSoundOn").checked=true;
+    $("confettiOn").checked=true;
+    $("excludeWinnerOn").checked=false;
+    $("spinSpeed").value="20";
+    $("volume").value="40";
+  }
+  $("speedLabel").textContent = $("spinSpeed").value;
+  $("volLabel").textContent = $("volume").value;
+}
+
+function savePrefs(){
+  if (!storageOK()) return;
+  const p={
+    tick: $("tickSoundOn").checked,
+    conf: $("confettiOn").checked,
+    exw: $("excludeWinnerOn").checked,
+    speed: Number($("spinSpeed").value)||20,
+    vol: Number($("volume").value)||40
+  };
+  localStorage.setItem(PREF_KEY, JSON.stringify(p));
+}
+const savePrefsDebounced = debounce(()=>{ savePrefs(); toast("Saved"); }, 300);
+
+$("spinSpeed").addEventListener("input", ()=>{
+  $("speedLabel").textContent = $("spinSpeed").value;
+  savePrefsDebounced();
+});
+$("volume").addEventListener("input", ()=>{
+  $("volLabel").textContent = $("volume").value;
+  savePrefsDebounced();
+});
+["tickSoundOn","confettiOn","excludeWinnerOn"].forEach(id=>{
+  $(id).addEventListener("change", ()=>{ savePrefs(); toast("Saved"); });
+});
+
+function saveActiveSet(id){
+  if (!storageOK()) return;
+  localStorage.setItem(ACTIVE_SET_KEY, String(id || ""));
+}
+function loadActiveSet(){
+  if (!storageOK()) return null;
+  return localStorage.getItem(ACTIVE_SET_KEY) || null;
+}
+
+/* ================= Audio ================= */
+let audioCtx=null;
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state==="suspended") audioCtx.resume();
+}
+function getVol(){ return (Number($("volume").value)||40)/100; }
+
+function beep(freq=880, ms=70, type="sine", gain=0.22){
+  ensureAudio();
+  const t0=audioCtx.currentTime;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+
+  const v=gain*getVol();
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(v,t0+0.01);
+  g.gain.linearRampToValueAtTime(0.0001,t0+ms/1000);
+
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0+ms/1000+0.03);
+}
+function tick(){ beep(520, 22, "triangle", 0.22); }
+function winChime(){
+  beep(660, 130, "sine", 0.32);
+  setTimeout(()=>beep(880, 150, "sine", 0.32), 120);
+  setTimeout(()=>beep(990, 170, "sine", 0.32), 250);
+}
+document.addEventListener("pointerdown", ()=>{ ensureAudio(); }, { once:true });
+
+/* ================= Sets data ================= */
+let sets=[];
+let activeSetId=null;
+
+function uid(){ return "set_" + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+function getActiveSet(){ return sets.find(s=>s.id===activeSetId) || null; }
+
+function normalizeSet(s){
+  if (!s) return s;
+  if (!Array.isArray(s.students)) s.students = [];
+  if (!s.excludedIds) s.excludedIds = {};
+  if (!Array.isArray(s.trash)) s.trash = [];
+  return s;
+}
+
+function saveSets(){
+  if (!storageOK()) return;
+  localStorage.setItem(SETS_KEY, JSON.stringify(sets));
+}
+const saveSetsDebounced = debounce(()=>{ saveSets(); toast("Saved"); }, 350);
+
+function loadSets(){
+  if (!storageOK()) { sets=[]; return; }
+  try{
+    const raw=localStorage.getItem(SETS_KEY);
+    sets = raw ? JSON.parse(raw) : [];
+    sets.forEach(normalizeSet);
+  }catch(e){ sets=[]; }
+}
+
+function includedStudents(set){
+  normalizeSet(set);
+  const ex=set?.excludedIds || {};
+  return (set?.students || []).filter(st=>!ex[st.id]);
+}
+
+/* ================= Default sets (first run) ================= */
+const DEFAULT_CONSEQUENCES_NAME = "Default • Consequences";
+const DEFAULT_TREATS_NAME       = "Default • Treats";
+const DEFAULT_BRAINBREAK_NAME   = "Default • Brain Break";
+
+const DEFAULT_CONSEQUENCES = [
+  "Cleanup Duty","Help Tidy Classroom","Board Cleaning Duty","Pack-up Supervision",
+  "Seat Change","Extra Homework","5-Minute Quiet Reflection","Lunch Time Catch-Up",
+  "After-School Reflection","Teacher’s Choice","Contact Home","Lucky Escape"
+];
+const DEFAULT_TREATS = [
+  "Mana Award","Students Choice","Teacher Shout-Out","Positive Call Home",
+  "Early Pack-up Pass","Choose the Music (2 mins)","Free Choice Activity (5 mins)",
+  "Teachers Assistent","Class Vote","Spin Again"
+];
+const DEFAULT_BRAIN_BREAKS = [
+  "2-min stretch break","3-min walk + water","Quick doodle challenge (2 mins)",
+  "Would you rather (1 question)","Rock, Paper, Scissors","Trivia Question",
+  "Silent ball (3 mins)","Breathing reset (60s)","Desk tidy sprint (90s)"
+];
+
+function createDefaultSetIfNone(){
+  if (sets.length) return;
+
+  function makeSet(name, entries){
+    const setId = uid();
+    const students = entries.map((label, i) => ({
+      id: `${setId}::DEF:${i}`,
+      sid: "",
+      first: "",
+      last: "",
+      name: label,
+      form: "",
+      timetableClass: ""
+    }));
+    return normalizeSet({ id: setId, name, students, excludedIds: {}, trash: [] });
+  }
+
+  sets = [
+    makeSet(DEFAULT_CONSEQUENCES_NAME, DEFAULT_CONSEQUENCES),
+    makeSet(DEFAULT_TREATS_NAME, DEFAULT_TREATS),
+    makeSet(DEFAULT_BRAINBREAK_NAME, DEFAULT_BRAIN_BREAKS)
+  ];
+
+  const remembered = loadActiveSet();
+  const validRemembered = sets.some(s => s.id === remembered) ? remembered : null;
+  activeSetId = validRemembered || sets[1].id;
+
+  saveSets();
+  saveActiveSet(activeSetId);
+}
+
+/* =========================================================
+   Robust paste parsing (restored)
+   ========================================================= */
+/* ... YOUR EXISTING JS CONTINUES UNCHANGED FROM HERE ... */
+
+/* ================= Init ================= */
+function init(){
+  loadPrefs();
+  savePrefs();
+
+  loadSets();
+  createDefaultSetIfNone();
+
+  const remembered = loadActiveSet();
+  if (remembered && sets.some(s => s.id === remembered)) {
+    activeSetId = remembered;
+  } else {
+    activeSetId = sets[0]?.id || null;
+    saveActiveSet(activeSetId);
+  }
+
+  // init group preview area
+  renderGroupPreview(null);
+  $("printGroupsBtn").disabled = true;
+
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+  drawWheel(rot, null);
+}
+init();
+  </script>
+</body>
+</html>
+If it still won’t paste after this: open your styles.css and search for user-select: none or -webkit-touch-callout: none (especially on * or body). This override fixes that without you having to touch the shared stylesheet.
+
+
+You said:
+FULL CODE PLEASE  <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Class Wheel of Fortune</title>
+
+  <!-- Single external stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="page-wheel">
+  <nav class="appNav" aria-label="PHS Classroom Tools">
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
+    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
+    <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
+  </nav>
+
+  <div class="toast" id="toast">Saved</div>
+
+  <!-- OPTIONS MENU -->
+  <div class="controls">
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+        <div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
+        </div>
+        <button id="closeMenu" type="button" title="Close">✕</button>
+      </div>
+
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn" type="button">Full screen</button>
+          <button id="goPHSTimerBtn" type="button">Open PHSTimer →</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Spin speed</div>
+              <div class="smallNote">Short + snappy (still at least 1 full turn).</div>
+            </div>
+            <span class="valuePill"><span id="speedLabel">10</span>/30</span>
+          </div>
+          <input id="spinSpeed" class="u-w-100 u-mt-8" type="range" min="10" max="30" value="7" />
+        </div>
+
+        <div>
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Volume</div>
+              <div class="smallNote">Tick + win chime.</div>
+            </div>
+            <span class="valuePill"><span id="volLabel">40</span>%</span>
+          </div>
+          <input id="volume" class="u-w-100 u-mt-8" type="range" min="0" max="100" value="40" />
+        </div>
+
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Add / edit class sets (paste)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Paste anything: full export OR just names</div>
+          <div class="smallNote u-mt-8">
+            Works with: headers / partial columns / tab exports / CSV / or just a list like:
+            <b>Jake Jones</b><br>
+            <b>David Smith</b>
+          </div>
+
+          <div class="u-h-8"></div>
+          <textarea id="pasteBox" spellcheck="false" placeholder="Paste here…"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <input
+              id="pasteSetName"
+              type="text"
+              class="u-flex-1 u-minw-180"
+              placeholder="Set label (e.g. 11TEC1)"
+            />
+            <button id="importPasteBtn" type="button">Create set</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: sets save on this device. Exclusions apply only to the currently selected set.
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Relabel / delete sets</div>
+          <div id="setManager" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
+        <details>
+          <summary>Edit current set (add/remove entries)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Add entries (one per line)</div>
+          <div class="smallNote u-mt-8">Works for student names OR wheel options.</div>
+
+          <div class="u-h-8"></div>
+          <textarea
+            id="editAddBox"
+            spellcheck="false"
+            placeholder="e.g.
+Jake Jones
+Cleanup Duty
+Mana Award"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="addEntriesBtn" type="button">Add to current set</button>
+            <button id="dedupeSetBtn" type="button" title="Remove duplicates by name">De-dupe</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: Remove an item with the ✕ next to it in the list. You can restore removed items below.
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Recently removed</div>
+              <div class="smallNote">Restore items deleted with ✕ (per set).</div>
+            </div>
+            <button id="restoreAllBtn" type="button" title="Restore all removed items for this set">Restore all</button>
+          </div>
+
+          <div class="u-h-8"></div>
+          <input
+            id="trashSearch"
+            type="text"
+            class="searchBox"
+            placeholder="Search removed items…"
+            style="box-shadow:none;"
+          />
+
+          <div class="u-h-8"></div>
+          <div id="trashList" class="u-grid-gap-8"></div>
+          <div class="smallNote u-mt-8" id="trashHint">No removed items.</div>
+        </details>
+
+        <div class="divider"></div>
+
+        <!-- ✅ Group maker -->
+        <details>
+          <summary>Group maker (random groups + print)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Group size</div>
+          <div class="smallNote u-mt-8">Choose a size, then “Spin to make groups”. Remainders are balanced (some groups get +1).</div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow" style="gap:8px;">
+            <input id="groupSize" type="number" min="2" max="20" value="4" class="u-minw-180" style="box-shadow:none;" />
+            <span class="pillBtn" title="Only students currently included on the wheel">
+              <input id="groupUseIncluded" type="checkbox" checked />
+              <label for="groupUseIncluded">Use included only</label>
+            </span>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="makeGroupsBtn" type="button">Spin to make groups</button>
+            <button id="printGroupsBtn" type="button" disabled>Print groups</button>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Preview</div>
+          <div class="smallNote u-mt-8" id="groupPreviewHint">No groups yet.</div>
+          <div class="u-h-8"></div>
+          <div id="groupPreview" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
+        <!-- ✅ Backup / Restore (Export + Import) -->
+        <div>
+          <div class="miniLabel">Backup / Restore</div>
+          <div class="smallNote u-mt-8">
+            Export or import ALL wheel data (sets + options).
+          </div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow">
+            <button id="exportWheelBtn" type="button">Export backup</button>
+            <button id="importWheelBtn" type="button">Import backup</button>
+            <input id="importWheelFile" type="file" accept=".json" style="display:none;" />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="menuRow">
+          <button id="resetOptionsBtn" type="button" title="Reset wheel options (keeps sets)">Reset options</button>
+          <button id="clearSetsBtn" class="danger" type="button" title="Delete all saved class sets">Clear all sets</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP -->
+  <div class="topBar">
+    <div class="titleWrap">
+      <p class="title">Class Wheel of Fortune</p>
+    </div>
+    <div class="chip" id="statusChip">No set loaded</div>
+  </div>
+
+  <div class="setRow" id="setRow" aria-label="Class set buttons"></div>
+
+  <!-- MAIN -->
+  <div class="grid">
+    <div class="wheelPanel">
+      <div class="confetti" id="confettiLayer" aria-hidden="true"></div>
+
+      <div class="wheelStage" id="wheelStage" title="Click to spin">
+        <div class="pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="1100" height="1100" aria-label="Wheel"></canvas>
+      </div>
+
+      <div class="winnerBox" id="winnerBox">Ready to spin 🎡</div>
+      <div class="hintLine" id="hintLine">Click the wheel (or press <b>Space</b>)</div>
+
+      <div class="btnRow">
+        <button class="primary" id="spinBtn" type="button">SPIN!</button>
+        <button id="includeAllBtn" type="button">Include all</button>
+        <button id="excludeAllBtn" type="button">Exclude all</button>
+      </div>
+    </div>
+
+    <div class="sidePanel">
+      <div class="miniLabel">Click an entry to include/exclude (✕ deletes)</div>
+
+      <div class="menuRow u-mt-8" style="gap:8px;">
+        <input
+          id="quickAddInput"
+          class="u-flex-1"
+          type="text"
+          placeholder="Quick add entry…"
+          style="min-width: 0;"
+        />
+        <button id="quickAddBtn" type="button" title="Add to current set">Add</button>
+      </div>
+      <div class="smallNote u-mt-8">Adds immediately to the current set (student name or wheel option).</div>
+
+      <div class="u-h-10"></div>
+
+      <input
+        id="searchBox"
+        class="searchBox"
+        type="text"
+        placeholder="Search name or option (e.g. 11HRI)"
+      />
+
+      <div class="statRow">
+        <div>Included: <span class="valuePill"><span id="includedCount">0</span></span></div>
+        <div>Excluded: <span class="valuePill"><span id="excludedCount">0</span></span></div>
+      </div>
+
+      <div class="toggleRow">
+        <span class="pillBtn" title="Tick sounds while spinning">
+          <input id="tickSoundOn" type="checkbox" />
+          <label for="tickSoundOn">Click sounds</label>
+        </span>
+
+        <span class="pillBtn" title="Confetti celebration">
+          <input id="confettiOn" type="checkbox" />
+          <label for="confettiOn">Confetti</label>
+        </span>
+
+        <span class="pillBtn" title="Winner will be excluded NEXT spin">
+          <input id="excludeWinnerOn" type="checkbox" />
+          <label for="excludeWinnerOn">Exclude winner</label>
+        </span>
+      </div>
+
+      <div class="list" id="studentList"></div>
+
+      <div class="footerRow smallNote">
+        <span id="freezeHint">Ready.</span>
+        <span><b>Space</b> to spin</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+/* =========================================================
+   Class Wheel – full working version
+   - 3 default wheels: Consequences / Treats / Brain Break
+   - automatic saving (debounced)
+   - delete warning + restore individually (trash)
+   - quick add field
+   - FIX: spacebar spins only when NOT typing + Options closed
+   - ✅ Export/Import full wheel backup (JSON)
+   - ✅ Group maker: choose size → spin animation → random groups → print
+   ========================================================= */
+
+const $ = (id) => document.getElementById(id);
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const safeText = (s) => (s ?? "").toString().trim();
+const stripBOM = (s) => (s ?? "").toString().replace(/^\\uFEFF/, "");
+
+function storageOK(){
+  try{
+    const k="__storage_test__";
+    localStorage.setItem(k,"1");
+    localStorage.removeItem(k);
+    return true;
+  } catch(e){ return false; }
+}
+function debounce(fn, wait=250){
+  let t=null;
+  return (...args)=>{
+    clearTimeout(t);
+    t=setTimeout(()=>fn(...args), wait);
+  };
+}
+
+/* ================= Toast ================= */
+let toastTimer = null;
+function toast(msg){
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove("show"), 1100);
+}
+
+/* ================= Options menu ================= */
+const optionsBtn = $("optionsBtn");
+const optionsMenu = $("optionsMenu");
+const closeMenuBtn = $("closeMenu");
+const menuHeader = $("menuHeader");
+
+function openMenu(){ optionsMenu.classList.remove("hidden"); optionsBtn.setAttribute("aria-expanded","true"); }
+function closeMenu(){ optionsMenu.classList.add("hidden"); optionsBtn.setAttribute("aria-expanded","false"); }
+function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
+
+optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); });
+["pointerdown","click"].forEach(evt=>{
+  closeMenuBtn.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
+});
+document.addEventListener("pointerdown",(e)=>{
+  if (optionsMenu.classList.contains("hidden")) return;
+  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+});
+document.addEventListener("keydown",(e)=>{ if (e.key==="Escape") closeMenu(); });
+
+let dragStartY=null;
+menuHeader.addEventListener("pointerdown",(e)=>{ dragStartY=e.clientY; menuHeader.setPointerCapture(e.pointerId); });
+menuHeader.addEventListener("pointermove",(e)=>{
+  if (dragStartY===null) return;
+  if ((e.clientY - dragStartY) > 70){ dragStartY=null; closeMenu(); }
+});
+menuHeader.addEventListener("pointerup",()=> dragStartY=null);
+menuHeader.addEventListener("pointercancel",()=> dragStartY=null);
+
+/* ================= Fullscreen + nav ================= */
+$("fullscreenBtn").addEventListener("click", async ()=>{
+  try{
+    if (!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      $("fullscreenBtn").textContent = "Exit full screen";
+    } else {
+      await document.exitFullscreen();
+      $("fullscreenBtn").textContent = "Full screen";
+    }
+  } catch(e){ alert("Fullscreen blocked. Try F11."); }
+});
+document.addEventListener("fullscreenchange", ()=>{
+  $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+});
+$("goPHSTimerBtn").addEventListener("click", ()=> window.location.href="index.html");
+
+/* ================= Preferences ================= */
+const PREF_KEY="wheel_prefs_v3";
+const SETS_KEY="wheel_sets_v3";
+const ACTIVE_SET_KEY="wheel_active_set_v3";
+
+function loadPrefs(){
+  try{
+    const raw=localStorage.getItem(PREF_KEY);
+    const p=raw?JSON.parse(raw):{};
+    $("tickSoundOn").checked = p.tick ?? true;
+    $("confettiOn").checked  = p.conf ?? true;
+    $("excludeWinnerOn").checked = p.exw ?? false;
+    $("spinSpeed").value = String(p.speed ?? 20);
+    $("volume").value = String(p.vol ?? 40);
+  }catch(e){
+    $("tickSoundOn").checked=true;
+    $("confettiOn").checked=true;
+    $("excludeWinnerOn").checked=false;
+    $("spinSpeed").value="20";
+    $("volume").value="40";
+  }
+  $("speedLabel").textContent = $("spinSpeed").value;
+  $("volLabel").textContent = $("volume").value;
+}
+
+function savePrefs(){
+  if (!storageOK()) return;
+  const p={
+    tick: $("tickSoundOn").checked,
+    conf: $("confettiOn").checked,
+    exw: $("excludeWinnerOn").checked,
+    speed: Number($("spinSpeed").value)||20,
+    vol: Number($("volume").value)||40
+  };
+  localStorage.setItem(PREF_KEY, JSON.stringify(p));
+}
+const savePrefsDebounced = debounce(()=>{ savePrefs(); toast("Saved"); }, 300);
+
+$("spinSpeed").addEventListener("input", ()=>{
+  $("speedLabel").textContent = $("spinSpeed").value;
+  savePrefsDebounced();
+});
+$("volume").addEventListener("input", ()=>{
+  $("volLabel").textContent = $("volume").value;
+  savePrefsDebounced();
+});
+["tickSoundOn","confettiOn","excludeWinnerOn"].forEach(id=>{
+  $(id).addEventListener("change", ()=>{ savePrefs(); toast("Saved"); });
+});
+
+function saveActiveSet(id){
+  if (!storageOK()) return;
+  localStorage.setItem(ACTIVE_SET_KEY, String(id || ""));
+}
+function loadActiveSet(){
+  if (!storageOK()) return null;
+  return localStorage.getItem(ACTIVE_SET_KEY) || null;
+}
+
+/* ================= Audio ================= */
+let audioCtx=null;
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state==="suspended") audioCtx.resume();
+}
+function getVol(){ return (Number($("volume").value)||40)/100; }
+
+function beep(freq=880, ms=70, type="sine", gain=0.22){
+  ensureAudio();
+  const t0=audioCtx.currentTime;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+
+  const v=gain*getVol();
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(v,t0+0.01);
+  g.gain.linearRampToValueAtTime(0.0001,t0+ms/1000);
+
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0+ms/1000+0.03);
+}
+function tick(){ beep(520, 22, "triangle", 0.22); }
+function winChime(){
+  beep(660, 130, "sine", 0.32);
+  setTimeout(()=>beep(880, 150, "sine", 0.32), 120);
+  setTimeout(()=>beep(990, 170, "sine", 0.32), 250);
+}
+document.addEventListener("pointerdown", ()=>{ ensureAudio(); }, { once:true });
+
+/* ================= Sets data ================= */
+let sets=[];
+let activeSetId=null;
+
+function uid(){ return "set_" + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+function getActiveSet(){ return sets.find(s=>s.id===activeSetId) || null; }
+
+function normalizeSet(s){
+  if (!s) return s;
+  if (!Array.isArray(s.students)) s.students = [];
+  if (!s.excludedIds) s.excludedIds = {};
+  if (!Array.isArray(s.trash)) s.trash = [];
+  return s;
+}
+
+function saveSets(){
+  if (!storageOK()) return;
+  localStorage.setItem(SETS_KEY, JSON.stringify(sets));
+}
+const saveSetsDebounced = debounce(()=>{ saveSets(); toast("Saved"); }, 350);
+
+function loadSets(){
+  if (!storageOK()) { sets=[]; return; }
+  try{
+    const raw=localStorage.getItem(SETS_KEY);
+    sets = raw ? JSON.parse(raw) : [];
+    sets.forEach(normalizeSet);
+  }catch(e){ sets=[]; }
+}
+
+function includedStudents(set){
+  normalizeSet(set);
+  const ex=set?.excludedIds || {};
+  return (set?.students || []).filter(st=>!ex[st.id]);
+}
+
+/* ================= Default sets (first run) ================= */
+const DEFAULT_CONSEQUENCES_NAME = "Default • Consequences";
+const DEFAULT_TREATS_NAME       = "Default • Treats";
+const DEFAULT_BRAINBREAK_NAME   = "Default • Brain Break";
+
+const DEFAULT_CONSEQUENCES = [
+  "Cleanup Duty","Help Tidy Classroom","Board Cleaning Duty","Pack-up Supervision",
+  "Seat Change","Extra Homework","5-Minute Quiet Reflection","Lunch Time Catch-Up",
+  "After-School Reflection","Teacher’s Choice","Contact Home","Lucky Escape"
+];
+const DEFAULT_TREATS = [
+  "Mana Award","Students Choice","Teacher Shout-Out","Positive Call Home",
+  "Early Pack-up Pass","Choose the Music (2 mins)","Free Choice Activity (5 mins)",
+  "Teachers Assistent","Class Vote","Spin Again"
+];
+const DEFAULT_BRAIN_BREAKS = [
+  "2-min stretch break","3-min walk + water","Quick doodle challenge (2 mins)",
+  "Would you rather (1 question)","Rock, Paper, Scissors","Trivia Question",
+  "Silent ball (3 mins)","Breathing reset (60s)","Desk tidy sprint (90s)"
+];
+
+function createDefaultSetIfNone(){
+  if (sets.length) return;
+
+  function makeSet(name, entries){
+    const setId = uid();
+    const students = entries.map((label, i) => ({
+      id: ${setId}::DEF:${i},
+      sid: "",
+      first: "",
+      last: "",
+      name: label,
+      form: "",
+      timetableClass: ""
+    }));
+    return normalizeSet({ id: setId, name, students, excludedIds: {}, trash: [] });
+  }
+
+  sets = [
+    makeSet(DEFAULT_CONSEQUENCES_NAME, DEFAULT_CONSEQUENCES),
+    makeSet(DEFAULT_TREATS_NAME, DEFAULT_TREATS),
+    makeSet(DEFAULT_BRAINBREAK_NAME, DEFAULT_BRAIN_BREAKS)
+  ];
+
+  const remembered = loadActiveSet();
+  const validRemembered = sets.some(s => s.id === remembered) ? remembered : null;
+  activeSetId = validRemembered || sets[1].id;
+
+  saveSets();
+  saveActiveSet(activeSetId);
+}
+
+/* =========================================================
+   Robust paste parsing (restored)
+   ========================================================= */
+function normHeader(h){
+  return (h||"")
+    .toString()
+    .replace(/^\\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\\s+/g," ")
+    .replace(/[^\\w ]/g,"");
+}
+function detectDelimiter(firstLine){
+  const line=firstLine||"";
+  const tab=(line.match(/\\t/g)||[]).length;
+  const comma=(line.match(/,/g)||[]).length;
+  const semi=(line.match(/;/g)||[]).length;
+  if (tab>0) return "\\t";
+  if (semi>comma) return ";";
+  return ",";
+}
+function parseCSVWithQuotes(text){
+  const rows=[];
+  let row=[], cur="", inQ=false;
+  for (let i=0;i<text.length;i++){
+    const ch=text[i], nxt=text[i+1];
+    if (ch === '"'){
+      if (inQ && nxt === '"'){ cur+='"'; i++; }
+      else inQ=!inQ;
+      continue;
+    }
+    if (!inQ && ch === ','){ row.push(cur); cur=""; continue; }
+    if (!inQ && ch === '\\n'){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
+    if (ch !== '\\r') cur += ch;
+  }
+  if (cur.length || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+function parseDelimited(text){
+  text = stripBOM(text).replace(/\\r/g,"");
+  const lines=text.split("\\n").filter(l=>l.trim()!=="");
+  if (!lines.length) return { rows:[], delim:"," };
+
+  const delim=detectDelimiter(lines[0]);
+  let rows=[];
+  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\\n"));
+  else rows = lines.map(l => l.split(delim));
+
+  rows = rows.filter(r=>r.some(c=>safeText(c)!==""));
+  return { rows, delim };
+}
+function headerIndexMap(headers){
+  const map=new Map();
+  headers.forEach((h,i)=> map.set(normHeader(h), i));
+  return map;
+}
+
+const HEADER_ALIASES = {
+  id: ["student id","id","studentid","student number","student no","nsn"],
+  first: ["first name","firstname","given name","forename"],
+  last: ["last name","lastname","surname","family name"],
+  name: ["name","student name","full name"],
+  tutor: ["tutor","form","form class","formclass","homegroup","home group"],
+  tt: ["timetable class","class","tt class","timetable"]
+};
+
+function findAnyIndex(map, aliases){
+  for (const k of aliases){
+    if (map.has(k)) return map.get(k);
+  }
+  return -1;
+}
+function looksLikeHeaderRow(cells){
+  const joined = cells.map(normHeader).join(" ");
+  const hits = [
+    "student id","first name","last name","tutor","timetable class","name","surname","given name","form"
+  ].filter(k => joined.includes(k));
+  return hits.length >= 2;
+}
+function splitNameSmart(s){
+  s = safeText(s);
+  if (!s) return { first:"", last:"" };
+  if (s.includes(",")){
+    const [a,b] = s.split(",").map(x=>safeText(x));
+    return { first:b||"", last:a||"" };
+  }
+  const parts = s.split(/\\s+/).filter(Boolean);
+  if (parts.length===1) return { first:parts[0], last:"" };
+  return { first:parts.slice(0,-1).join(" "), last:parts.slice(-1).join("") };
+}
+
+function parseStudentsFlexible(text, setId){
+  const { rows, delim } = parseDelimited(text);
+  if (!rows.length) return { ok:false, reason:"Paste is empty." };
+
+  const firstRow = rows[0].map(safeText);
+  const headerMode = looksLikeHeaderRow(firstRow);
+
+  let headers = null, dataRows = null, map = null;
+  if (headerMode){
+    headers = firstRow;
+    dataRows = rows.slice(1);
+    map = headerIndexMap(headers);
+  } else {
+    dataRows = rows;
+  }
+
+  let iID=-1, iFirst=-1, iLast=-1, iName=-1, iTutor=-1, iTT=-1;
+  if (headerMode){
+    iID    = findAnyIndex(map, HEADER_ALIASES.id);
+    iFirst = findAnyIndex(map, HEADER_ALIASES.first);
+    iLast  = findAnyIndex(map, HEADER_ALIASES.last);
+    iName  = findAnyIndex(map, HEADER_ALIASES.name);
+    iTutor = findAnyIndex(map, HEADER_ALIASES.tutor);
+    iTT    = findAnyIndex(map, HEADER_ALIASES.tt);
+  }
+
+  const out=[];
+  const seenKey=new Set();
+
+  function makeSetLocalId(seed){ return ${setId}::${seed}; }
+
+  for (let rIndex=0; rIndex<dataRows.length; rIndex++){
+    const r = dataRows[rIndex];
+
+    let sid="", first="", last="", full="", tutor="", tt="";
+
+    if (headerMode){
+      sid   = iID>=0 ? safeText(r[iID]) : "";
+      first = iFirst>=0 ? safeText(r[iFirst]) : "";
+      last  = iLast>=0 ? safeText(r[iLast]) : "";
+      full  = iName>=0 ? safeText(r[iName]) : "";
+      tutor = iTutor>=0 ? safeText(r[iTutor]) : "";
+      tt    = iTT>=0 ? safeText(r[iTT]) : "";
+
+      if (!full && (first || last)) full = (first + " " + last).trim();
+      if (full && (!first && !last)){
+        const p = splitNameSmart(full);
+        first = first || p.first;
+        last  = last  || p.last;
+      }
+    } else {
+      const joined = r.map(safeText).filter(Boolean).join(" ").trim();
+      if (!joined) continue;
+      const p = splitNameSmart(joined);
+      first = p.first; last = p.last;
+      full = (first + " " + last).trim() || joined;
+    }
+
+    if (!safeText(full)){
+      full = (safeText(first)+" "+safeText(last)).trim();
+    }
+    if (!safeText(full)) continue;
+
+    const id = sid ? makeSetLocalId("SID:"+sid) : makeSetLocalId("ROW:"+rIndex);
+    const dedupeKey = sid ? ("SID:"+sid) : ("NAME:"+full.toLowerCase());
+    if (seenKey.has(dedupeKey)) continue;
+    seenKey.add(dedupeKey);
+
+    out.push({
+      id,
+      sid: sid || "",
+      first,
+      last,
+      name: full,
+      form: tutor || "",
+      timetableClass: tt || ""
+    });
+  }
+
+  if (!out.length){
+    return {
+      ok:false,
+      reason:"Could not find any names. Paste needs at least one name per line.",
+      diag: headerMode ? headerMode=true delim=${delim} : headerMode=false delim=${delim}
+    };
+  }
+
+  return { ok:true, students: out };
+}
+
+/* ================= Add / Restore helpers ================= */
+function safeName(s){ return safeText(s).replace(/\\s+/g," ").trim(); }
+
+function makeNewEntry(name, setId){
+  const base = safeName(name);
+  const id = ${setId}::MAN:${Date.now().toString(16)}:${Math.random().toString(16).slice(2)};
+  return { id, sid:"", first:"", last:"", name: base, form:"", timetableClass:"" };
+}
+function addTextEntriesToSet(set, rawText){
+  normalizeSet(set);
+  const text = safeText(rawText);
+  if (!text) return 0;
+
+  const lines = text.split(/\\r?\\n/).map(safeName).filter(Boolean);
+  if (!lines.length) return 0;
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  let added = 0;
+
+  for (const line of lines){
+    const k = line.toLowerCase();
+    if (!k) continue;
+    if (existing.has(k)) continue;
+    existing.add(k);
+    set.students.push(makeNewEntry(line, set.id));
+    added++;
+  }
+  return added;
+}
+function restoreFromTrash(set, entryId){
+  normalizeSet(set);
+  const idx = set.trash.findIndex(x => x.id === entryId);
+  if (idx < 0) return false;
+
+  const item = set.trash.splice(idx, 1)[0];
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  const k = (item.name || "").trim().toLowerCase();
+  if (k && existing.has(k)) return true;
+
+  set.students.push(item);
+  return true;
+}
+function restoreAllTrash(set){
+  normalizeSet(set);
+  if (!set.trash.length) return 0;
+
+  const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
+  let restored = 0;
+
+  const trashCopy = set.trash.slice().reverse();
+  set.trash = [];
+
+  for (const item of trashCopy){
+    const k = (item.name || "").trim().toLowerCase();
+    if (k && existing.has(k)) continue;
+    existing.add(k);
+    set.students.push(item);
+    restored++;
+  }
+  return restored;
+}
+
+/* ================= Set selection helpers ================= */
+function setActiveSet(id){
+  activeSetId = id;
+  saveActiveSet(activeSetId);
+}
+
+/* ================= UI: sets buttons & manager ================= */
+function renderSetButtons(){
+  const row=$("setRow");
+  row.innerHTML="";
+
+  if (!sets.length){
+    const b=document.createElement("button");
+    b.className="setBtn";
+    b.type="button";
+    b.textContent="No sets yet — paste one in Options (⚙️)";
+    b.style.cursor="default";
+    row.appendChild(b);
+    return;
+  }
+
+  for (const s0 of sets){
+    const s = normalizeSet(s0);
+
+    const b=document.createElement("button");
+    b.className="setBtn"+(s.id===activeSetId?" active":"");
+    b.type="button";
+    b.textContent=s.name;
+    b.title="Click to load this set";
+    b.addEventListener("click", ()=>{
+      if (spinning) { toast("Finish the spin 🙂"); return; }
+      setActiveSet(s.id);
+      displayPool=null;
+      pendingExcludeId=null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+      renderSetButtons();
+      renderSetManager();
+      refreshAll();
+      renderTrashList();
+      toast("Loaded");
+    });
+    row.appendChild(b);
+  }
+}
+
+function renderSetManager(){
+  const wrap=$("setManager");
+  wrap.innerHTML="";
+  if (!sets.length){
+    wrap.innerHTML=<div class="smallNote">No sets saved yet.</div>;
+    return;
+  }
+
+  for (const s0 of sets){
+    const s = normalizeSet(s0);
+
+    const box=document.createElement("div");
+    box.style.display="grid";
+    box.style.gridTemplateColumns="1fr auto auto";
+    box.style.gap="8px";
+    box.style.alignItems="center";
+
+    const inp=document.createElement("input");
+    inp.type="text";
+    inp.value=s.name;
+    inp.style.boxShadow="none";
+    inp.placeholder="Set label";
+    inp.addEventListener("input", ()=>{
+      s.name=(inp.value||"Untitled").trim();
+      renderSetButtons();
+      setStatus();
+      saveSetsDebounced();
+      // update print header if preview exists
+      if (lastGroups) renderGroupPreview(lastGroups);
+    });
+
+    const use=document.createElement("button");
+    use.type="button";
+    use.textContent="Use";
+    use.addEventListener("click", ()=>{
+      if (spinning) { toast("Finish the spin 🙂"); return; }
+      setActiveSet(s.id);
+      displayPool=null;
+      pendingExcludeId=null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+      renderSetButtons();
+      refreshAll();
+      renderTrashList();
+      toast("Loaded");
+    });
+
+    const del=document.createElement("button");
+    del.type="button";
+    del.textContent="Delete";
+    del.addEventListener("click", ()=>{
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+      if (!confirm(Delete "${s.name}"?)) return;
+      sets=sets.filter(x=>x.id!==s.id);
+      if (activeSetId===s.id) setActiveSet(sets[0]?.id || null);
+      saveSets();
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+      renderSetButtons();
+      renderSetManager();
+      displayPool=null;
+      pendingExcludeId=null;
+      refreshAll();
+      renderTrashList();
+      toast("Deleted");
+    });
+
+    box.appendChild(inp);
+    box.appendChild(use);
+    box.appendChild(del);
+    wrap.appendChild(box);
+  }
+}
+
+/* ================= Status / background ================= */
+function setBg(state){
+  if (state==="spinning") document.body.style.backgroundColor="var(--bgOrange)";
+  else if (state==="winner") document.body.style.backgroundColor="var(--bgGreen)";
+  else document.body.style.backgroundColor="var(--bgGrey)";
+}
+function setStatus(){
+  const set=getActiveSet();
+  if (!set){ $("statusChip").textContent="No set loaded"; return; }
+  normalizeSet(set);
+  const inc=includedStudents(set).length;
+  const exc=(set.students.length - inc);
+  $("statusChip").textContent=${set.name} • ${inc} in • ${exc} out;
+}
+
+/* ================= Wheel drawing ================= */
+const canvas=$("wheel");
+const ctx=canvas.getContext("2d");
+let rot=0;
+
+function hashColor(i){
+  const hue=(i*47)%360;
+  return hsl(${hue} 70% 60%);
+}
+function getLivePool(){
+  const set=getActiveSet();
+  if (!set) return [];
+  return includedStudents(set);
+}
+let displayPool = null;
+
+function drawWheel(rotation=0, pool=null){
+  const set=getActiveSet();
+  const arr = pool ?? (displayPool ?? getLivePool());
+
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2;
+  const rOuter=Math.min(W,H)*0.46;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx,cy,rOuter+7,0,Math.PI*2);
+  ctx.fillStyle="rgba(0,0,0,0.06)";
+  ctx.fill();
+  ctx.restore();
+
+  const n=Math.max(1, arr.length);
+  const arc=(Math.PI*2)/n;
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(rotation);
+
+  for (let i=0;i<n;i++){
+    const a0=i*arc, a1=a0+arc;
+
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,rOuter,a0,a1);
+    ctx.closePath();
+    ctx.fillStyle = arr.length ? hashColor(i) : "rgba(0,0,0,0.10)";
+    ctx.fill();
+
+    ctx.strokeStyle="rgba(0,0,0,0.16)";
+    ctx.lineWidth=2;
+    ctx.stroke();
+
+    const label = arr.length ? arr[i].name : (set ? "All excluded" : "Paste a class");
+
+    const mid=(a0+a1)/2;
+    ctx.save();
+    ctx.rotate(mid);
+
+    const startR=rOuter*0.18;
+    const endR=rOuter*0.92;
+    const avail=endR-startR;
+
+    ctx.translate(startR,0);
+    ctx.fillStyle="rgba(0,0,0,0.88)";
+    ctx.font="900 30px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign="left";
+    ctx.textBaseline="middle";
+
+    let shown=label;
+    while (shown.length && ctx.measureText(shown+"…").width > avail){
+      shown = shown.slice(0,-1);
+    }
+    if (shown !== label) shown += "…";
+    ctx.fillText(shown,0,0);
+
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  ctx.arc(0,0,rOuter*0.12,0,Math.PI*2);
+  ctx.fillStyle="rgba(255,255,255,0.86)";
+  ctx.fill();
+  ctx.strokeStyle="rgba(0,0,0,0.12)";
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/* ================= Confetti ================= */
+function popConfetti(){
+  const layer=$("confettiLayer");
+  layer.innerHTML="";
+  layer.classList.add("show");
+  const count=90;
+  for (let i=0;i<count;i++){
+    const s=document.createElement("span");
+    s.style.left=(Math.random()*100)+"%";
+    s.style.animationDuration=(1.3+Math.random()*1.4)+"s";
+    s.style.animationDelay=(Math.random()*0.25)+"s";
+    const hue=Math.floor(Math.random()*360);
+    s.style.background=hsl(${hue} 80% 60%);
+    layer.appendChild(s);
+  }
+  setTimeout(()=>layer.classList.remove("show"), 2400);
+}
+
+/* ================= Trash UI ================= */
+function renderTrashList(){
+  const set = getActiveSet();
+  const wrap = $("trashList");
+  const hint = $("trashHint");
+  const q = safeName($("trashSearch").value).toLowerCase();
+  wrap.innerHTML = "";
+
+  if (!set){
+    hint.textContent = "No set loaded.";
+    return;
+  }
+
+  normalizeSet(set);
+  let items = (set.trash || []).slice().reverse(); // newest first
+  if (q) items = items.filter(x => (x.name||"").toLowerCase().includes(q));
+
+  if (!set.trash.length){
+    hint.textContent = "No removed items.";
+    return;
+  }
+
+  hint.textContent = q
+    ? ${items.length} match${items.length===1?"":"es"} in removed items (total ${set.trash.length}).
+    : ${set.trash.length} removed item${set.trash.length===1?"":"s"} — click Restore.;
+
+  if (!items.length && q){
+    wrap.innerHTML = <div class="smallNote" style="padding:6px 0;">No matches.</div>;
+    return;
+  }
+
+  for (const st of items){
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "1fr auto";
+    row.style.gap = "8px";
+    row.style.alignItems = "center";
+
+    const label = document.createElement("div");
+    label.textContent = st.name || "(unnamed)";
+    label.style.fontWeight = "900";
+    label.style.opacity = "0.9";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Restore";
+    btn.addEventListener("click", ()=>{
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+      const ok = restoreFromTrash(set, st.id);
+      if (!ok){ toast("Not found"); return; }
+      if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      renderTrashList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast("Restored");
+    });
+
+    row.appendChild(label);
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+$("trashSearch").addEventListener("input", ()=> renderTrashList());
+
+$("restoreAllBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+  normalizeSet(set);
+
+  const n = restoreAllTrash(set);
+  if (!n){ toast("Nothing to restore"); return; }
+
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  renderTrashList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast(Restored ${n});
+});
+
+/* ================= Student list ================= */
+function renderStudentList(){
+  const set=getActiveSet();
+  const list=$("studentList");
+  list.innerHTML="";
+
+  if (!set){
+    list.innerHTML=<div style="padding:10px; font-weight:900; opacity:.7;">Paste a set in Options (⚙️).</div>;
+    $("includedCount").textContent="0";
+    $("excludedCount").textContent="0";
+    $("freezeHint").textContent="—";
+    return;
+  }
+
+  normalizeSet(set);
+
+  $("freezeHint").textContent = spinning ? "Changes take effect next spin." : "Ready.";
+
+  const q=($("searchBox").value||"").trim().toLowerCase();
+  const ex=set.excludedIds || {};
+  const inc=includedStudents(set).length;
+  const exc=set.students.length - inc;
+  $("includedCount").textContent=String(inc);
+  $("excludedCount").textContent=String(exc);
+
+  const shown=set.students.filter(st=>{
+    if (!q) return true;
+    const hay=(st.name+" "+(st.form||"")+" "+(st.timetableClass||"")).toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (!shown.length){
+    list.innerHTML=<div style="padding:10px; font-weight:900; opacity:.7;">No matches.</div>;
+    return;
+  }
+
+  for (const st of shown){
+    const excluded=!!ex[st.id];
+
+    const row=document.createElement("div");
+    row.className="row"+(excluded?" excluded":"");
+
+    const left=document.createElement("div");
+    left.className="rowLeft";
+
+    const dot=document.createElement("div");
+    dot.className="dot";
+    left.appendChild(dot);
+
+    const name=document.createElement("span");
+    name.className="nameText";
+    name.textContent=st.name;
+    left.appendChild(name);
+
+    const meta=document.createElement("span");
+    meta.className="meta";
+    const bits=[];
+    if (st.form) bits.push(st.form);
+    if (st.timetableClass) bits.push(st.timetableClass);
+    meta.textContent=bits.length ? (${bits.join(" • ")}) : "";
+    if (meta.textContent) left.appendChild(meta);
+
+    row.appendChild(left);
+
+    const del=document.createElement("button");
+    del.type="button";
+    del.className="rowDel";
+    del.textContent="✕";
+    del.title="Remove from set (restore in Options)";
+    del.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      if (spinning){ toast("Finish the spin 🙂"); return; }
+
+      const ok = confirm(Remove "${st.name}" from this set?\n\nYou can restore it later in:\nOptions (⚙️) → Edit current set → Recently removed);
+      if (!ok) return;
+
+      set.students = set.students.filter(x => x.id !== st.id);
+      if (set.excludedIds && set.excludedIds[st.id]) delete set.excludedIds[st.id];
+      set.trash.push(st);
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      renderTrashList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast("Removed (can restore)");
+    });
+    row.appendChild(del);
+
+    list.appendChild(row);
+
+    row.addEventListener("click", ()=>{
+      set.excludedIds = set.excludedIds || {};
+      if (set.excludedIds[st.id]) delete set.excludedIds[st.id];
+      else set.excludedIds[st.id]=true;
+
+      saveSetsDebounced();
+      setStatus();
+      renderStudentList();
+      if (!spinning && displayPool === null) drawWheel(rot, null);
+      toast(spinning ? "Updated (next spin)" : "Updated");
+    });
+  }
+}
+$("searchBox").addEventListener("input", ()=> renderStudentList());
+
+$("includeAllBtn").addEventListener("click", ()=>{
+  const set=getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+  set.excludedIds={};
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool===null) drawWheel(rot,null);
+  toast(spinning ? "Included all (next spin)" : "Included all");
+});
+
+$("excludeAllBtn").addEventListener("click", ()=>{
+  const set=getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+  const ex={};
+  for (const st of set.students) ex[st.id]=true;
+  set.excludedIds=ex;
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool===null) drawWheel(rot,null);
+  toast(spinning ? "Excluded all (next spin)" : "Excluded all");
+});
+
+/* ================= Add entries buttons ================= */
+$("addEntriesBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+  const n = addTextEntriesToSet(set, $("editAddBox").value);
+  $("editAddBox").value = "";
+  if (!n){ toast("Nothing to add"); return; }
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast(Added ${n});
+});
+
+$("dedupeSetBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set) return;
+  normalizeSet(set);
+
+  const seen = new Set();
+  const next = [];
+
+  for (const st of set.students){
+    const k = (st.name || "").trim().toLowerCase();
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    next.push(st);
+  }
+  set.students = next;
+
+  // clean excluded ids
+  const validIds = new Set(set.students.map(s => s.id));
+  const ex = set.excludedIds || {};
+  for (const id of Object.keys(ex)){
+    if (!validIds.has(id)) delete ex[id];
+  }
+
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("De-duped");
+});
+
+/* ================= Quick add ================= */
+function quickAdd(){
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){ toast("No set loaded"); return; }
+  const v = safeName($("quickAddInput").value);
+  if (!v){ toast("Type something first"); return; }
+  const added = addTextEntriesToSet(set, v);
+  if (!added){ toast("Already exists"); return; }
+  $("quickAddInput").value = "";
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+  if (!spinning && displayPool === null) drawWheel(rot, null);
+  toast("Added");
+}
+$("quickAddBtn").addEventListener("click", quickAdd);
+$("quickAddInput").addEventListener("keydown", (e)=>{
+  if (e.key === "Enter"){ e.preventDefault(); quickAdd(); }
+});
+
+/* ================= Spin logic (single winner) ================= */
+let spinning=false;
+let spinPool=null;
+let pendingExcludeId=null;
+let lastTickIndex=null;
+
+function angleToIndex(rotation, pool){
+  const arr=pool||[];
+  if (!arr.length) return null;
+  const n=arr.length;
+  const arc=(Math.PI*2)/n;
+  let a = (-Math.PI/2 - rotation) % (Math.PI*2);
+  if (a < 0) a += Math.PI*2;
+  return clamp(Math.floor(a/arc), 0, n-1);
+}
+function applyPendingExclude(){
+  if (!pendingExcludeId) return;
+  const set=getActiveSet();
+  if (!set){ pendingExcludeId=null; return; }
+  normalizeSet(set);
+  set.excludedIds=set.excludedIds||{};
+  set.excludedIds[pendingExcludeId]=true;
+  pendingExcludeId=null;
+  saveSetsDebounced();
+  setStatus();
+  renderStudentList();
+}
+function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
+function startSpin(){
+  if (spinning) return;
+
+  const set=getActiveSet();
+  if (!set){
+    $("winnerBox").textContent="Paste a class set first 🙂";
+    $("hintLine").textContent="Options (⚙️) → paste → create set";
+    return;
+  }
+
+  applyPendingExclude();
+
+  const pool=getLivePool();
+  if (!pool.length){
+    $("winnerBox").textContent="Everyone is excluded 🙂";
+    $("hintLine").textContent="Click entries to include.";
+    displayPool=null;
+    drawWheel(rot,null);
+    return;
+  }
+
+  spinning=true;
+  setBg("spinning");
+  $("spinBtn").disabled=true;
+  $("spinBtn").textContent="SPINNING…";
+  $("winnerBox").textContent="Spinning…";
+  $("hintLine").textContent="Good luck 🍀";
+
+  spinPool = pool.slice();
+
+  const winIndex = Math.floor(Math.random()*spinPool.length);
+  const n=spinPool.length;
+  const arc=(Math.PI*2)/n;
+  const centerOfIndex = winIndex*arc + arc/2;
+  const desiredRotation = -Math.PI/2 - centerOfIndex;
+
+  const speed = Number($("spinSpeed").value)||20;
+  const durationMs = clamp(2400 - speed*160, 900, 2200);
+
+  const minTurns = 1;
+  const extraTurns = clamp(Math.round((10 - speed) * 0.35) + 1, 1, 3);
+  const turns = minTurns + extraTurns;
+
+  const extra = (Math.random()*0.18 - 0.09);
+
+  const startRot = rot;
+  const endRot = desiredRotation + (Math.PI*2*turns) + extra;
+
+  lastTickIndex = angleToIndex(rot, spinPool);
+
+  let startTime=null;
+  function frame(t){
+    if (!spinning) return;
+    if (!startTime) startTime=t;
+    const p = clamp((t-startTime)/durationMs, 0, 1);
+    const eased = easeOutCubic(p);
+    rot = startRot + (endRot-startRot)*eased;
+
+    const idx = angleToIndex(rot, spinPool);
+    if ($("tickSoundOn").checked && idx !== null && idx !== lastTickIndex){
+      tick();
+      lastTickIndex = idx;
+    }
+
+    drawWheel(rot, spinPool);
+
+    if (p < 1) requestAnimationFrame(frame);
+    else finishSpin();
+  }
+  requestAnimationFrame(frame);
+}
+
+function finishSpin(){
+  spinning=false;
+  setBg("winner");
+  $("spinBtn").disabled=false;
+  $("spinBtn").textContent="SPIN!";
+
+  const idx = angleToIndex(rot, spinPool);
+  const winner = (idx!==null && spinPool) ? spinPool[idx] : null;
+
+  if ($("confettiOn").checked) popConfetti();
+  winChime();
+
+  if (!winner){
+    $("winnerBox").textContent="No eligible entries 🙂";
+    $("hintLine").textContent="Include someone.";
+    spinPool=null;
+    displayPool=null;
+    drawWheel(rot,null);
+    return;
+  }
+
+  const bits=[];
+  if (winner.form) bits.push(winner.form);
+  if (winner.timetableClass) bits.push(winner.timetableClass);
+  const meta = bits.length ?  • ${bits.join(" • ")} : "";
+
+  $("winnerBox").textContent = 🎉 ${winner.name}${meta} 🎉;
+
+  displayPool = spinPool.slice();
+
+  if ($("excludeWinnerOn").checked){
+    pendingExcludeId = winner.id;
+    $("hintLine").textContent = "Winner will be excluded on the NEXT spin";
+  } else {
+    pendingExcludeId = null;
+    $("hintLine").innerHTML = Click the wheel (or press <b>Space</b>);
+  }
+
+  spinPool=null;
+  drawWheel(rot, displayPool);
+  renderStudentList();
+}
+
+/* ================= Spin bindings ================= */
+$("spinBtn").addEventListener("click", startSpin);
+$("wheelStage").addEventListener("click", startSpin);
+
+/* FIX: spacebar should NOT spin while typing, OR when Options open */
+function isTypingTarget(el){
+  if (!el) return false;
+  const tag = (el.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+  if (el.closest && el.closest("[contenteditable='true']")) return true;
+  return false;
+}
+document.addEventListener("keydown",(e)=>{
+  if (e.key !== " ") return;
+
+  // Options open? let space type normally.
+  if (!optionsMenu.classList.contains("hidden")) return;
+
+  // Typing in a field? let space type normally.
+  if (isTypingTarget(document.activeElement)) return;
+
+  e.preventDefault();
+  startSpin();
+});
+
+/* ================= Create set from paste ================= */
+function createSetFromStudents(name, students){
+  const newSet = normalizeSet({
+    id: uid(),
+    name: (name||"Untitled").trim(),
+    students,
+    excludedIds: {},
+    trash: []
+  });
+  sets.unshift(newSet);
+  setActiveSet(newSet.id);
+  saveSets();
+  displayPool=null;
+  pendingExcludeId=null;
+  lastGroups = null;
+  $("printGroupsBtn").disabled = true;
+  renderGroupPreview(null);
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+}
+
+$("importPasteBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+
+  const text=$("pasteBox").value||"";
+  const name=($("pasteSetName").value||"").trim() || "Pasted set";
+  const tempSetId = "import_" + Date.now().toString(16);
+
+  const res=parseStudentsFlexible(text, tempSetId);
+
+  if (!res.ok){
+    alert(Paste import failed:\n${res.reason}\n\n${res.diag ? ("Details:\n"+res.diag) : ""});
+    return;
+  }
+
+  createSetFromStudents(name, res.students);
+  $("pasteBox").value="";
+  $("pasteSetName").value="";
+  toast(Created "${name}" (${res.students.length}));
+  closeMenu();
+});
+
+/* ================= Reset / Clear ================= */
+$("resetOptionsBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  localStorage.removeItem(PREF_KEY);
+  loadPrefs();
+  savePrefs();
+  toast("Options reset");
+});
+
+$("clearSetsBtn").addEventListener("click", ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  if (!confirm("Delete ALL saved class sets?")) return;
+  sets=[]; setActiveSet(null);
+  saveSets();
+  displayPool=null;
+  pendingExcludeId=null;
+  lastGroups = null;
+  $("printGroupsBtn").disabled = true;
+  renderGroupPreview(null);
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+  toast("Cleared");
+});
+
+/* ================= Export / Import (Full Backup) ================= */
+function buildFullBackup(){
+  let prefs = {};
+  if (storageOK()){
+    try { prefs = JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); }
+    catch(e){ prefs = {}; }
+  }
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    prefs,
+    sets,
+    activeSetId
+  };
+}
+
+function downloadJSON(filename, dataObj){
+  const blob = new Blob([JSON.stringify(dataObj, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+$("exportWheelBtn").addEventListener("click", ()=>{
+  if (!sets.length){ toast("Nothing to export"); return; }
+  const backup = buildFullBackup();
+  const filename = wheel-backup-${new Date().toISOString().slice(0,10)}.json;
+  downloadJSON(filename, backup);
+  toast("Backup exported");
+});
+
+$("importWheelBtn").addEventListener("click", ()=> $("importWheelFile").click());
+
+$("importWheelFile").addEventListener("change", (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = JSON.parse(String(evt.target.result || ""));
+      if (!data || !Array.isArray(data.sets)){
+        alert("Invalid backup file (missing sets).");
+        e.target.value = "";
+        return;
+      }
+
+      const ok = confirm("Importing will REPLACE all current sets and settings.\n\nContinue?");
+      if (!ok){ e.target.value = ""; return; }
+
+      // restore sets
+      sets = data.sets.map(normalizeSet);
+
+      // restore active set
+      activeSetId = data.activeSetId || sets[0]?.id || null;
+
+      // restore prefs
+      if (storageOK()){
+        try{
+          localStorage.setItem(PREF_KEY, JSON.stringify(data.prefs || {}));
+        }catch(err){}
+      }
+
+      saveSets();
+      saveActiveSet(activeSetId);
+      loadPrefs();
+
+      displayPool = null;
+      pendingExcludeId = null;
+      lastGroups = null;
+      $("printGroupsBtn").disabled = true;
+      renderGroupPreview(null);
+
+      renderSetButtons();
+      renderSetManager();
+      refreshAll();
+      renderTrashList();
+
+      toast("Backup imported");
+    }catch(err){
+      alert("Import failed — invalid JSON file.");
+    } finally {
+      e.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+});
+
+/* ================= Group maker ================= */
+let lastGroups = null;
+
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i=a.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Balanced grouping:
+ * - Base size = groupSize
+ * - Remainder distributed: first R groups get +1
+ */
+function makeBalancedGroups(items, groupSize){
+  const n = items.length;
+  if (n === 0) return [];
+
+  const size = clamp(Number(groupSize)||2, 2, 50);
+  const baseGroupCount = Math.max(1, Math.floor(n / size));
+  const rem = n - (baseGroupCount * size);
+
+  // If size > n, just one group
+  if (baseGroupCount === 0) return [items.slice()];
+
+  const groups = [];
+  let idx = 0;
+
+  // Build groups with base size, distribute remainder as +1 to first rem groups
+  for (let g=0; g<baseGroupCount; g++){
+    const extra = g < rem ? 1 : 0;
+    const take = size + extra;
+    groups.push(items.slice(idx, idx+take));
+    idx += take;
+  }
+
+  // Safety: if anything left (shouldn't), append to last group
+  if (idx < n){
+    groups[groups.length-1].push(...items.slice(idx));
+  }
+
+  // If we ended up with a tiny last group (e.g. size 5, n 6 -> baseGroupCount=1 rem=1 => group of 6 ok)
+  return groups.filter(g => g.length);
+}
+
+function renderGroupPreview(groups){
+  const wrap = $("groupPreview");
+  const hint = $("groupPreviewHint");
+  wrap.innerHTML = "";
+
+  const set = getActiveSet();
+  const setName = set?.name || "No set loaded";
+
+  if (!groups || !groups.length){
+    hint.textContent = "No groups yet.";
+    return;
+  }
+
+  const total = groups.reduce((a,g)=>a+g.length, 0);
+  const sizes = groups.map(g=>g.length);
+  const minS = Math.min(...sizes);
+  const maxS = Math.max(...sizes);
+
+  hint.textContent = ${setName} • ${groups.length} group${groups.length===1?"":"s"} • ${total} student${total===1?"":"s"} (size ${minS}${minS===maxS?"":("–"+maxS)});
+
+  for (let i=0; i<groups.length; i++){
+    const card = document.createElement("div");
+    card.style.background = "rgba(255,255,255,0.86)";
+    card.style.borderRadius = "14px";
+    card.style.padding = "10px 12px";
+    card.style.boxShadow = "0 10px 26px rgba(0,0,0,0.10)";
+    card.style.display = "grid";
+    card.style.gap = "8px";
+
+    const head = document.createElement("div");
+    head.style.display = "flex";
+    head.style.justifyContent = "space-between";
+    head.style.alignItems = "center";
+
+    const title = document.createElement("div");
+    title.textContent = Group ${i+1};
+    title.style.fontWeight = "1000";
+    title.style.letterSpacing = "0.2px";
+
+    const pill = document.createElement("span");
+    pill.className = "valuePill";
+    pill.textContent = ${groups[i].length};
+
+    head.appendChild(title);
+    head.appendChild(pill);
+
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gridTemplateColumns = "1fr 1fr";
+    list.style.gap = "6px 12px";
+
+    const sorted = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    for (const name of sorted){
+      const item = document.createElement("div");
+      item.textContent = name;
+      item.style.fontWeight = "800";
+      item.style.opacity = "0.92";
+      list.appendChild(item);
+    }
+
+    card.appendChild(head);
+    card.appendChild(list);
+    wrap.appendChild(card);
+  }
+}
+
+function getGroupPool(){
+  const set = getActiveSet();
+  if (!set) return [];
+  const useIncluded = $("groupUseIncluded").checked;
+  normalizeSet(set);
+  if (useIncluded) return includedStudents(set);
+  return set.students.slice();
+}
+
+/* A short "spin effect" for group making (no winner) */
+function spinAnimation(pool, ms=1200){
+  return new Promise((resolve)=>{
+    const startRot = rot;
+    const extraTurns = 2 + Math.random()*2;
+    const endRot = startRot + (Math.PI*2*extraTurns);
+    const startTime = performance.now();
+
+    lastTickIndex = angleToIndex(rot, pool);
+
+    function frame(t){
+      const p = clamp((t-startTime)/ms, 0, 1);
+      const eased = easeOutCubic(p);
+      rot = startRot + (endRot-startRot)*eased;
+
+      const idx = angleToIndex(rot, pool);
+      if ($("tickSoundOn").checked && idx !== null && idx !== lastTickIndex){
+        tick();
+        lastTickIndex = idx;
+      }
+
+      drawWheel(rot, pool);
+
+      if (p < 1) requestAnimationFrame(frame);
+      else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+$("makeGroupsBtn").addEventListener("click", async ()=>{
+  if (spinning){ toast("Finish the spin 🙂"); return; }
+  const set = getActiveSet();
+  if (!set){
+    toast("No set loaded");
+    return;
+  }
+
+  const size = clamp(Number($("groupSize").value)||4, 2, 20);
+
+  // Apply "exclude winner next spin" pending state before groups
+  applyPendingExclude();
+
+  const pool = getGroupPool();
+  if (pool.length < 2){
+    toast("Need at least 2 students");
+    return;
+  }
+  if (pool.length < size){
+    // allow: one group with all
+    // still ok
+  }
+
+  spinning = true;
+  setBg("spinning");
+  $("spinBtn").disabled = true;
+  $("makeGroupsBtn").disabled = true;
+  $("winnerBox").textContent = "Making groups…";
+  $("hintLine").textContent = "Randomising 🍀";
+
+  // Keep wheel showing the pool used for groups
+  displayPool = pool.slice();
+
+  await spinAnimation(displayPool, clamp(1400 - (Number($("spinSpeed").value)||20)*25, 650, 1400));
+
+  const shuffled = shuffle(pool);
+  const groups = makeBalancedGroups(shuffled, size);
+
+  spinning = false;
+  setBg("idle");
+  $("spinBtn").disabled = false;
+  $("makeGroupsBtn").disabled = false;
+
+  lastGroups = groups;
+  $("printGroupsBtn").disabled = !lastGroups.length;
+
+  // nice feedback
+  $("winnerBox").textContent = Groups made ✅ (${groups.length} group${groups.length===1?"":"s"});
+  $("hintLine").innerHTML = Open Options (⚙️) → Group maker → <b>Print groups</b>;
+
+  renderGroupPreview(groups);
+
+  // redraw wheel in whatever state it was (keep pool shown)
+  drawWheel(rot, displayPool);
+  toast("Groups created");
+});
+
+function buildPrintHTML(groups){
+  const set = getActiveSet();
+  const setName = (set?.name || "Class Groups").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const when = new Date().toLocaleString();
+
+  // Build columns that flow nicely when printed
+  let body = "";
+  for (let i=0; i<groups.length; i++){
+    const names = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    const lis = names.map(n => <li>${escapeHTML(n)}</li>).join("");
+    body += 
+      <section class="card">
+        <div class="cardHead">
+          <div class="groupTitle">Group ${i+1}</div>
+          <div class="pill">${names.length}</div>
+        </div>
+        <ol class="names">${lis}</ol>
+      </section>
+    ;
+  }
+
+  return <!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${setName} — Groups</title>
+    <style>
+      :root{
+        --ink:#111;
+        --muted:#666;
+        --card:#ffffff;
+        --line:#e7e7e7;
+      }
+      html,body{ margin:0; padding:0; color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      .page{ padding: 24px; }
+      .header{
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-end;
+        gap:16px;
+        border-bottom: 2px solid var(--line);
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+      .title{
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: .2px;
+      }
+      .sub{
+        color:var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .meta{
+        text-align:right;
+        color:var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .grid{
+        display:grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card{
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 14px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        background: var(--card);
+      }
+      .cardHead{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom: 10px;
+      }
+      .groupTitle{
+        font-weight: 1000;
+        font-size: 16px;
+      }
+      .pill{
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-weight: 900;
+        font-size: 12px;
+        color: #222;
+      }
+      .names{
+        margin: 0;
+        padding-left: 18px;
+        columns: 2;
+        column-gap: 18px;
+      }
+      .names li{
+        margin: 4px 0;
+        font-weight: 800;
+        font-size: 13px;
+        break-inside: avoid;
+      }
+      @media print{
+        .page{ padding: 0; }
+        .grid{ gap: 10px; }
+        .card{ border-color: #ddd; }
+      }
+      @page{ margin: 12mm; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header">
+        <div>
+          <div class="title">${setName} — Random Groups</div>
+          <div class="sub">Made with PHS Wheel • Balanced sizes • Sorted names</div>
+        </div>
+        <div class="meta">
+          ${escapeHTML(when)}<br/>
+          ${groups.length} group${groups.length===1?"":"s"} • ${groups.reduce((a,g)=>a+g.length,0)} student${groups.reduce((a,g)=>a+g.length,0)===1?"":"s"}
+        </div>
+      </div>
+      <div class="grid">
+        ${body}
+      </div>
+    </div>
+  </body>
+  </html>;
+}
+
+function escapeHTML(s){
+  return String(s ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+$("printGroupsBtn").addEventListener("click", ()=>{
+  if (!lastGroups || !lastGroups.length){
+    toast("No groups to print");
+    return;
+  }
+  const win = window.open("", "_blank");
+  if (!win){
+    alert("Pop-up blocked. Allow pop-ups for printing.");
+    return;
+  }
+  win.document.open();
+  win.document.write(buildPrintHTML(lastGroups));
+  win.document.close();
+
+  // Try to print automatically after load
+  win.onload = ()=>{
+    try{ win.focus(); win.print(); }catch(e){}
+  };
+});
+
+/* ================= Refresh all ================= */
+function refreshAll(){
+  setStatus();
+  renderStudentList();
+
+  const set=getActiveSet();
+  if (!set){
+    $("winnerBox").textContent="Ready to spin 🎡";
+    $("hintLine").textContent="Options (⚙️) → paste a class set";
+    setBg("idle");
+    displayPool=null;
+    drawWheel(rot, null);
+    return;
+  }
+
+  normalizeSet(set);
+
+  if (!set.students.length){
+    $("winnerBox").textContent="This set is empty 🙂";
+    $("hintLine").textContent="Paste a class list in Options (⚙️).";
+    setBg("idle");
+    displayPool=null;
+    drawWheel(rot, null);
+    return;
+  }
+
+  $("winnerBox").textContent="Ready to spin 🎡";
+  $("hintLine").innerHTML=Click the wheel (or press <b>Space</b>);
+  setBg("idle");
+
+  if (displayPool === null) drawWheel(rot, null);
+  else drawWheel(rot, displayPool);
+}
+
+/* ================= Init ================= */
+function init(){
+  loadPrefs();
+  savePrefs();
+
+  loadSets();
+  createDefaultSetIfNone();
+
+  const remembered = loadActiveSet();
+  if (remembered && sets.some(s => s.id === remembered)) {
+    activeSetId = remembered;
+  } else {
+    activeSetId = sets[0]?.id || null;
+    saveActiveSet(activeSetId);
+  }
+
+  // init group preview area
+  renderGroupPreview(null);
+  $("printGroupsBtn").disabled = true;
+
+  renderSetButtons();
+  renderSetManager();
+  refreshAll();
+  renderTrashList();
+  drawWheel(rot, null);
+}
+init();
+  </script>
+</body>
+</html>
+
+ChatGPT said:
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Class Wheel of Fortune</title>
+
+  <!-- Single external stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- ✅ COPY/PASTE FIX: overrides any global user-select:none / touch-callout:none in styles.css -->
+  <style>
+    input, textarea, select, button {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+      -webkit-touch-callout: default !important; /* iOS long-press menu */
+    }
+    textarea, input, select {
+      -webkit-user-modify: read-write-plaintext-only;
+    }
+  </style>
+</head>
+
+<body class="page-wheel">
+  <nav class="appNav" aria-label="PHS Classroom Tools">
+    <a class="appNav__btn" href="index.html" data-nav="index">⏲ Smart Board</a>
+    <a class="appNav__btn" href="whiteboard.html" data-nav="whiteboard">🧑‍🏫 Whiteboard</a>
+    <a class="appNav__btn" href="wheel.html" data-nav="wheel">🎡 Wheel</a>
+    <a class="appNav__btn" href="timer.html" data-nav="timer">⏱ Quick Timer</a>
+    <a class="appNav__btn" href="noise.html" data-nav="noise">🔊 Noise</a>
+    <a class="appNav__btn" href="brainbreak.html" data-nav="brain">🧠 Brain Breaks</a>
+  </nav>
+
+  <div class="toast" id="toast">Saved</div>
+
+  <!-- OPTIONS MENU -->
+  <div class="controls">
+    <button id="optionsBtn" aria-haspopup="true" aria-expanded="false" title="Options">⚙️</button>
+
+    <div id="optionsMenu" class="hidden" role="menu" aria-label="Options menu">
+      <div class="menuHeader" id="menuHeader" title="Drag down to close">
+        <div>
+          <div class="menuTitle">Options</div>
+          <div class="menuHint">Click outside or drag down to close</div>
+        </div>
+        <button id="closeMenu" type="button" title="Close">✕</button>
+      </div>
+
+      <div class="menuBody">
+        <div class="menuRow">
+          <button id="fullscreenBtn" type="button">Full screen</button>
+          <button id="goPHSTimerBtn" type="button">Open PHSTimer →</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Spin speed</div>
+              <div class="smallNote">Short + snappy (still at least 1 full turn).</div>
+            </div>
+            <span class="valuePill"><span id="speedLabel">10</span>/30</span>
+          </div>
+          <input id="spinSpeed" class="u-w-100 u-mt-8" type="range" min="10" max="30" value="7" />
+        </div>
+
+        <div>
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Volume</div>
+              <div class="smallNote">Tick + win chime.</div>
+            </div>
+            <span class="valuePill"><span id="volLabel">40</span>%</span>
+          </div>
+          <input id="volume" class="u-w-100 u-mt-8" type="range" min="0" max="100" value="40" />
+        </div>
+
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Add / edit class sets (paste)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Paste anything: full export OR just names</div>
+          <div class="smallNote u-mt-8">
+            Works with: headers / partial columns / tab exports / CSV / or just a list like:
+            <b>Jake Jones</b><br>
+            <b>David Smith</b>
+          </div>
+
+          <div class="u-h-8"></div>
+          <textarea id="pasteBox" spellcheck="false" placeholder="Paste here…"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <input
+              id="pasteSetName"
+              type="text"
+              class="u-flex-1 u-minw-180"
+              placeholder="Set label (e.g. 11TEC1)"
+            />
+            <button id="importPasteBtn" type="button">Create set</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: sets save on this device. Exclusions apply only to the currently selected set.
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Relabel / delete sets</div>
+          <div id="setManager" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
+        <details>
+          <summary>Edit current set (add/remove entries)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Add entries (one per line)</div>
+          <div class="smallNote u-mt-8">Works for student names OR wheel options.</div>
+
+          <div class="u-h-8"></div>
+          <textarea
+            id="editAddBox"
+            spellcheck="false"
+            placeholder="e.g.
+Jake Jones
+Cleanup Duty
+Mana Award"></textarea>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="addEntriesBtn" type="button">Add to current set</button>
+            <button id="dedupeSetBtn" type="button" title="Remove duplicates by name">De-dupe</button>
+          </div>
+
+          <div class="smallNote u-mt-8">
+            Tip: Remove an item with the ✕ next to it in the list. You can restore removed items below.
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="menuRow menuRow--end">
+            <div>
+              <div class="miniLabel">Recently removed</div>
+              <div class="smallNote">Restore items deleted with ✕ (per set).</div>
+            </div>
+            <button id="restoreAllBtn" type="button" title="Restore all removed items for this set">Restore all</button>
+          </div>
+
+          <div class="u-h-8"></div>
+          <input
+            id="trashSearch"
+            type="text"
+            class="searchBox"
+            placeholder="Search removed items…"
+            style="box-shadow:none;"
+          />
+
+          <div class="u-h-8"></div>
+          <div id="trashList" class="u-grid-gap-8"></div>
+          <div class="smallNote u-mt-8" id="trashHint">No removed items.</div>
+        </details>
+
+        <div class="divider"></div>
+
+        <!-- ✅ Group maker -->
+        <details>
+          <summary>Group maker (random groups + print)</summary>
+          <div class="u-h-10"></div>
+
+          <div class="miniLabel">Group size</div>
+          <div class="smallNote u-mt-8">Choose a size, then “Spin to make groups”. Remainders are balanced (some groups get +1).</div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow" style="gap:8px;">
+            <input id="groupSize" type="number" min="2" max="20" value="4" class="u-minw-180" style="box-shadow:none;" />
+            <span class="pillBtn" title="Only students currently included on the wheel">
+              <input id="groupUseIncluded" type="checkbox" checked />
+              <label for="groupUseIncluded">Use included only</label>
+            </span>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="menuRow">
+            <button id="makeGroupsBtn" type="button">Spin to make groups</button>
+            <button id="printGroupsBtn" type="button" disabled>Print groups</button>
+          </div>
+
+          <div class="u-h-10"></div>
+          <div class="divider"></div>
+
+          <div class="miniLabel">Preview</div>
+          <div class="smallNote u-mt-8" id="groupPreviewHint">No groups yet.</div>
+          <div class="u-h-8"></div>
+          <div id="groupPreview" class="u-grid-gap-8"></div>
+        </details>
+
+        <div class="divider"></div>
+
+        <!-- ✅ Backup / Restore (Export + Import) -->
+        <div>
+          <div class="miniLabel">Backup / Restore</div>
+          <div class="smallNote u-mt-8">
+            Export or import ALL wheel data (sets + options).
+          </div>
+
+          <div class="u-h-8"></div>
+          <div class="menuRow">
+            <button id="exportWheelBtn" type="button">Export backup</button>
+            <button id="importWheelBtn" type="button">Import backup</button>
+            <input id="importWheelFile" type="file" accept=".json" style="display:none;" />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="menuRow">
+          <button id="resetOptionsBtn" type="button" title="Reset wheel options (keeps sets)">Reset options</button>
+          <button id="clearSetsBtn" class="danger" type="button" title="Delete all saved class sets">Clear all sets</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP -->
+  <div class="topBar">
+    <div class="titleWrap">
+      <p class="title">Class Wheel of Fortune</p>
+    </div>
+    <div class="chip" id="statusChip">No set loaded</div>
+  </div>
+
+  <div class="setRow" id="setRow" aria-label="Class set buttons"></div>
+
+  <!-- MAIN -->
+  <div class="grid">
+    <div class="wheelPanel">
+      <div class="confetti" id="confettiLayer" aria-hidden="true"></div>
+
+      <div class="wheelStage" id="wheelStage" title="Click to spin">
+        <div class="pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="1100" height="1100" aria-label="Wheel"></canvas>
+      </div>
+
+      <div class="winnerBox" id="winnerBox">Ready to spin 🎡</div>
+      <div class="hintLine" id="hintLine">Click the wheel (or press <b>Space</b>)</div>
+
+      <div class="btnRow">
+        <button class="primary" id="spinBtn" type="button">SPIN!</button>
+        <button id="includeAllBtn" type="button">Include all</button>
+        <button id="excludeAllBtn" type="button">Exclude all</button>
+      </div>
+    </div>
+
+    <div class="sidePanel">
+      <div class="miniLabel">Click an entry to include/exclude (✕ deletes)</div>
+
+      <div class="menuRow u-mt-8" style="gap:8px;">
+        <input
+          id="quickAddInput"
+          class="u-flex-1"
+          type="text"
+          placeholder="Quick add entry…"
+          style="min-width: 0;"
+        />
+        <button id="quickAddBtn" type="button" title="Add to current set">Add</button>
+      </div>
+      <div class="smallNote u-mt-8">Adds immediately to the current set (student name or wheel option).</div>
+
+      <div class="u-h-10"></div>
+
+      <input
+        id="searchBox"
+        class="searchBox"
+        type="text"
+        placeholder="Search name or option (e.g. 11HRI)"
+      />
+
+      <div class="statRow">
+        <div>Included: <span class="valuePill"><span id="includedCount">0</span></span></div>
+        <div>Excluded: <span class="valuePill"><span id="excludedCount">0</span></span></div>
+      </div>
+
+      <div class="toggleRow">
+        <span class="pillBtn" title="Tick sounds while spinning">
+          <input id="tickSoundOn" type="checkbox" />
+          <label for="tickSoundOn">Click sounds</label>
+        </span>
+
+        <span class="pillBtn" title="Confetti celebration">
+          <input id="confettiOn" type="checkbox" />
+          <label for="confettiOn">Confetti</label>
+        </span>
+
+        <span class="pillBtn" title="Winner will be excluded NEXT spin">
+          <input id="excludeWinnerOn" type="checkbox" />
+          <label for="excludeWinnerOn">Exclude winner</label>
+        </span>
+      </div>
+
+      <div class="list" id="studentList"></div>
+
+      <div class="footerRow smallNote">
+        <span id="freezeHint">Ready.</span>
+        <span><b>Space</b> to spin</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+/* =========================================================
+   Class Wheel – full working version
+   - 3 default wheels: Consequences / Treats / Brain Break
+   - automatic saving (debounced)
+   - delete warning + restore individually (trash)
+   - quick add field
+   - FIX: spacebar spins only when NOT typing + Options closed
+   - ✅ Export/Import full wheel backup (JSON)
+   - ✅ Group maker: choose size → spin animation → random groups → print
+   - ✅ COPY/PASTE FIX: allow selection + auto-focus pasteBox when menu opens
+   ========================================================= */
+
+const $ = (id) => document.getElementById(id);
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const safeText = (s) => (s ?? "").toString().trim();
+const stripBOM = (s) => (s ?? "").toString().replace(/^\uFEFF/, "");
+
+function storageOK(){
+  try{
+    const k="__storage_test__";
+    localStorage.setItem(k,"1");
+    localStorage.removeItem(k);
+    return true;
+  } catch(e){ return false; }
+}
+function debounce(fn, wait=250){
+  let t=null;
+  return (...args)=>{
+    clearTimeout(t);
+    t=setTimeout(()=>fn(...args), wait);
+  };
+}
+
+/* ================= Toast ================= */
+let toastTimer = null;
+function toast(msg){
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove("show"), 1100);
+}
+
+/* ================= Options menu ================= */
+const optionsBtn = $("optionsBtn");
+const optionsMenu = $("optionsMenu");
+const closeMenuBtn = $("closeMenu");
+const menuHeader = $("menuHeader");
+
+function openMenu(){
+  optionsMenu.classList.remove("hidden");
+  optionsBtn.setAttribute("aria-expanded","true");
+
+  // ✅ paste-friendly: focus the paste box when the menu opens (helps iPad/Chromebook)
+  setTimeout(()=>{ $("pasteBox")?.focus({ preventScroll:true }); }, 0);
+}
+function closeMenu(){ optionsMenu.classList.add("hidden"); optionsBtn.setAttribute("aria-expanded","false"); }
+function toggleMenu(){ optionsMenu.classList.contains("hidden") ? openMenu() : closeMenu(); }
+
+optionsBtn.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMenu(); });
+["pointerdown","click"].forEach(evt=>{
+  closeMenuBtn.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); closeMenu(); });
+});
+document.addEventListener("pointerdown",(e)=>{
+  if (optionsMenu.classList.contains("hidden")) return;
+  if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) closeMenu();
+});
+document.addEventListener("keydown",(e)=>{ if (e.key==="Escape") closeMenu(); });
+
+let dragStartY=null;
+menuHeader.addEventListener("pointerdown",(e)=>{ dragStartY=e.clientY; menuHeader.setPointerCapture(e.pointerId); });
+menuHeader.addEventListener("pointermove",(e)=>{
+  if (dragStartY===null) return;
+  if ((e.clientY - dragStartY) > 70){ dragStartY=null; closeMenu(); }
+});
+menuHeader.addEventListener("pointerup",()=> dragStartY=null);
+menuHeader.addEventListener("pointercancel",()=> dragStartY=null);
+
+/* ================= Fullscreen + nav ================= */
+$("fullscreenBtn").addEventListener("click", async ()=>{
+  try{
+    if (!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      $("fullscreenBtn").textContent = "Exit full screen";
+    } else {
+      await document.exitFullscreen();
+      $("fullscreenBtn").textContent = "Full screen";
+    }
+  } catch(e){ alert("Fullscreen blocked. Try F11."); }
+});
+document.addEventListener("fullscreenchange", ()=>{
+  $("fullscreenBtn").textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+});
+$("goPHSTimerBtn").addEventListener("click", ()=> window.location.href="index.html");
+
+/* ================= Preferences ================= */
+const PREF_KEY="wheel_prefs_v3";
+const SETS_KEY="wheel_sets_v3";
+const ACTIVE_SET_KEY="wheel_active_set_v3";
+
+function loadPrefs(){
+  try{
+    const raw=localStorage.getItem(PREF_KEY);
+    const p=raw?JSON.parse(raw):{};
+    $("tickSoundOn").checked = p.tick ?? true;
+    $("confettiOn").checked  = p.conf ?? true;
+    $("excludeWinnerOn").checked = p.exw ?? false;
+    $("spinSpeed").value = String(p.speed ?? 20);
+    $("volume").value = String(p.vol ?? 40);
+  }catch(e){
+    $("tickSoundOn").checked=true;
+    $("confettiOn").checked=true;
+    $("excludeWinnerOn").checked=false;
+    $("spinSpeed").value="20";
+    $("volume").value="40";
+  }
+  $("speedLabel").textContent = $("spinSpeed").value;
+  $("volLabel").textContent = $("volume").value;
+}
+
+function savePrefs(){
+  if (!storageOK()) return;
+  const p={
+    tick: $("tickSoundOn").checked,
+    conf: $("confettiOn").checked,
+    exw: $("excludeWinnerOn").checked,
+    speed: Number($("spinSpeed").value)||20,
+    vol: Number($("volume").value)||40
+  };
+  localStorage.setItem(PREF_KEY, JSON.stringify(p));
+}
+const savePrefsDebounced = debounce(()=>{ savePrefs(); toast("Saved"); }, 300);
+
+$("spinSpeed").addEventListener("input", ()=>{
+  $("speedLabel").textContent = $("spinSpeed").value;
+  savePrefsDebounced();
+});
+$("volume").addEventListener("input", ()=>{
+  $("volLabel").textContent = $("volume").value;
+  savePrefsDebounced();
+});
+["tickSoundOn","confettiOn","excludeWinnerOn"].forEach(id=>{
+  $(id).addEventListener("change", ()=>{ savePrefs(); toast("Saved"); });
+});
+
+function saveActiveSet(id){
+  if (!storageOK()) return;
+  localStorage.setItem(ACTIVE_SET_KEY, String(id || ""));
+}
+function loadActiveSet(){
+  if (!storageOK()) return null;
+  return localStorage.getItem(ACTIVE_SET_KEY) || null;
+}
+
+/* ================= Audio ================= */
+let audioCtx=null;
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state==="suspended") audioCtx.resume();
+}
+function getVol(){ return (Number($("volume").value)||40)/100; }
+
+function beep(freq=880, ms=70, type="sine", gain=0.22){
+  ensureAudio();
+  const t0=audioCtx.currentTime;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+
+  const v=gain*getVol();
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(v,t0+0.01);
+  g.gain.linearRampToValueAtTime(0.0001,t0+ms/1000);
+
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0+ms/1000+0.03);
+}
+function tick(){ beep(520, 22, "triangle", 0.22); }
+function winChime(){
+  beep(660, 130, "sine", 0.32);
+  setTimeout(()=>beep(880, 150, "sine", 0.32), 120);
+  setTimeout(()=>beep(990, 170, "sine", 0.32), 250);
+}
+document.addEventListener("pointerdown", ()=>{ ensureAudio(); }, { once:true });
+
+/* ================= Sets data ================= */
+let sets=[];
+let activeSetId=null;
+
+function uid(){ return "set_" + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+function getActiveSet(){ return sets.find(s=>s.id===activeSetId) || null; }
+
+function normalizeSet(s){
+  if (!s) return s;
+  if (!Array.isArray(s.students)) s.students = [];
+  if (!s.excludedIds) s.excludedIds = {};
+  if (!Array.isArray(s.trash)) s.trash = [];
+  return s;
+}
+
+function saveSets(){
+  if (!storageOK()) return;
+  localStorage.setItem(SETS_KEY, JSON.stringify(sets));
+}
+const saveSetsDebounced = debounce(()=>{ saveSets(); toast("Saved"); }, 350);
+
+function loadSets(){
+  if (!storageOK()) { sets=[]; return; }
+  try{
+    const raw=localStorage.getItem(SETS_KEY);
+    sets = raw ? JSON.parse(raw) : [];
+    sets.forEach(normalizeSet);
+  }catch(e){ sets=[]; }
+}
+
+function includedStudents(set){
+  normalizeSet(set);
+  const ex=set?.excludedIds || {};
+  return (set?.students || []).filter(st=>!ex[st.id]);
+}
+
+/* ================= Default sets (first run) ================= */
+const DEFAULT_CONSEQUENCES_NAME = "Default • Consequences";
+const DEFAULT_TREATS_NAME       = "Default • Treats";
+const DEFAULT_BRAINBREAK_NAME   = "Default • Brain Break";
+
+const DEFAULT_CONSEQUENCES = [
+  "Cleanup Duty","Help Tidy Classroom","Board Cleaning Duty","Pack-up Supervision",
+  "Seat Change","Extra Homework","5-Minute Quiet Reflection","Lunch Time Catch-Up",
+  "After-School Reflection","Teacher’s Choice","Contact Home","Lucky Escape"
+];
+const DEFAULT_TREATS = [
+  "Mana Award","Students Choice","Teacher Shout-Out","Positive Call Home",
+  "Early Pack-up Pass","Choose the Music (2 mins)","Free Choice Activity (5 mins)",
+  "Teachers Assistent","Class Vote","Spin Again"
+];
+const DEFAULT_BRAIN_BREAKS = [
+  "2-min stretch break","3-min walk + water","Quick doodle challenge (2 mins)",
+  "Would you rather (1 question)","Rock, Paper, Scissors","Trivia Question",
+  "Silent ball (3 mins)","Breathing reset (60s)","Desk tidy sprint (90s)"
+];
+
+function createDefaultSetIfNone(){
+  if (sets.length) return;
+
+  function makeSet(name, entries){
+    const setId = uid();
+    const students = entries.map((label, i) => ({
+      id: `${setId}::DEF:${i}`,
+      sid: "",
+      first: "",
+      last: "",
+      name: label,
+      form: "",
+      timetableClass: ""
+    }));
+    return normalizeSet({ id: setId, name, students, excludedIds: {}, trash: [] });
+  }
+
+  sets = [
+    makeSet(DEFAULT_CONSEQUENCES_NAME, DEFAULT_CONSEQUENCES),
+    makeSet(DEFAULT_TREATS_NAME, DEFAULT_TREATS),
+    makeSet(DEFAULT_BRAINBREAK_NAME, DEFAULT_BRAIN_BREAKS)
+  ];
+
+  const remembered = loadActiveSet();
+  const validRemembered = sets.some(s => s.id === remembered) ? remembered : null;
+  activeSetId = validRemembered || sets[1].id;
+
+  saveSets();
+  saveActiveSet(activeSetId);
+}
+
+/* =========================================================
+   Robust paste parsing
+   ========================================================= */
+function normHeader(h){
+  return (h||"")
+    .toString()
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g," ")
+    .replace(/[^\w ]/g,"");
+}
+function detectDelimiter(firstLine){
+  const line=firstLine||"";
+  const tab=(line.match(/\t/g)||[]).length;
+  const comma=(line.match(/,/g)||[]).length;
+  const semi=(line.match(/;/g)||[]).length;
+  if (tab>0) return "\t";
+  if (semi>comma) return ";";
+  return ",";
+}
+function parseCSVWithQuotes(text){
+  const rows=[];
+  let row=[], cur="", inQ=false;
+  for (let i=0;i<text.length;i++){
+    const ch=text[i], nxt=text[i+1];
+    if (ch === '"'){
+      if (inQ && nxt === '"'){ cur+='"'; i++; }
+      else inQ=!inQ;
+      continue;
+    }
+    if (!inQ && ch === ','){ row.push(cur); cur=""; continue; }
+    if (!inQ && ch === '\n'){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
+    if (ch !== '\r') cur += ch;
+  }
+  if (cur.length || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+function parseDelimited(text){
+  text = stripBOM(text).replace(/\r/g,"");
+  const lines=text.split("\n").filter(l=>l.trim()!=="");
+  if (!lines.length) return { rows:[], delim:"," };
+
+  const delim=detectDelimiter(lines[0]);
+  let rows=[];
+  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\n"));
+  else rows = lines.map(l => l.split(delim));
+
+  rows = rows.filter(r=>r.some(c=>safeText(c)!==""));
+  return { rows, delim };
+}
+function headerIndexMap(headers){
+  const map=new Map();
+  headers.forEach((h,i)=> map.set(normHeader(h), i));
+  return map;
+}
+
+const HEADER_ALIASES = {
+  id: ["student id","id","studentid","student number","student no","nsn"],
+  first: ["first name","firstname","given name","forename"],
+  last: ["last name","lastname","surname","family name"],
+  name: ["name","student name","full name"],
+  tutor: ["tutor","form","form class","formclass","homegroup","home group"],
+  tt: ["timetable class","class","tt class","timetable"]
+};
+
+function findAnyIndex(map, aliases){
+  for (const k of aliases){
+    if (map.has(k)) return map.get(k);
+  }
+  return -1;
+}
+function looksLikeHeaderRow(cells){
+  const joined = cells.map(normHeader).join(" ");
+  const hits = [
+    "student id","first name","last name","tutor","timetable class","name","surname","given name","form"
+  ].filter(k => joined.includes(k));
+  return hits.length >= 2;
+}
+function splitNameSmart(s){
+  s = safeText(s);
+  if (!s) return { first:"", last:"" };
+  if (s.includes(",")){
+    const [a,b] = s.split(",").map(x=>safeText(x));
+    return { first:b||"", last:a||"" };
+  }
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length===1) return { first:parts[0], last:"" };
+  return { first:parts.slice(0,-1).join(" "), last:parts.slice(-1).join("") };
+}
+
+function parseStudentsFlexible(text, setId){
+  const { rows, delim } = parseDelimited(text);
+  if (!rows.length) return { ok:false, reason:"Paste is empty." };
+
+  const firstRow = rows[0].map(safeText);
+  const headerMode = looksLikeHeaderRow(firstRow);
+
+  let headers = null, dataRows = null, map = null;
+  if (headerMode){
+    headers = firstRow;
+    dataRows = rows.slice(1);
+    map = headerIndexMap(headers);
+  } else {
+    dataRows = rows;
+  }
+
+  let iID=-1, iFirst=-1, iLast=-1, iName=-1, iTutor=-1, iTT=-1;
+  if (headerMode){
+    iID    = findAnyIndex(map, HEADER_ALIASES.id);
+    iFirst = findAnyIndex(map, HEADER_ALIASES.first);
+    iLast  = findAnyIndex(map, HEADER_ALIASES.last);
+    iName  = findAnyIndex(map, HEADER_ALIASES.name);
+    iTutor = findAnyIndex(map, HEADER_ALIASES.tutor);
+    iTT    = findAnyIndex(map, HEADER_ALIASES.tt);
+  }
+
+  const out=[];
+  const seenKey=new Set();
   function makeSetLocalId(seed){ return `${setId}::${seed}`; }
 
   for (let rIndex=0; rIndex<dataRows.length; rIndex++){
@@ -750,7 +5629,7 @@ function parseStudentsFlexible(text, setId){
 }
 
 /* ================= Add / Restore helpers ================= */
-function safeName(s){ return safeText(s).replace(/\\s+/g," ").trim(); }
+function safeName(s){ return safeText(s).replace(/\s+/g," ").trim(); }
 
 function makeNewEntry(name, setId){
   const base = safeName(name);
@@ -762,7 +5641,7 @@ function addTextEntriesToSet(set, rawText){
   const text = safeText(rawText);
   if (!text) return 0;
 
-  const lines = text.split(/\\r?\\n/).map(safeName).filter(Boolean);
+  const lines = text.split(/\r?\n/).map(safeName).filter(Boolean);
   if (!lines.length) return 0;
 
   const existing = new Set(set.students.map(s => (s.name || "").trim().toLowerCase()));
@@ -886,7 +5765,6 @@ function renderSetManager(){
       renderSetButtons();
       setStatus();
       saveSetsDebounced();
-      // update print header if preview exists
       if (lastGroups) renderGroupPreview(lastGroups);
     });
 
@@ -1072,7 +5950,7 @@ function renderTrashList(){
   }
 
   normalizeSet(set);
-  let items = (set.trash || []).slice().reverse(); // newest first
+  let items = (set.trash || []).slice().reverse();
   if (q) items = items.filter(x => (x.name||"").toLowerCase().includes(q));
 
   if (!set.trash.length){
@@ -1307,7 +6185,6 @@ $("dedupeSetBtn").addEventListener("click", ()=>{
   }
   set.students = next;
 
-  // clean excluded ids
   const validIds = new Set(set.students.map(s => s.id));
   const ex = set.excludedIds || {};
   for (const id of Object.keys(ex)){
@@ -1502,10 +6379,7 @@ function isTypingTarget(el){
 document.addEventListener("keydown",(e)=>{
   if (e.key !== " ") return;
 
-  // Options open? let space type normally.
   if (!optionsMenu.classList.contains("hidden")) return;
-
-  // Typing in a field? let space type normally.
   if (isTypingTarget(document.activeElement)) return;
 
   e.preventDefault();
@@ -1637,13 +6511,9 @@ $("importWheelFile").addEventListener("change", (e)=>{
       const ok = confirm("Importing will REPLACE all current sets and settings.\n\nContinue?");
       if (!ok){ e.target.value = ""; return; }
 
-      // restore sets
       sets = data.sets.map(normalizeSet);
-
-      // restore active set
       activeSetId = data.activeSetId || sets[0]?.id || null;
 
-      // restore prefs
       if (storageOK()){
         try{
           localStorage.setItem(PREF_KEY, JSON.stringify(data.prefs || {}));
@@ -1687,11 +6557,6 @@ function shuffle(arr){
   return a;
 }
 
-/**
- * Balanced grouping:
- * - Base size = groupSize
- * - Remainder distributed: first R groups get +1
- */
 function makeBalancedGroups(items, groupSize){
   const n = items.length;
   if (n === 0) return [];
@@ -1700,13 +6565,11 @@ function makeBalancedGroups(items, groupSize){
   const baseGroupCount = Math.max(1, Math.floor(n / size));
   const rem = n - (baseGroupCount * size);
 
-  // If size > n, just one group
   if (baseGroupCount === 0) return [items.slice()];
 
   const groups = [];
   let idx = 0;
 
-  // Build groups with base size, distribute remainder as +1 to first rem groups
   for (let g=0; g<baseGroupCount; g++){
     const extra = g < rem ? 1 : 0;
     const take = size + extra;
@@ -1714,12 +6577,10 @@ function makeBalancedGroups(items, groupSize){
     idx += take;
   }
 
-  // Safety: if anything left (shouldn't), append to last group
   if (idx < n){
     groups[groups.length-1].push(...items.slice(idx));
   }
 
-  // If we ended up with a tiny last group (e.g. size 5, n 6 -> baseGroupCount=1 rem=1 => group of 6 ok)
   return groups.filter(g => g.length);
 }
 
@@ -1798,7 +6659,6 @@ function getGroupPool(){
   return set.students.slice();
 }
 
-/* A short "spin effect" for group making (no winner) */
 function spinAnimation(pool, ms=1200){
   return new Promise((resolve)=>{
     const startRot = rot;
@@ -1838,17 +6698,12 @@ $("makeGroupsBtn").addEventListener("click", async ()=>{
 
   const size = clamp(Number($("groupSize").value)||4, 2, 20);
 
-  // Apply "exclude winner next spin" pending state before groups
   applyPendingExclude();
 
   const pool = getGroupPool();
   if (pool.length < 2){
     toast("Need at least 2 students");
     return;
-  }
-  if (pool.length < size){
-    // allow: one group with all
-    // still ok
   }
 
   spinning = true;
@@ -1858,7 +6713,6 @@ $("makeGroupsBtn").addEventListener("click", async ()=>{
   $("winnerBox").textContent = "Making groups…";
   $("hintLine").textContent = "Randomising 🍀";
 
-  // Keep wheel showing the pool used for groups
   displayPool = pool.slice();
 
   await spinAnimation(displayPool, clamp(1400 - (Number($("spinSpeed").value)||20)*25, 650, 1400));
@@ -1874,23 +6728,29 @@ $("makeGroupsBtn").addEventListener("click", async ()=>{
   lastGroups = groups;
   $("printGroupsBtn").disabled = !lastGroups.length;
 
-  // nice feedback
   $("winnerBox").textContent = `Groups made ✅ (${groups.length} group${groups.length===1?"":"s"})`;
   $("hintLine").innerHTML = `Open Options (⚙️) → Group maker → <b>Print groups</b>`;
 
   renderGroupPreview(groups);
 
-  // redraw wheel in whatever state it was (keep pool shown)
   drawWheel(rot, displayPool);
   toast("Groups created");
 });
+
+function escapeHTML(s){
+  return String(s ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
 
 function buildPrintHTML(groups){
   const set = getActiveSet();
   const setName = (set?.name || "Class Groups").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const when = new Date().toLocaleString();
 
-  // Build columns that flow nicely when printed
   let body = "";
   for (let i=0; i<groups.length; i++){
     const names = groups[i].slice().map(x=>x.name || "").filter(Boolean).sort((a,b)=>a.localeCompare(b));
@@ -1906,6 +6766,8 @@ function buildPrintHTML(groups){
     `;
   }
 
+  const total = groups.reduce((a,g)=>a+g.length,0);
+
   return `<!doctype html>
   <html>
   <head>
@@ -1913,83 +6775,29 @@ function buildPrintHTML(groups){
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${setName} — Groups</title>
     <style>
-      :root{
-        --ink:#111;
-        --muted:#666;
-        --card:#ffffff;
-        --line:#e7e7e7;
-      }
+      :root{ --ink:#111; --muted:#666; --card:#fff; --line:#e7e7e7; }
       html,body{ margin:0; padding:0; color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
       .page{ padding: 24px; }
       .header{
-        display:flex;
-        justify-content:space-between;
-        align-items:flex-end;
-        gap:16px;
-        border-bottom: 2px solid var(--line);
-        padding-bottom: 14px;
-        margin-bottom: 18px;
+        display:flex; justify-content:space-between; align-items:flex-end; gap:16px;
+        border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
       }
-      .title{
-        font-size: 22px;
-        font-weight: 900;
-        letter-spacing: .2px;
-      }
-      .sub{
-        color:var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        margin-top: 4px;
-      }
-      .meta{
-        text-align:right;
-        color:var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-      }
-      .grid{
-        display:grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }
+      .title{ font-size: 22px; font-weight: 900; letter-spacing: .2px; }
+      .sub{ color:var(--muted); font-size: 12px; font-weight: 700; margin-top: 4px; }
+      .meta{ text-align:right; color:var(--muted); font-size: 12px; font-weight: 700; }
+      .grid{ display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
       .card{
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 12px 14px;
-        break-inside: avoid;
-        page-break-inside: avoid;
-        background: var(--card);
+        border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
+        break-inside: avoid; page-break-inside: avoid; background: var(--card);
       }
-      .cardHead{
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom: 10px;
-      }
-      .groupTitle{
-        font-weight: 1000;
-        font-size: 16px;
-      }
+      .cardHead{ display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; }
+      .groupTitle{ font-weight: 1000; font-size: 16px; }
       .pill{
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-weight: 900;
-        font-size: 12px;
-        color: #222;
+        border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+        font-weight: 900; font-size: 12px; color: #222;
       }
-      .names{
-        margin: 0;
-        padding-left: 18px;
-        columns: 2;
-        column-gap: 18px;
-      }
-      .names li{
-        margin: 4px 0;
-        font-weight: 800;
-        font-size: 13px;
-        break-inside: avoid;
-      }
+      .names{ margin: 0; padding-left: 18px; columns: 2; column-gap: 18px; }
+      .names li{ margin: 4px 0; font-weight: 800; font-size: 13px; break-inside: avoid; }
       @media print{
         .page{ padding: 0; }
         .grid{ gap: 10px; }
@@ -2007,7 +6815,7 @@ function buildPrintHTML(groups){
         </div>
         <div class="meta">
           ${escapeHTML(when)}<br/>
-          ${groups.length} group${groups.length===1?"":"s"} • ${groups.reduce((a,g)=>a+g.length,0)} student${groups.reduce((a,g)=>a+g.length,0)===1?"":"s"}
+          ${groups.length} group${groups.length===1?"":"s"} • ${total} student${total===1?"":"s"}
         </div>
       </div>
       <div class="grid">
@@ -2016,15 +6824,6 @@ function buildPrintHTML(groups){
     </div>
   </body>
   </html>`;
-}
-
-function escapeHTML(s){
-  return String(s ?? "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
 }
 
 $("printGroupsBtn").addEventListener("click", ()=>{
@@ -2040,11 +6839,7 @@ $("printGroupsBtn").addEventListener("click", ()=>{
   win.document.open();
   win.document.write(buildPrintHTML(lastGroups));
   win.document.close();
-
-  // Try to print automatically after load
-  win.onload = ()=>{
-    try{ win.focus(); win.print(); }catch(e){}
-  };
+  win.onload = ()=>{ try{ win.focus(); win.print(); }catch(e){} };
 });
 
 /* ================= Refresh all ================= */
@@ -2097,7 +6892,6 @@ function init(){
     saveActiveSet(activeSetId);
   }
 
-  // init group preview area
   renderGroupPreview(null);
   $("printGroupsBtn").disabled = true;
 
@@ -2111,3 +6905,6 @@ init();
   </script>
 </body>
 </html>
+
+
+
