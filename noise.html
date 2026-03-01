@@ -10,6 +10,31 @@
 
   <!-- Tiny page-specific styles (keeps shared styles.css untouched) -->
   <style>
+    /* ===== OPTIONS MENU: make it scroll instead of running off-screen ===== */
+.page-noise #optionsMenu{
+  /* keep your width rule */
+  width: min(520px, calc(100vw - 20px));
+
+  /* NEW: constrain to viewport height */
+  max-height: calc(100vh - 90px); /* room for nav + breathing space */
+  overflow: hidden;              /* menuBody will scroll */
+}
+
+/* Make the header stay visible while scrolling */
+.page-noise #optionsMenu .menuHeader{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* NEW: scrollable body */
+.page-noise #optionsMenu .menuBody{
+  max-height: calc(100vh - 170px); /* subtract header + margins */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* smooth on iPad */
+  overscroll-behavior: contain;      /* stops page scroll “rubber band” */
+  padding-bottom: 16px;             /* so last items aren’t cramped */
+}
     .noiseCard{
       width: min(620px, calc(100% - 28px));
       background: var(--card);
