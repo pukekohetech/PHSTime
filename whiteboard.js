@@ -174,6 +174,88 @@
     showToast._t = setTimeout(() => toast.classList.remove("show"), 1200);
   }
 
+     // ---------- Stroke smoothing (CapsLock while drawing) ----------
+  function dist2(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  }
+
+  function pointLineDistance(p, a, b) {
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const wx = p.x - a.x, wy = p.y - a.y;
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) return Math.hypot(p.x - b.x, p.y - b.y);
+    const t = c1 / c2;
+    const projX = a.x + t * vx, projY = a.y + t * vy;
+    return Math.hypot(p.x - projX, p.y - projY);
+  }
+
+  // Ramer–Douglas–Peucker simplification
+  function simplifyRDP(points, epsilon) {
+    if (!points || points.length <= 2) return points ? points.slice() : [];
+    const first = points[0];
+    const last = points[points.length - 1];
+
+    let index = -1;
+    let maxDist = 0;
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const d = pointLineDistance(points[i], first, last);
+      if (d > maxDist) {
+        maxDist = d;
+        index = i;
+      }
+    }
+
+    if (maxDist > epsilon && index !== -1) {
+      const left = simplifyRDP(points.slice(0, index + 1), epsilon);
+      const right = simplifyRDP(points.slice(index), epsilon);
+      return left.slice(0, -1).concat(right);
+    }
+    return [first, last];
+  }
+
+  // Chaikin corner cutting (smooth curve)
+  function chaikinSmooth(points, iterations = 2) {
+    if (!points || points.length < 3) return points ? points.slice() : [];
+    let pts = points.slice();
+    for (let it = 0; it < iterations; it++) {
+      const out = [pts[0]];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i];
+        const p1 = pts[i + 1];
+        const q = { x: 0.75 * p0.x + 0.25 * p1.x, y: 0.75 * p0.y + 0.25 * p1.y };
+        const r = { x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y };
+        out.push(q, r);
+      }
+      out.push(pts[pts.length - 1]);
+      pts = out;
+      if (pts.length > 1600) break; // safety cap
+    }
+    return pts;
+  }
+
+  function smoothStrokePoints(points, sizePx) {
+    if (!points || points.length < 3) return points ? points.slice() : [];
+    // Epsilon tuned to brush size; bigger brush tolerates more smoothing
+    const eps = clamp((sizePx || 5) * 0.35, 1.2, 6.5);
+
+    // 1) remove jitter/noise
+    let pts = simplifyRDP(points, eps);
+
+    // 2) smooth corners
+    pts = chaikinSmooth(pts, 2);
+
+    // 3) remove any accidental duplicates (helps rendering)
+    const cleaned = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      if (dist2(pts[i], cleaned[cleaned.length - 1]) > 0.01) cleaned.push(pts[i]);
+    }
+    return cleaned;
+  }
+   
   // Sizing uses the stage
   function stageRect() {
     return stage.getBoundingClientRect();
@@ -1430,7 +1512,7 @@ function setActiveTool(tool) {
   const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
 
   const gesture = {
-    active: false,
+    active: false,   
     pointerId: null,
     mode: "none",
     startWorld: null,
@@ -1439,6 +1521,8 @@ function setActiveTool(tool) {
     lastScreen: null,
     activeObj: null,
 
+    strokeSmooth: false,
+     
     // For transform handles (stable, non-accumulating)
     selIndex: -1,
     selStartObj: null,
@@ -1468,6 +1552,7 @@ function setActiveTool(tool) {
     gesture.lastWorld = null;
     gesture.lastScreen = null;
     gesture.activeObj = null;
+    gesture.strokeSmooth = false;
     hideMeasureTip();
 
     gesture.selIndex = -1;
@@ -1770,7 +1855,8 @@ function setActiveTool(tool) {
     clearRedo();
     state.selectionIndex = -1;
 
-    if (state.tool === "pen") {
+     if (state.tool === "pen") {
+      gesture.strokeSmooth = e.getModifierState("CapsLock"); // ✅ hold/toggle CapsLock for smoother ink
       const obj = { kind: "stroke", color: state.color, size: state.size, points: [w] };
       state.objects.push(obj);
       gesture.activeObj = obj;
@@ -2095,7 +2181,17 @@ if (!gesture.active) return;
 
     // Drawing: stroke / erase
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
-      gesture.activeObj.points.push(w);
+      // For pen: if CapsLock is on at any point, we’ll smooth on pointerup
+      if (gesture.mode === "drawStroke" && e.getModifierState("CapsLock")) gesture.strokeSmooth = true;
+
+      // Light point throttling to reduce jaggies (still feels responsive)
+      const pts = gesture.activeObj.points;
+      const last = pts[pts.length - 1];
+      const minDist = gesture.mode === "drawStroke" ? 0.6 : 0.8; // world px
+      if (!last || Math.hypot(w.x - last.x, w.y - last.y) >= minDist) {
+        pts.push(w);
+      }
+
       redrawAll();
       return;
     }
@@ -2183,11 +2279,21 @@ if (!gesture.active) return;
     }
   }
 
-  function onPointerUp() {
+   function onPointerUp() {
     if (!gesture.active) return;
     try {
       inkCanvas.releasePointerCapture(gesture.pointerId);
     } catch {}
+
+    // ✅ If this was a pen stroke and CapsLock smoothing was used, smooth the final points
+    if (gesture.activeObj && gesture.activeObj.kind === "stroke" && gesture.strokeSmooth) {
+      const obj = gesture.activeObj;
+      obj.points = smoothStrokePoints(obj.points || [], obj.size || state.size);
+
+      // Optional: a tiny toast so you know it happened
+      // showToast("Smoothed");
+    }
+
     hardResetGesture();
     updateCursorFromTool();
   }
