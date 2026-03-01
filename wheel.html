@@ -581,12 +581,13 @@ function normHeader(h){
     .replace(/[^\\w ]/g,"");
 }
 function detectDelimiter(firstLine){
-  const line=firstLine||"";
-  const tab=(line.match(/\\t/g)||[]).length;
-  const comma=(line.match(/,/g)||[]).length;
-  const semi=(line.match(/;/g)||[]).length;
-  if (tab>0) return "\\t";
-  if (semi>comma) return ";";
+  const line = firstLine || "";
+  const tab  = (line.match(/\t/g) || []).length;
+  const comma= (line.match(/,/g)  || []).length;
+  const semi = (line.match(/;/g)  || []).length;
+
+  if (tab > 0) return "\t";      // ✅ REAL TAB (not "\\t")
+  if (semi > comma) return ";";
   return ",";
 }
 function parseCSVWithQuotes(text){
