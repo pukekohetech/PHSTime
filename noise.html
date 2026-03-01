@@ -20,7 +20,21 @@
       overflow: hidden;
       margin-top: 70px; /* room for fixed appNav */
     }
+.page-noise details{
+  border-radius: 14px;
+  background: rgba(0,0,0,0.06);
+  padding: 10px 12px;
+}
 
+.page-noise details + details{ margin-top: 10px; }
+
+.page-noise summary{
+  cursor: pointer;
+  font-weight: 900;
+  list-style: none;
+}
+
+.page-noise summary::-webkit-details-marker{ display:none; }
     .noiseTitleRow{
       display:flex;
       align-items:center;
