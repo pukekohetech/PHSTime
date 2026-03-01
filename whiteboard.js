@@ -2475,7 +2475,7 @@ if (!gesture.active) return;
       }
     }
 
-    const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse"));
+    const els = Array.from(svg.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse,text"));
     if (!els.length && !pendingBg) {
       showToast("No SVG paths");
       return;
@@ -2599,6 +2599,34 @@ if (!gesture.active) return;
         pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
         continue;
       }
+       if (tag === "text") {
+  const fill = el.getAttribute("fill");
+  const color = !isNone(fill) ? fill : strokeOf(el); // fall back safely
+
+  const fontSize = parseNumberAttr(el.getAttribute("font-size")) ?? 20;
+
+  // SVG text position
+  const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
+  const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
+
+  // Map through CTM (and remove camera if round-trip)
+  const p = mapCTM(el, x, y);
+
+  const text = (el.textContent || "").trim();
+  if (!text) continue;
+
+  // Optional: try to read rotate() from the element transform (simple cases)
+  let rot = 0;
+  const tf = String(el.getAttribute("transform") || "");
+  const m = tf.match(/rotate\(\s*([-\d.]+)/i);
+  if (m) rot = (parseFloat(m[1]) || 0) * Math.PI / 180;
+
+  pushPart(
+    { kind: "text", x: p.x, y: p.y, text, color, fontSize, rot },
+    [p]
+  );
+  continue;
+}
 
       if (tag === "polyline" || tag === "polygon") {
         const ptsAttr = (el.getAttribute("points") || "").trim();
