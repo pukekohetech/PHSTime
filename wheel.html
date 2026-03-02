@@ -582,15 +582,11 @@ function normHeader(h){
 }
 function detectDelimiter(firstLine){
   const line = firstLine || "";
-
-  // ✅ REAL tab character
   const tab   = (line.match(/\t/g) || []).length;
-
-  // commas + semicolons are normal
   const comma = (line.match(/,/g)  || []).length;
   const semi  = (line.match(/;/g)  || []).length;
 
-  if (tab > 0) return "\t";     // ✅ REAL TAB
+  if (tab > 0) return "\t";
   if (semi > comma) return ";";
   return ",";
 }
@@ -614,7 +610,7 @@ function parseCSVWithQuotes(text){
 }
 
 
-    function parseDelimited(text){
+ function parseDelimited(text){
   text = stripBOM(text);
 
   // ✅ Preserve rows: normalize all line endings to \n
