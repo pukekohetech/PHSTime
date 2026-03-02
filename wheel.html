@@ -606,25 +606,34 @@ function parseCSVWithQuotes(text){
       continue;
     }
     if (!inQ && ch === ','){ row.push(cur); cur=""; continue; }
-    if (!inQ && ch === '\\n'){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
-    if (ch !== '\\r') cur += ch;
+   if (!inQ && ch === '\n'){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
+   if (ch !== '\r') cur += ch;
   }
   if (cur.length || row.length){ row.push(cur); rows.push(row); }
   return rows;
 }
-function parseDelimited(text){
-  text = stripBOM(text).replace(/\\r/g,"");
-  const lines=text.split("\\n").filter(l=>l.trim()!=="");
+
+
+    function parseDelimited(text){
+  text = stripBOM(text);
+
+  // ✅ Preserve rows: normalize all line endings to \n
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const lines = text.split("\n").filter(l => l.trim() !== "");
   if (!lines.length) return { rows:[], delim:"," };
 
-  const delim=detectDelimiter(lines[0]);
-  let rows=[];
-  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\\n"));
+  const delim = detectDelimiter(lines[0]);
+  let rows = [];
+
+  if (delim === ",") rows = parseCSVWithQuotes(lines.join("\n"));
   else rows = lines.map(l => l.split(delim));
 
-  rows = rows.filter(r=>r.some(c=>safeText(c)!==""));
+  rows = rows.filter(r => r.some(c => safeText(c) !== ""));
   return { rows, delim };
 }
+
+    
 function headerIndexMap(headers){
   const map=new Map();
   headers.forEach((h,i)=> map.set(normHeader(h), i));
