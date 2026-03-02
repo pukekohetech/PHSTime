@@ -1818,7 +1818,7 @@ function setActiveTool(tool) {
     if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
       let p0 = w;
       const isSnapShape = state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle";
-      const ctrlHeld = e.getModifierState("CapsLock");
+      const ctrlHeld = !e.getModifierState("CapsLock");
 
       if (isSnapShape) {
         if (ctrlHeld) {
