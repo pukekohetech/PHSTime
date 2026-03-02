@@ -238,7 +238,10 @@ function styleOpacity(el) {
   const a = (so == null ? 1 : so) * (o == null ? 1 : o);
   return clamp01(a);
 }
-
+function isNone(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return !s || s === "none" || s === "transparent";
+}
      // ---------- Stroke smoothing (CapsLock while drawing) ----------
   function dist2(a, b) {
     const dx = a.x - b.x, dy = a.y - b.y;
@@ -2694,10 +2697,7 @@ if (!gesture.active) return;
       if (ptsForBounds && ptsForBounds.length) boundsPts.push(...ptsForBounds);
     }
 
-    const isNone = (v) => {
-      const s = String(v || "").trim().toLowerCase();
-      return !s || s === "none" || s === "transparent";
-    };
+ 
 
     function strokeOf(el) {
       const stroke = el.getAttribute("stroke");
