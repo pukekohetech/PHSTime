@@ -174,6 +174,71 @@
     showToast._t = setTimeout(() => toast.classList.remove("show"), 1200);
   }
 
+   function getComputed(el) {
+  try { return window.getComputedStyle(el); } catch { return null; }
+}
+function readStyleOrAttr(el, cssProp, attrName) {
+  // priority: attribute -> inline style -> computed style
+  const a = el.getAttribute(attrName);
+  if (a != null && String(a).trim() !== "") return String(a).trim();
+
+  const inline = (el.style && el.style.getPropertyValue(cssProp)) ? el.style.getPropertyValue(cssProp).trim() : "";
+  if (inline) return inline;
+
+  const cs = getComputed(el);
+  const comp = cs ? String(cs.getPropertyValue(cssProp) || "").trim() : "";
+  return comp || "";
+}
+function parseNum(v) {
+  const n = parseFloat(String(v || "").replace(/px$/, ""));
+  return Number.isFinite(n) ? n : null;
+}
+function parseDashArray(v) {
+  const s = String(v || "").trim();
+  if (!s || s === "none") return null;
+  const nums = s.split(/[\s,]+/).map(parseFloat).filter(Number.isFinite);
+  return nums.length ? nums : null;
+}
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+function styleStroke(el) {
+  const v = readStyleOrAttr(el, "stroke", "stroke");
+  if (!isNone(v)) return v;
+  // sometimes editors use "currentColor"
+  const cc = readStyleOrAttr(el, "color", "color");
+  if (!isNone(cc) && v === "currentColor") return cc;
+  return "#111111";
+}
+function styleStrokeWidth(el) {
+  const v = readStyleOrAttr(el, "stroke-width", "stroke-width");
+  const n = parseNum(v);
+  return Math.max(1, n ?? 3);
+}
+function styleLineCap(el) {
+  const v = readStyleOrAttr(el, "stroke-linecap", "stroke-linecap");
+  const s = String(v || "").trim();
+  return (s === "butt" || s === "square" || s === "round") ? s : "round";
+}
+function styleLineJoin(el) {
+  const v = readStyleOrAttr(el, "stroke-linejoin", "stroke-linejoin");
+  const s = String(v || "").trim();
+  return (s === "miter" || s === "bevel" || s === "round") ? s : "round";
+}
+function styleDash(el) {
+  const da = readStyleOrAttr(el, "stroke-dasharray", "stroke-dasharray");
+  const dash = parseDashArray(da);
+  if (!dash) return null;
+  const off = parseNum(readStyleOrAttr(el, "stroke-dashoffset", "stroke-dashoffset")) || 0;
+  return { dash, dashOffset: off };
+}
+function styleOpacity(el) {
+  // combine stroke-opacity * opacity if present
+  const so = parseNum(readStyleOrAttr(el, "stroke-opacity", "stroke-opacity"));
+  const o  = parseNum(readStyleOrAttr(el, "opacity", "opacity"));
+  const a = (so == null ? 1 : so) * (o == null ? 1 : o);
+  return clamp01(a);
+}
+
      // ---------- Stroke smoothing (CapsLock while drawing) ----------
   function dist2(a, b) {
     const dx = a.x - b.x, dy = a.y - b.y;
@@ -822,27 +887,41 @@ function setActiveTool(tool) {
     ctx.scale(state.zoom, state.zoom);
   }
 
-  function drawInkObject(obj) {
-    inkCtx.save();
-    applyWorldTransform(inkCtx);
+function drawInkObject(obj) {
+  inkCtx.save();
+  applyWorldTransform(inkCtx);
 
-    inkCtx.lineCap = "round";
-    inkCtx.lineJoin = "round";
+  // ✅ Use object styling instead of forcing round
+  inkCtx.lineCap = obj.lineCap || "round";
+  inkCtx.lineJoin = obj.lineJoin || "round";
+  inkCtx.globalAlpha = (obj.opacity == null ? 1 : obj.opacity);
 
-    if (obj.kind === "stroke") {
-      inkCtx.globalCompositeOperation = "source-over";
-      inkCtx.strokeStyle = obj.color;
-      inkCtx.lineWidth = obj.size;
-      inkCtx.beginPath();
-      const pts = obj.points || [];
-      if (pts.length) {
-        inkCtx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) inkCtx.lineTo(pts[i].x, pts[i].y);
+  // ✅ Dash support
+  if (obj.dash && Array.isArray(obj.dash) && obj.dash.length) {
+    inkCtx.setLineDash(obj.dash);
+    inkCtx.lineDashOffset = obj.dashOffset || 0;
+  } else {
+    inkCtx.setLineDash([]);
+    inkCtx.lineDashOffset = 0;
+  }
+
+  if (obj.kind === "stroke") {
+    inkCtx.globalCompositeOperation = "source-over";
+    inkCtx.strokeStyle = obj.color;
+    inkCtx.lineWidth = obj.size;
+
+    inkCtx.beginPath();
+    const pts = obj.points || [];
+    if (pts.length) {
+      inkCtx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        inkCtx.lineTo(pts[i].x, pts[i].y);
       }
-      inkCtx.stroke();
-      inkCtx.restore();
-      return;
     }
+    inkCtx.stroke();
+    inkCtx.restore();
+    return;
+  }
 
     if (obj.kind === "erase") {
       inkCtx.globalCompositeOperation = "destination-out";
@@ -859,27 +938,45 @@ function setActiveTool(tool) {
       return;
     }
 
-    if (obj.kind === "text") {
-      inkCtx.globalCompositeOperation = "source-over";
-      inkCtx.fillStyle = obj.color;
-      inkCtx.textBaseline = "top";
+if (obj.kind === "text") {
+  inkCtx.globalCompositeOperation = "source-over";
+  inkCtx.fillStyle = obj.color || "#111111";
 
-      const m = textMetrics(obj);
-      inkCtx.font = `700 ${m.fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+  // ✅ opacity from imported SVG (defaults to 1)
+  inkCtx.globalAlpha = (obj.opacity == null ? 1 : obj.opacity);
 
-      // Rotate around the *center* of the text box so it stays inside its bounds.
-      const cx = obj.x + m.w / 2;
-      const cy = obj.y + m.h / 2;
+  // Metrics + font
+  const m = textMetrics(obj);
+  inkCtx.font = `${obj.fontWeight || 700} ${m.fontSize}px ${
+    obj.fontFamily || "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+  }`;
 
-      inkCtx.save();
-      inkCtx.translate(cx, cy);
-      if (obj.rot) inkCtx.rotate(obj.rot);
-      inkCtx.fillText(obj.text, -m.w / 2, -m.h / 2);
-      inkCtx.restore();
+  // ✅ anchor support (SVG text-anchor)
+  const anchor = obj.anchor || "start"; // start | middle | end
+  inkCtx.textAlign = anchor === "middle" ? "center" : anchor === "end" ? "right" : "left";
+  inkCtx.textBaseline = "middle"; // makes centering simple
 
-      inkCtx.restore();
-      return;
-    }
+  // Rotate around the center of the text box
+  const cx = obj.x + m.w / 2;
+  const cy = obj.y + m.h / 2;
+
+  inkCtx.save();
+  inkCtx.translate(cx, cy);
+  if (obj.rot) inkCtx.rotate(obj.rot);
+
+  // draw at box center, but shift X based on anchor
+  // start = left edge, middle = center, end = right edge
+  const xAt =
+    anchor === "start" ? -m.w / 2 :
+    anchor === "middle" ? 0 :
+    +m.w / 2;
+
+  inkCtx.fillText(obj.text || "", xAt, 0);
+  inkCtx.restore();
+
+  inkCtx.restore();
+  return;
+}
 
     inkCtx.globalCompositeOperation = "source-over";
     inkCtx.strokeStyle = obj.color;
@@ -2660,8 +2757,12 @@ if (!gesture.active) return;
         continue;
       }
 
-      const stroke = strokeOf(el);
-      const size = strokeWidthOf(el);
+      const stroke = styleStroke(el);
+       const size = styleStrokeWidth(el);
+       const lineCap = styleLineCap(el);
+       const lineJoin = styleLineJoin(el);
+       const dashInfo = styleDash(el);
+       const opacity = styleOpacity(el);
 
       if (tag === "line") {
         const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
@@ -2670,7 +2771,7 @@ if (!gesture.active) return;
         const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
         const p1 = mapCTM(el, x1, y1);
         const p2 = mapCTM(el, x2, y2);
-        pushPart({ kind: "line", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+       pushPart({   kind: "line",   color: stroke,   size,   lineCap,   lineJoin,   dash: dashInfo ? dashInfo.dash : null,   dashOffset: dashInfo ? dashInfo.dashOffset : 0,   opacity,   x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,   rot: 0 }, [p1, p2]);
         continue;
       }
 
@@ -2681,7 +2782,7 @@ if (!gesture.active) return;
         const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
         const p1 = mapCTM(el, x, y);
         const p2 = mapCTM(el, x + w, y + h);
-        pushPart({ kind: "rect", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+        pushPart({   kind: "line",   color: stroke,   size,   lineCap,   lineJoin,   dash: dashInfo ? dashInfo.dash : null,   dashOffset: dashInfo ? dashInfo.dashOffset : 0,   opacity,   x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,   rot: 0 }, [p1, p2]);
         continue;
       }
 
@@ -2691,7 +2792,18 @@ if (!gesture.active) return;
         const r = parseNumberAttr(el.getAttribute("r")) ?? 0;
         const p1 = mapCTM(el, cx - r, cy - r);
         const p2 = mapCTM(el, cx + r, cy + r);
-        pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+       pushPart({
+  kind: "line",
+  color: stroke,
+  size,
+  lineCap,
+  lineJoin,
+  dash: dashInfo ? dashInfo.dash : null,
+  dashOffset: dashInfo ? dashInfo.dashOffset : 0,
+  opacity,
+  x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+  rot: 0
+}, [p1, p2]);
         continue;
       }
 
@@ -2702,18 +2814,63 @@ if (!gesture.active) return;
         const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
         const p1 = mapCTM(el, cx - rx, cy - ry);
         const p2 = mapCTM(el, cx + rx, cy + ry);
-        pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
+       pushPart({
+  kind: "line",
+  color: stroke,
+  size,
+  lineCap,
+  lineJoin,
+  dash: dashInfo ? dashInfo.dash : null,
+  dashOffset: dashInfo ? dashInfo.dashOffset : 0,
+  opacity,
+  x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+  rot: 0
+}, [p1, p2]);
         continue;
       }
-       if (tag === "text") {
-  const fill = el.getAttribute("fill");
-  const color = !isNone(fill) ? fill : strokeOf(el); // fall back safely
+     if (tag === "text") {
+  // --- computed/inline/attr style reads ---
+  const cs = getComputed(el);
 
-  const fontSize = parseNumberAttr(el.getAttribute("font-size")) ?? 20;
+  // Prefer fill for text color (common), else fall back to stroke/color
+  const fill = readStyleOrAttr(el, "fill", "fill");
+  const stroke = readStyleOrAttr(el, "stroke", "stroke");
+  const color = !isNone(fill) ? fill : (!isNone(stroke) ? stroke : "#111111");
 
-  // SVG text position
-  const x = parseNumberAttr(el.getAttribute("x")) ?? 0;
-  const y = parseNumberAttr(el.getAttribute("y")) ?? 0;
+  // Font size: attr/style/computed (px assumed)
+  const fontSize =
+    parseNum(readStyleOrAttr(el, "font-size", "font-size")) ??
+    20;
+
+  const fontFamily =
+    (cs && cs.getPropertyValue("font-family").trim()) ||
+    (el.getAttribute("font-family") || "").trim() ||
+    "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+
+  const fontWeight =
+    (cs && cs.getPropertyValue("font-weight").trim()) ||
+    (el.getAttribute("font-weight") || "").trim() ||
+    "700";
+
+  // Text anchor: start | middle | end
+  const anchor =
+    (cs && cs.getPropertyValue("text-anchor").trim()) ||
+    (el.getAttribute("text-anchor") || "").trim() ||
+    "start";
+
+  // Opacity (combine element opacity + fill-opacity if present)
+  const opacity = (() => {
+    const o = parseNum(readStyleOrAttr(el, "opacity", "opacity"));
+    const fo = parseNum(readStyleOrAttr(el, "fill-opacity", "fill-opacity"));
+    const a = (o == null ? 1 : o) * (fo == null ? 1 : fo);
+    return Math.max(0, Math.min(1, Number.isFinite(a) ? a : 1));
+  })();
+
+  // SVG text position (x/y can be lists; take first)
+  const xAttr = (el.getAttribute("x") || "0").trim().split(/[\s,]+/)[0];
+  const yAttr = (el.getAttribute("y") || "0").trim().split(/[\s,]+/)[0];
+  const x = parseNum(xAttr) ?? 0;
+  const y = parseNum(yAttr) ?? 0;
 
   // Map through CTM (and remove camera if round-trip)
   const p = mapCTM(el, x, y);
@@ -2721,61 +2878,30 @@ if (!gesture.active) return;
   const text = (el.textContent || "").trim();
   if (!text) continue;
 
-  // Optional: try to read rotate() from the element transform (simple cases)
+  // Try to read rotate() from element transform (simple cases)
   let rot = 0;
   const tf = String(el.getAttribute("transform") || "");
   const m = tf.match(/rotate\(\s*([-\d.]+)/i);
-  if (m) rot = (parseFloat(m[1]) || 0) * Math.PI / 180;
+  if (m) rot = ((parseFloat(m[1]) || 0) * Math.PI) / 180;
 
   pushPart(
-    { kind: "text", x: p.x, y: p.y, text, color, fontSize, rot },
+    {
+      kind: "text",
+      x: p.x,
+      y: p.y,
+      text,
+      color,
+      fontSize,
+      rot,
+      opacity,
+      fontFamily,
+      fontWeight,
+      anchor
+    },
     [p]
   );
   continue;
 }
-
-      if (tag === "polyline" || tag === "polygon") {
-        const ptsAttr = (el.getAttribute("points") || "").trim();
-        if (!ptsAttr) continue;
-        const nums = ptsAttr.split(/[\s,]+/).map(Number).filter((n) => isFinite(n));
-        if (nums.length < 4) continue;
-        const pts = [];
-        for (let i = 0; i < nums.length - 1; i += 2) {
-          pts.push(mapCTM(el, nums[i], nums[i + 1]));
-        }
-        if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
-        pushPart({ kind: "stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-        continue;
-      }
-
-      if (tag === "path") {
-        if (!el.getTotalLength) continue;
-        let total = 0;
-        try {
-          total = el.getTotalLength();
-        } catch {
-          total = 0;
-        }
-        if (!isFinite(total) || total <= 0) continue;
-
-        const steps = Math.max(20, Math.min(200, Math.round(total / 6)));
-        const pts = [];
-        for (let i = 0; i <= steps; i++) {
-          const t = (i / steps) * total;
-          let p;
-          try {
-            p = el.getPointAtLength(t);
-          } catch {
-            p = null;
-          }
-          if (!p) continue;
-          pts.push(mapCTM(el, p.x, p.y));
-        }
-        if (pts.length < 2) continue;
-        pushPart({ kind: "stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
-        continue;
-      }
-    }
 
     if (!parts.length && !pendingBg) {
       showToast("No supported SVG shapes");
