@@ -2902,7 +2902,7 @@ if (!gesture.active) return;
   );
   continue;
 }
-
+}
     if (!parts.length && !pendingBg) {
       showToast("No supported SVG shapes");
       return;
