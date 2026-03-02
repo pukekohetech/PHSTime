@@ -179,6 +179,33 @@
     return stage.getBoundingClientRect();
   }
 
+function styleMap(el){
+  const s = String(el.getAttribute("style") || "");
+  const out = {};
+  s.split(";").forEach(part=>{
+    const [k,v] = part.split(":");
+    if(!k || v == null) return;
+    out[k.trim().toLowerCase()] = v.trim();
+  });
+  return out;
+}
+function attrOrStyle(el, attr, cssName){
+  const a = el.getAttribute(attr);
+  if (a != null && String(a).trim() !== "") return String(a).trim();
+  const st = styleMap(el);
+  const v = st[String(cssName || attr).toLowerCase()];
+  return (v != null && String(v).trim() !== "") ? String(v).trim() : null;
+}
+function strokeStr(el){ return attrOrStyle(el, "stroke", "stroke"); }
+function fillStr(el){ return attrOrStyle(el, "fill", "fill"); }
+function strokeWidthNum(el){
+  const raw = attrOrStyle(el, "stroke-width", "stroke-width");
+  const n = parseNumberAttr(raw);
+  return Math.max(1, n ?? 3);
+}
+
+
+   
   // Pointer mapping MUST use the canvas rect
   function canvasRect() {
     return inkCanvas.getBoundingClientRect();
@@ -2525,23 +2552,20 @@ if (!gesture.active) return;
 for (const el of els) {
   const tag = el.tagName.toLowerCase();
 
-  // --- Exporter background is: <rect ... fill="white" stroke="none"> (or no stroke)
-  // We never want to import that as ink.
-  const fillAttr = el.getAttribute("fill");
+  // Background “white rect” killer
+  const fillAttr = fillStr(el);
   const fillIsWhiteish = (() => {
     const f = String(fillAttr || "").trim().toLowerCase();
     return f === "white" || f === "#fff" || f === "#ffffff" || f === "rgb(255,255,255)";
   })();
 
-  // ✅ IMPORTANT: style-aware stroke detection (handles style="", CSS, currentColor, etc.)
-  const strokeIsNone = isNone(styleStroke(el));
+  const strokeAttr = strokeStr(el);
+  const strokeIsNone = isNone(strokeAttr);
 
-  // If it's a big rect with no stroke and white fill, ignore it (removes random white box)
-  if (tag === "rect" && strokeIsNone && (fillIsWhiteish || !fillAttr)) {
-    continue;
-  }
+  // Ignore exporter background rect
+  if (tag === "rect" && strokeIsNone && (fillIsWhiteish || !fillAttr)) continue;
 
-  // If there is truly no stroke on a drawable shape, skip it (we only import strokes as ink)
+  // Only import shapes that actually have a stroke
   if (
     (tag === "rect" ||
       tag === "circle" ||
@@ -2555,13 +2579,8 @@ for (const el of els) {
     continue;
   }
 
-  // ✅ Use the style-aware helpers so paths/arcs don’t get dropped
-  const stroke = styleStroke(el);
-  const size = styleStrokeWidth(el);
-  const lineCap = styleLineCap(el);
-  const lineJoin = styleLineJoin(el);
-  const dashInfo = styleDash(el);
-  const opacity = styleOpacity(el);
+  const stroke = !strokeIsNone ? strokeAttr : "#111111";
+  const size = strokeWidthNum(el);
 
   if (tag === "line") {
     const x1 = parseNumberAttr(el.getAttribute("x1")) ?? 0;
@@ -2570,25 +2589,7 @@ for (const el of els) {
     const y2 = parseNumberAttr(el.getAttribute("y2")) ?? 0;
     const p1 = mapCTM(el, x1, y1);
     const p2 = mapCTM(el, x2, y2);
-
-    pushPart(
-      {
-        kind: "line",
-        color: stroke,
-        size,
-        lineCap,
-        lineJoin,
-        dash: dashInfo ? dashInfo.dash : null,
-        dashOffset: dashInfo ? dashInfo.dashOffset : 0,
-        opacity,
-        x1: p1.x,
-        y1: p1.y,
-        x2: p2.x,
-        y2: p2.y,
-        rot: 0
-      },
-      [p1, p2]
-    );
+    pushPart({ kind: "line", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
     continue;
   }
 
@@ -2599,25 +2600,7 @@ for (const el of els) {
     const h = parseNumberAttr(el.getAttribute("height")) ?? 0;
     const p1 = mapCTM(el, x, y);
     const p2 = mapCTM(el, x + w, y + h);
-
-    pushPart(
-      {
-        kind: "rect",
-        color: stroke,
-        size,
-        lineCap,
-        lineJoin,
-        dash: dashInfo ? dashInfo.dash : null,
-        dashOffset: dashInfo ? dashInfo.dashOffset : 0,
-        opacity,
-        x1: p1.x,
-        y1: p1.y,
-        x2: p2.x,
-        y2: p2.y,
-        rot: 0
-      },
-      [p1, p2]
-    );
+    pushPart({ kind: "rect", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
     continue;
   }
 
@@ -2627,25 +2610,7 @@ for (const el of els) {
     const r = parseNumberAttr(el.getAttribute("r")) ?? 0;
     const p1 = mapCTM(el, cx - r, cy - r);
     const p2 = mapCTM(el, cx + r, cy + r);
-
-    pushPart(
-      {
-        kind: "circle",
-        color: stroke,
-        size,
-        lineCap,
-        lineJoin,
-        dash: dashInfo ? dashInfo.dash : null,
-        dashOffset: dashInfo ? dashInfo.dashOffset : 0,
-        opacity,
-        x1: p1.x,
-        y1: p1.y,
-        x2: p2.x,
-        y2: p2.y,
-        rot: 0
-      },
-      [p1, p2]
-    );
+    pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
     continue;
   }
 
@@ -2656,99 +2621,27 @@ for (const el of els) {
     const ry = parseNumberAttr(el.getAttribute("ry")) ?? 0;
     const p1 = mapCTM(el, cx - rx, cy - ry);
     const p2 = mapCTM(el, cx + rx, cy + ry);
-
-    // store as "circle" in your app (ellipse supported by your renderer under kind==="circle")
-    pushPart(
-      {
-        kind: "circle",
-        color: stroke,
-        size,
-        lineCap,
-        lineJoin,
-        dash: dashInfo ? dashInfo.dash : null,
-        dashOffset: dashInfo ? dashInfo.dashOffset : 0,
-        opacity,
-        x1: p1.x,
-        y1: p1.y,
-        x2: p2.x,
-        y2: p2.y,
-        rot: 0
-      },
-      [p1, p2]
-    );
+    pushPart({ kind: "circle", color: stroke, size, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, rot: 0 }, [p1, p2]);
     continue;
   }
 
+  // NOTE: If you want text later, we can add it, BUT you must also handle it in the “recenter/scale” step.
+  // For now: skip text so import cannot break.
   if (tag === "text") {
-    // Prefer fill for text color
-    const fill = readStyleOrAttr(el, "fill", "fill");
-    const color = !isNone(fill) ? fill : stroke;
-
-    const fontSize = parseNum(readStyleOrAttr(el, "font-size", "font-size")) ?? 20;
-
-    // SVG text position (x/y can be lists; take first)
-    const xAttr = (el.getAttribute("x") || "0").trim().split(/[\s,]+/)[0];
-    const yAttr = (el.getAttribute("y") || "0").trim().split(/[\s,]+/)[0];
-    const x = parseNum(xAttr) ?? 0;
-    const y = parseNum(yAttr) ?? 0;
-
-    const p = mapCTM(el, x, y);
-
-    const text = (el.textContent || "").trim();
-    if (!text) continue;
-
-    let rot = 0;
-    const tf = String(el.getAttribute("transform") || "");
-    const m = tf.match(/rotate\(\s*([-\d.]+)/i);
-    if (m) rot = ((parseFloat(m[1]) || 0) * Math.PI) / 180;
-
-    pushPart(
-      {
-        kind: "text",
-        x: p.x,
-        y: p.y,
-        text,
-        color,
-        fontSize,
-        rot,
-        opacity
-      },
-      [p]
-    );
     continue;
   }
 
   if (tag === "polyline" || tag === "polygon") {
     const ptsAttr = (el.getAttribute("points") || "").trim();
     if (!ptsAttr) continue;
-
-    const nums = ptsAttr
-      .split(/[\s,]+/)
-      .map(Number)
-      .filter((n) => Number.isFinite(n));
-
+    const nums = ptsAttr.split(/[\s,]+/).map(Number).filter((n) => isFinite(n));
     if (nums.length < 4) continue;
 
     const pts = [];
-    for (let i = 0; i < nums.length - 1; i += 2) {
-      pts.push(mapCTM(el, nums[i], nums[i + 1]));
-    }
+    for (let i = 0; i < nums.length - 1; i += 2) pts.push(mapCTM(el, nums[i], nums[i + 1]));
     if (tag === "polygon" && pts.length) pts.push({ ...pts[0] });
 
-    pushPart(
-      {
-        kind: "stroke",
-        color: stroke,
-        size,
-        lineCap,
-        lineJoin,
-        dash: dashInfo ? dashInfo.dash : null,
-        dashOffset: dashInfo ? dashInfo.dashOffset : 0,
-        opacity,
-        points: pts
-      },
-      pts.slice(0, 12)
-    );
+    pushPart({ kind: "stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
     continue;
   }
 
@@ -2756,45 +2649,23 @@ for (const el of els) {
     if (!el.getTotalLength) continue;
 
     let total = 0;
-    try {
-      total = el.getTotalLength();
-    } catch {
-      total = 0;
-    }
-    if (!Number.isFinite(total) || total <= 0) continue;
+    try { total = el.getTotalLength(); } catch { total = 0; }
+    if (!isFinite(total) || total <= 0) continue;
 
-    // ✅ denser sampling helps arcs look like arcs
-    const steps = Math.max(40, Math.min(320, Math.ceil(total / 4)));
+    // Dense sampling makes arc-paths look good
+    const steps = Math.max(60, Math.min(420, Math.ceil(total / 3)));
 
     const pts = [];
     for (let i = 0; i <= steps; i++) {
       const t = (i / steps) * total;
       let p = null;
-      try {
-        p = el.getPointAtLength(t);
-      } catch {
-        p = null;
-      }
+      try { p = el.getPointAtLength(t); } catch { p = null; }
       if (!p) continue;
       pts.push(mapCTM(el, p.x, p.y));
     }
-
     if (pts.length < 2) continue;
 
-    pushPart(
-      {
-        kind: "stroke",
-        color: stroke,
-        size,
-        lineCap,
-        lineJoin,
-        dash: dashInfo ? dashInfo.dash : null,
-        dashOffset: dashInfo ? dashInfo.dashOffset : 0,
-        opacity,
-        points: pts
-      },
-      pts.slice(0, 12)
-    );
+    pushPart({ kind: "stroke", color: stroke, size, points: pts }, pts.slice(0, 12));
     continue;
   }
 }
