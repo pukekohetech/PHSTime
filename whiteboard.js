@@ -1,4 +1,4 @@
-/* =========================================================
+/* ==========================================================
    whiteboard.js — background as DOM image (no zoom artefacts)
 
    ADDITIONS (requested):
@@ -2103,113 +2103,115 @@ const ctrlHeld = !e.getModifierState("CapsLock");
     gesture.mode = "none";
   }
 
-  function onPointerMove(e) {
-    const { sx, sy } = clientToScreen(e);
-     if (lenEntry.open) moveLenBoxTo(sx, sy);
-    updateHoverCursor(sx, sy);
+function onPointerMove(e) {
+  const { sx, sy } = clientToScreen(e);
 
-  // Arc tool: show tip immediately after center is picked (even before dragging)
-// Arc tool: live radius tooltip after center is picked (before dragging)
-if (state.tool === "arc" && arcDraft.hasCenter && !gesture.active) {
-  const ctrlHeld = !e.getModifierState("CapsLock");
-  const wPreview = screenToWorld(sx, sy);
+  if (lenEntry.open) moveLenBoxTo(sx, sy);
+  updateHoverCursor(sx, sy);
 
-  let p = snapShapePoint({ x: arcDraft.cx, y: arcDraft.cy }, wPreview, ctrlHeld);
-  if (ctrlHeld) {
-    const hit = snapPointWithCtrl(p);
-    p = hit || snapPointWithCtrlOrAngle({ x: arcDraft.cx, y: arcDraft.cy }, p);
-  } else {
-    p = snapToMmGridWorld(p);
+  // ✅ Always compute + store w so typing UI (lenBox) can track pointer reliably
+  const w = screenToWorld(sx, sy);
+  gesture.lastScreen = { sx, sy };
+  gesture.lastWorld = w;
+
+  // Arc tool: live radius tooltip after center is picked (before dragging)
+  if (state.tool === "arc" && arcDraft.hasCenter && !gesture.active) {
+    const ctrlHeld = !e.getModifierState("CapsLock");
+
+    let p = snapShapePoint({ x: arcDraft.cx, y: arcDraft.cy }, w, ctrlHeld);
+    if (ctrlHeld) {
+      const hit = snapPointWithCtrl(p);
+      p = hit || snapPointWithCtrlOrAngle({ x: arcDraft.cx, y: arcDraft.cy }, p);
+    } else {
+      p = snapToMmGridWorld(p);
+    }
+
+    const rMm = Math.hypot(p.x - arcDraft.cx, p.y - arcDraft.cy) / pxPerMm();
+    showMeasureTip(sx, sy, `R ${Math.round(rMm)} mm`);
+    // ✅ no redrawAll() and no return
   }
 
-  const rMm = Math.hypot(p.x - arcDraft.cx, p.y - arcDraft.cy) / pxPerMm();
-  showMeasureTip(sx, sy, `R ${Math.round(rMm)} mm`);
+  if (!gesture.active) return;
 
-  // ✅ no redrawAll() and no return; keep everything else behaving normally
-}
+  if (gesture.mode === "pan" && gesture.lastScreen) {
+    const dx = sx - gesture.lastScreen.sx;
+    const dy = sy - gesture.lastScreen.sy;
+    state.panX += dx;
+    state.panY += dy;
+    gesture.lastScreen = { sx, sy };
+    redrawAll();
+    return;
+  }
 
-if (!gesture.active) return;
+  // Selection move (stable from snapshot)
+  if (gesture.mode === "selMove" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.startWorld) {
+    const dx = w.x - gesture.startWorld.x;
+    const dy = w.y - gesture.startWorld.y;
+    state.objects[gesture.selIndex] = deepClone(gesture.selStartObj);
+    moveObject(state.objects[gesture.selIndex], dx, dy);
+    redrawAll();
+    return;
+  }
 
-    const w = screenToWorld(sx, sy);
+  // Selection scale (stable from snapshot)
+  if (gesture.mode === "selScale" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.selAnchor && gesture.startWorld) {
+    const ax = gesture.selAnchor.x;
+    const ay = gesture.selAnchor.y;
 
-    if (gesture.mode === "pan" && gesture.lastScreen) {
-      const dx = sx - gesture.lastScreen.sx;
-      const dy = sy - gesture.lastScreen.sy;
-      state.panX += dx;
-      state.panY += dy;
-      gesture.lastScreen = { sx, sy };
-      redrawAll();
-      return;
-    }
+    const start = gesture.startWorld;
+    const obj0 = gesture.selStartObj;
 
-    // Selection move (stable from snapshot)
-    if (gesture.mode === "selMove" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.startWorld) {
-      const dx = w.x - gesture.startWorld.x;
-      const dy = w.y - gesture.startWorld.y;
-      state.objects[gesture.selIndex] = deepClone(gesture.selStartObj);
-      moveObject(state.objects[gesture.selIndex], dx, dy);
-      redrawAll();
-      return;
-    }
+    const hasOwnRot =
+      (obj0.kind === "rect" || obj0.kind === "circle" || obj0.kind === "text") && (obj0.rot || 0);
 
-    // Selection scale (stable from snapshot)
-    if (gesture.mode === "selScale" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.selAnchor && gesture.startWorld) {
-      const ax = gesture.selAnchor.x;
-      const ay = gesture.selAnchor.y;
+    if (hasOwnRot) {
+      const ang = obj0.rot || 0;
+      const cos = Math.cos(-ang), sin = Math.sin(-ang);
 
-      const start = gesture.startWorld;
-      const obj0 = gesture.selStartObj;
+      const v0x = (start.x - ax) * cos - (start.y - ay) * sin;
+      const v0y = (start.x - ax) * sin + (start.y - ay) * cos;
 
-      const hasOwnRot = (obj0.kind === "rect" || obj0.kind === "circle" || obj0.kind === "text") && (obj0.rot || 0);
-      if (hasOwnRot) {
-        const ang = obj0.rot || 0;
-        const cos = Math.cos(-ang),
-          sin = Math.sin(-ang);
+      const v1x = (w.x - ax) * cos - (w.y - ay) * sin;
+      const v1y = (w.x - ax) * sin + (w.y - ay) * cos;
 
-        const v0x = (start.x - ax) * cos - (start.y - ay) * sin;
-        const v0y = (start.x - ax) * sin + (start.y - ay) * cos;
+      const fxRaw = Math.abs(v0x) < 0.001 ? 1 : v1x / v0x;
+      const fyRaw = Math.abs(v0y) < 0.001 ? 1 : v1y / v0y;
 
-        const v1x = (w.x - ax) * cos - (w.y - ay) * sin;
-        const v1y = (w.x - ax) * sin + (w.y - ay) * cos;
+      let fx = fxRaw, fy = fyRaw;
 
-        const fxRaw = Math.abs(v0x) < 0.001 ? 1 : v1x / v0x;
-        const fyRaw = Math.abs(v0y) < 0.001 ? 1 : v1y / v0y;
-
-        let fx = fxRaw;
-        let fy = fyRaw;
-
-        if (e.shiftKey) {
-          const l0 = Math.hypot(v0x, v0y) || 1;
-          const l1 = Math.hypot(v1x, v1y) || 1;
-          const f = l1 / l0;
-          fx = f;
-          fy = f;
-        }
-
-        state.objects[gesture.selIndex] = deepClone(obj0);
-        const obj = state.objects[gesture.selIndex];
-
-        if (obj.kind === "text") {
-          const uni = Math.max(0.2, (Math.abs(fx) + Math.abs(fy)) / 2);
-          obj.fontSize = Math.max(6, obj0.fontSize * uni);
-
-          const m0 = textMetrics(obj0);
-          obj.x = ax - m0.w / 2;
-          obj.y = ay - m0.h / 2;
-        } else if (obj.kind === "rect" || obj.kind === "circle") {
-          const w0 = Math.abs(obj0.x2 - obj0.x1);
-          const h0 = Math.abs(obj0.y2 - obj0.y1);
-          const w1 = Math.max(1, w0 * fx);
-          const h1 = Math.max(1, h0 * fy);
-          obj.x1 = ax - w1 / 2;
-          obj.x2 = ax + w1 / 2;
-          obj.y1 = ay - h1 / 2;
-          obj.y2 = ay + h1 / 2;
-        }
-
-        redrawAll();
-        return;
+      if (e.shiftKey) {
+        const l0 = Math.hypot(v0x, v0y) || 1;
+        const l1 = Math.hypot(v1x, v1y) || 1;
+        const f = l1 / l0;
+        fx = f; fy = f;
       }
+
+      state.objects[gesture.selIndex] = deepClone(obj0);
+      const obj = state.objects[gesture.selIndex];
+
+      if (obj.kind === "text") {
+        const uni = Math.max(0.2, (Math.abs(fx) + Math.abs(fy)) / 2);
+        obj.fontSize = Math.max(6, obj0.fontSize * uni);
+
+        const m0 = textMetrics(obj0);
+        obj.x = ax - m0.w / 2;
+        obj.y = ay - m0.h / 2;
+      } else if (obj.kind === "rect" || obj.kind === "circle") {
+        const w0 = Math.abs(obj0.x2 - obj0.x1);
+        const h0 = Math.abs(obj0.y2 - obj0.y1);
+        const w1 = Math.max(1, w0 * fx);
+        const h1 = Math.max(1, h0 * fy);
+        obj.x1 = ax - w1 / 2;
+        obj.x2 = ax + w1 / 2;
+        obj.y1 = ay - h1 / 2;
+        obj.y2 = ay + h1 / 2;
+      }
+
+      redrawAll();
+      return;
+    }
+
+
 
       const v0 = { x: start.x - ax, y: start.y - ay };
       const v1 = { x: w.x - ax, y: w.y - ay };
@@ -3090,9 +3092,15 @@ if (!parts.length && !pendingBg) {
   });
 
   // ---------- Keyboard ----------
-document.addEventListener("keydown", (e) => {
-  const tag = (document.activeElement && document.activeElement.tagName) || "";
-  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+   document.addEventListener("keydown", (e) => {
+  const activeEl = document.activeElement;
+  const tag = (activeEl && activeEl.tagName) || "";
+
+  // ✅ treat our floating length box as "not typing" so shortcuts still work
+  const typing =
+    (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") &&
+    activeEl !== lenInput;
 
   // Escape closes panels + tips + length box
   if (e.key === "Escape") {
@@ -3103,6 +3111,71 @@ document.addEventListener("keydown", (e) => {
     closeLenBox();
     return;
   }
+
+   // ---------- Type-to-set RADIUS (mm) while dragging ARC ----------
+if (
+  !typing &&
+  gesture.active &&
+  gesture.mode === "drawArc" &&
+  gesture.activeObj &&
+  gesture.activeObj.kind === "arc"
+) {
+  const isDigit = /^[0-9]$/.test(e.key);
+  const isDot = e.key === "." || e.key === ",";
+  const isBack = e.key === "Backspace";
+  const isEnter = e.key === "Enter";
+  const isEsc = e.key === "Escape";
+  const isMinus = e.key === "-";
+
+  if (isDigit || isDot || isBack || isEnter || isEsc || isMinus) {
+    e.preventDefault();
+
+    // Open the box the moment they start typing (or backspace)
+    if (!lenEntry.open && (isDigit || isDot || isBack || isMinus)) {
+      const sx = (gesture.lastScreen?.sx ?? gesture.startScreen?.sx ?? 0);
+      const sy = (gesture.lastScreen?.sy ?? gesture.startScreen?.sy ?? 0);
+
+      const curMm = Math.max(1, Math.round((gesture.activeObj.r || gesture.arcR || 0) / pxPerMm()) || 1);
+      openLenBoxAt(sx, sy, String(curMm));
+    }
+
+    if (isEsc) {
+      closeLenBox();
+      return;
+    }
+
+    if (isEnter) {
+      // If user typed nothing, use placeholder/seed (current radius)
+      const raw = (lenInput.value || "").trim() || lenInput.placeholder || "";
+      let mm = parseMmInput(raw);
+      if (mm == null && lenEntry.seedMm != null) mm = lenEntry.seedMm;
+
+      if (mm == null) {
+        showToast("Invalid mm");
+        return;
+      }
+
+      setActiveArcRadiusMm(mm);
+
+      // ✅ For arcs, Enter should NOT finish the arc; just apply radius and keep dragging
+      closeLenBox();
+      return;
+    }
+
+    if (!lenEntry.open) return;
+
+    if (isBack) {
+      lenInput.value = lenInput.value.slice(0, -1);
+      return;
+    }
+
+    if (isDigit) lenInput.value += e.key;
+    else if (isDot) lenInput.value += ".";
+    else if (isMinus) lenInput.value += "-";
+
+    return;
+  }
+}
 
   // ---------- Type-to-set length while dragging LINE/ARROW ----------
   if (
@@ -3162,6 +3235,24 @@ if (isEnter) {
     }
   }
 
+function setActiveArcRadiusMm(mm) {
+  if (!gesture.activeObj) return false;
+  const obj = gesture.activeObj;
+  if (obj.kind !== "arc") return false;
+
+  const ppm = pxPerMm();
+  const rPx = Math.max(0.5, mm * ppm);
+
+  // Keep center + angles; only change radius
+  obj.r = rPx;
+
+  // Keep gesture cache in sync so your drawArc math doesn't fight it
+  gesture.arcR = rPx;
+
+  redrawAll();
+  return true;
+}
+   
   // Space pan
   if (e.code === "Space") {
     spacePanning = true;
