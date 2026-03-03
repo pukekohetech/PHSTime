@@ -521,6 +521,19 @@ function strokeWidthNum(el){
     return best;
   }
 
+function snapLinePreferEndpointsThenMm(start, rawPt, ctrlHeld) {
+  // ✅ Always prefer endpoints/intersections if close enough
+  const hit = snapPointWithCtrl(rawPt);
+  if (hit) return hit;
+
+  // Otherwise keep your existing behaviour:
+  // Ctrl/Cmd mode -> angle snap then whole-mm length
+  if (ctrlHeld) return snapLinePointWithCtrlOrAngle(start, rawPt);
+
+  // Default -> whole-mm length
+  return snapToWholeMmLength(start, rawPt);
+}
+   
   function snapEndpointToAngles(x1, y1, x2, y2) {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -2012,13 +2025,7 @@ function setActiveTool(tool) {
       clearRedo();
       state.selectionIndex = -1;
 
-      let p1 = w;
-      if (ctrlHeld) {
-        const hit = snapPointWithCtrl(p1);
-        p1 = hit || snapToMmGridWorld(p1);
-      } else {
-        p1 = snapToMmGridWorld(p1);
-      }
+    let p1 = snapShapePoint({ x: arcDraft.cx, y: arcDraft.cy }, w, ctrlHeld);
 
       const cx = arcDraft.cx;
       const cy = arcDraft.cy;
@@ -2065,18 +2072,15 @@ function setActiveTool(tool) {
     }
 
     if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
-      let p0 = w;
-      const isSnapShape = state.tool === "line" || state.tool === "arrow" || state.tool === "rect" || state.tool === "circle";
-      const ctrlHeld = !e.getModifierState("CapsLock");
+    let p0 = w;
+const ctrlHeld = !e.getModifierState("CapsLock");
 
-      if (isSnapShape) {
-        if (ctrlHeld) {
-          const hit = snapPointWithCtrl(p0);
-          p0 = hit || snapToMmGridWorld(p0);
-        } else {
-          p0 = snapToMmGridWorld(p0);
-        }
-      }
+// ✅ start point also prefers endpoints/intersections
+{
+  const hit = snapPreferEndsOrIntersections(p0);
+  if (hit) p0 = hit;
+  else p0 = snapToMmGridWorld(p0); // keep your “start point on mm grid” behavior when no hit
+}
 
       const obj = { kind: state.tool, color: state.color, size: state.size, x1: p0.x, y1: p0.y, x2: p0.x, y2: p0.y, rot: 0 };
       state.objects.push(obj);
@@ -2110,7 +2114,7 @@ if (state.tool === "arc" && arcDraft.hasCenter && !gesture.active) {
   const ctrlHeld = !e.getModifierState("CapsLock");
   const wPreview = screenToWorld(sx, sy);
 
-  let p = wPreview;
+  let p = snapShapePoint({ x: arcDraft.cx, y: arcDraft.cy }, wPreview, ctrlHeld);
   if (ctrlHeld) {
     const hit = snapPointWithCtrl(p);
     p = hit || snapPointWithCtrlOrAngle({ x: arcDraft.cx, y: arcDraft.cy }, p);
@@ -2317,19 +2321,18 @@ if (!gesture.active) return;
       const cx = gesture.arcCenter.cx;
       const cy = gesture.arcCenter.cy;
 
-      let p = w;
-      let snappedHit = null;
-      if (ctrlHeld) {
-        snappedHit = snapPointWithCtrl(p);
-        if (snappedHit) {
-          p = snappedHit;
-        } else {
-          p = snapPointWithCtrlOrAngle({ x: cx, y: cy }, p);
-        }
-      } else {
-        p = snapToMmGridWorld(p);
-      }
+     let p = w;
 
+      // ✅ ALWAYS prefer endpoints/intersections over grid/angles
+      const hit = snapPointWithCtrl(p); // uses SNAP_RADIUS_PX / zoom
+      if (hit) {
+        p = hit;
+      } else {
+        // no hit -> keep your existing behavior
+        p = ctrlHeld
+          ? snapPointWithCtrlOrAngle({ x: cx, y: cy }, p) // angle-snap then mm grid
+          : snapToMmGridWorld(p);                         // mm grid
+      }
       let aNow = Math.atan2(p.y - cy, p.x - cx);
       if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
 
@@ -2390,19 +2393,15 @@ if (!gesture.active) return;
 
       // ✅ Line/Arrow: default = whole-mm LENGTH.
       // Ctrl/Cmd: endpoint/intersection; else angle snap + whole-mm LENGTH.
-      if (k === "line" || k === "arrow") {
-        const p2 = ctrlHeld ? snapLinePointWithCtrlOrAngle(startPt, rawPt) : snapToWholeMmLength(startPt, rawPt);
-        x2 = p2.x;
-        y2 = p2.y;
-      }
+if (k === "line" || k === "arrow") {
+  const p2 = snapLinePoint(startPt, rawPt, ctrlHeld);
+  x2 = p2.x; y2 = p2.y;
+}
 
-      // Rect/Circle: default = mm GRID.
-      // Ctrl/Cmd: endpoint/intersection; else angle snap + mm GRID.
-      if (k === "rect" || k === "circle") {
-        const p2 = ctrlHeld ? snapPointWithCtrlOrAngle(startPt, rawPt) : snapToMmGridWorld(rawPt);
-        x2 = p2.x;
-        y2 = p2.y;
-      }
+if (k === "rect" || k === "circle") {
+  const p2 = snapShapePoint(startPt, rawPt, ctrlHeld);
+  x2 = p2.x; y2 = p2.y;
+}
 
       if (k === "circle") {
         // Shift = perfect circle (uniform)
@@ -3313,7 +3312,32 @@ if (isEnter) {
   function snapshotBoard() {
     return { v: 8, savedAt: new Date().toISOString(), ...snapshot() };
   }
+// ✅ Always prefer endpoints/intersections over anything else
+function snapPreferEndsOrIntersections(rawPt) {
+  return snapPointWithCtrl(rawPt); // uses SNAP_RADIUS_PX + zoom
+}
 
+// ✅ Generic point snap for shapes that use mm GRID (rect/circle, and arc points)
+function snapShapePoint(start, rawPt, ctrlHeld) {
+  const hit = snapPreferEndsOrIntersections(rawPt);
+  if (hit) return hit;
+
+  // no hit -> your existing behavior
+  return ctrlHeld
+    ? snapPointWithCtrlOrAngle(start, rawPt) // angle-snap then mm grid
+    : snapToMmGridWorld(rawPt);              // mm grid
+}
+
+// ✅ Line/Arrow endpoint snap: prefer ends/intersections, else preserve your length/angle rules
+function snapLinePoint(start, rawPt, ctrlHeld) {
+  const hit = snapPreferEndsOrIntersections(rawPt);
+  if (hit) return hit;
+
+  // no hit -> your existing behavior
+  return ctrlHeld
+    ? snapLinePointWithCtrlOrAngle(start, rawPt) // angle-snap then whole-mm LENGTH
+    : snapToWholeMmLength(start, rawPt);         // whole-mm LENGTH
+}
   async function applyBoard(data) {
     hardResetGesture();
     state.undo = [];
