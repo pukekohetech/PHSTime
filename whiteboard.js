@@ -2315,63 +2315,69 @@ if (!gesture.active) return;
     }
 
     // Drawing: Arc (CW/CCW + full circle snap + length indicator)
-    if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
-      const ctrlHeld = !e.getModifierState("CapsLock");
+// Drawing: Arc (CW/CCW + full circle snap + length indicator)
+if (gesture.mode === "drawArc" && gesture.activeObj && gesture.arcCenter) {
+  const ctrlHeld = !e.getModifierState("CapsLock");
 
-      const cx = gesture.arcCenter.cx;
-      const cy = gesture.arcCenter.cy;
+  const cx = gesture.arcCenter.cx;
+  const cy = gesture.arcCenter.cy;
 
-     let p = w;
+  let p = w;
 
-      // ✅ ALWAYS prefer endpoints/intersections over grid/angles
-      const hit = snapPointWithCtrl(p); // uses SNAP_RADIUS_PX / zoom
-      if (hit) {
-        p = hit;
-      } else {
-        // no hit -> keep your existing behavior
-        p = ctrlHeld
-          ? snapPointWithCtrlOrAngle({ x: cx, y: cy }, p) // angle-snap then mm grid
-          : snapToMmGridWorld(p);                         // mm grid
-      }
-      let aNow = Math.atan2(p.y - cy, p.x - cx);
-      if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
+  // ✅ ALWAYS prefer endpoints/intersections over grid/angles
+  let snappedHit = null;
+  const hit = snapPointWithCtrl(p); // uses SNAP_RADIUS_PX / zoom
+  if (hit) {
+    snappedHit = hit;
+    p = hit;
+  } else {
+    // no hit -> keep your existing behavior
+    p = ctrlHeld
+      ? snapPointWithCtrlOrAngle({ x: cx, y: cy }, p) // angle-snap then mm grid
+      : snapToMmGridWorld(p);                         // mm grid
+  }
 
-      const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
-      const step = wrapSigned(aNow - (gesture.arcLastA || aNow));
-      gesture.arcAccum = (gesture.arcAccum || 0) + step;
-      gesture.arcLastA = aNow;
+  let aNow = Math.atan2(p.y - cy, p.x - cx);
+  if (snappedHit) aNow = Math.atan2(snappedHit.y - cy, snappedHit.x - cx);
 
-      const rFixed = Math.max(1, gesture.arcR || 1);
-      let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
+  const wrapSigned = (a) => Math.atan2(Math.sin(a), Math.cos(a)); // (-pi..pi]
+  const step = wrapSigned(aNow - (gesture.arcLastA ?? aNow));
+  gesture.arcAccum = (gesture.arcAccum || 0) + step;
+  gesture.arcLastA = aNow;
 
-      const TWO_PI = Math.PI * 2;
-      const spanAbs = Math.abs(gesture.arcAccum || 0);
-      const snapTol = (10 * Math.PI) / 180; // 10°
-      let isCircle = false;
+  const rFixed = Math.max(1, gesture.arcR || 1);
+  let a2 = (gesture.arcA1 || 0) + (gesture.arcAccum || 0);
 
-      if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
-        isCircle = true;
-        a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
-      }
+  const TWO_PI = Math.PI * 2;
+  const spanAbs = Math.abs(gesture.arcAccum || 0);
+  const snapTol = (10 * Math.PI) / 180; // 10°
+  let isCircle = false;
 
-      gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
+  if (Math.abs(spanAbs - TWO_PI) <= snapTol) {
+    isCircle = true;
+    a2 = (gesture.arcA1 || 0) + Math.sign(gesture.arcAccum || 1) * TWO_PI;
+  }
 
-      gesture.activeObj.cx = cx;
-      gesture.activeObj.cy = cy;
-      gesture.activeObj.r = rFixed;
-      gesture.activeObj.a1 = gesture.arcA1;
-      gesture.activeObj.a2 = a2;
+  gesture.activeObj.ccw = (gesture.arcAccum || 0) < 0;
 
-      const rMm = rFixed / pxPerMm();
-      const span = Math.abs(a2 - (gesture.arcA1 || 0));
-      const lenMm = (span * rFixed) / pxPerMm();
+  gesture.activeObj.cx = cx;
+  gesture.activeObj.cy = cy;
+  gesture.activeObj.r = rFixed;
+  gesture.activeObj.a1 = gesture.arcA1;
+  gesture.activeObj.a2 = a2;
 
-      const label = isCircle ? `Circle • R ${Math.round(rMm)} mm` : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
+  const rMm = rFixed / pxPerMm();
+  const span = Math.abs(a2 - (gesture.arcA1 || 0));
+  const lenMm = (span * rFixed) / pxPerMm();
 
-      showMeasureTip(sx, sy, label);
-      redrawAll();
-      return;
-    }
+  const label = isCircle
+    ? `Circle • R ${Math.round(rMm)} mm`
+    : `R ${Math.round(rMm)} mm • L ${Math.round(lenMm)} mm`;
+
+  showMeasureTip(sx, sy, label);
+  redrawAll();
+  return;
+}
 
     // Drawing: stroke / erase
     if ((gesture.mode === "drawStroke" || gesture.mode === "drawErase") && gesture.activeObj) {
