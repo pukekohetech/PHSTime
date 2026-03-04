@@ -3345,7 +3345,7 @@ function setActiveArcRadiusMm(mm) {
   }
 
   // ----- Ctrl/Cmd + NUMBER / +/- / ARROWS helpers -----
-  if (!typing && (e.getModifierState("CapsLock"))) {
+  if (!typing && !gesture.active) {
     const digit = /^[0-9]$/.test(e.key) ? Number(e.key) : null;
 
     if (digit !== null) {
