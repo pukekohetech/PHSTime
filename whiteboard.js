@@ -284,6 +284,126 @@ function setActiveLineLengthMm(mm) {
     showToast._t = setTimeout(() => toast.classList.remove("show"), 1200);
   }
 
+   // ---------- Zoom-to-fit helpers (camera only; preserves bg↔ink alignment) ----------
+function unionBounds(a, b) {
+  if (!a) return b ? { ...b } : null;
+  if (!b) return { ...a };
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY)
+  };
+}
+
+function boundsFromPoints(pts) {
+  if (!pts || !pts.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of pts) {
+    if (!p) continue;
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return null;
+  return { minX, minY, maxX, maxY };
+}
+
+function boundsOfBackground() {
+  if (!state.bg || !state.bg.src || !state.bg.natW || !state.bg.natH) return null;
+
+  // Approx axis-aligned bounds including rotation (accurate enough for fitting)
+  const natW = state.bg.natW;
+  const natH = state.bg.natH;
+  const cx = state.bg.x + natW / 2;
+  const cy = state.bg.y + natH / 2;
+
+  const sx = (state.bg.scale || 1);
+  const ang = (state.bg.rot || 0);
+
+  const hw = (natW * sx) / 2;
+  const hh = (natH * sx) / 2;
+
+  const corners = [
+    { x: -hw, y: -hh },
+    { x:  hw, y: -hh },
+    { x:  hw, y:  hh },
+    { x: -hw, y:  hh }
+  ].map((p) => {
+    const c = Math.cos(ang), s = Math.sin(ang);
+    return { x: cx + p.x * c - p.y * s, y: cy + p.x * s + p.y * c };
+  });
+
+  return boundsFromPoints(corners);
+}
+
+function boundsOfAllInk() {
+  if (!state.objects || !state.objects.length) return null;
+  let b = null;
+  for (const o of state.objects) {
+    if (!o || o.hidden) continue;
+    b = unionBounds(b, objectBounds(o));
+  }
+  return b;
+}
+
+function boundsOfAllContent() {
+  return unionBounds(boundsOfBackground(), boundsOfAllInk());
+}
+
+function fitCameraToBounds(b, padFrac = 0.08) {
+  if (!b) return false;
+
+  const bw = Math.max(1, b.maxX - b.minX);
+  const bh = Math.max(1, b.maxY - b.minY);
+
+  const padX = state.viewW * padFrac;
+  const padY = state.viewH * padFrac;
+
+  const z = clamp(
+    Math.min((state.viewW - padX * 2) / bw, (state.viewH - padY * 2) / bh),
+    0.05,
+    6
+  );
+
+  const cx = b.minX + bw / 2;
+  const cy = b.minY + bh / 2;
+
+  state.zoom = z;
+  state.panX = state.viewW / 2 - cx * z;
+  state.panY = state.viewH / 2 - cy * z;
+
+  redrawAll();
+  return true;
+}
+
+function contentFitsOnScreen(b, padPx = 24) {
+  if (!b) return true;
+  const z = state.zoom || 1;
+
+  const left = b.minX * z + state.panX;
+  const right = b.maxX * z + state.panX;
+  const top = b.minY * z + state.panY;
+  const bottom = b.maxY * z + state.panY;
+
+  return (
+    left >= padPx &&
+    top >= padPx &&
+    right <= (state.viewW - padPx) &&
+    bottom <= (state.viewH - padPx)
+  );
+}
+
+// Only auto-fit when needed (prevents wrecking a deliberate saved view)
+function autoFitIfNeeded() {
+  const b = boundsOfAllContent();
+  if (!b) return;
+  if (!contentFitsOnScreen(b, 18)) {
+    fitCameraToBounds(b, 0.08);
+  }
+}
+
   // Sizing uses the stage
   function stageRect() {
     return stage.getBoundingClientRect();
@@ -890,7 +1010,7 @@ function setActiveTool(tool) {
   }
 
   function setZoomTo(newZoom, anchorSX, anchorSY) {
-    const z = clamp(newZoom, 0.25, 6);
+    const z = clamp(newZoom, 0.05, 6);
     const old = state.zoom;
 
     const worldX = (anchorSX - state.panX) / old;
@@ -2590,6 +2710,9 @@ if (k === "rect" || k === "circle") {
 
       applyBgTransform();
       redrawAll();
+       // ✅ NEW: camera fits background
+fitCameraToBounds(boundsOfBackground() || boundsOfAllContent(), 0.08);
+
       showToast("Background loaded");
     };
     img.onerror = () => showToast("Paste failed");
@@ -2628,6 +2751,8 @@ if (k === "rect" || k === "circle") {
 
         applyBgTransform();
         redrawAll();
+         // ✅ NEW: camera fits background
+fitCameraToBounds(boundsOfBackground() || boundsOfAllContent(), 0.08);
         showToast("Background loaded");
       };
       img.src = String(reader.result || "");
@@ -3022,14 +3147,19 @@ if (!parts.length && !pendingBg) {
     state.selectionIndex = -1;
     setActiveTool("select");
 
-    if (isRoundTrip) {
-      state.zoom = cam.zoom;
-      state.panX = cam.panX;
-      state.panY = cam.panY;
-    }
+  if (isRoundTrip) {
+  state.zoom = cam.zoom;
+  state.panX = cam.panX;
+  state.panY = cam.panY;
 
-    redrawAll();
-    showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
+  // ✅ If round-trip camera doesn't fit on smaller screens, refit anyway
+  autoFitIfNeeded();
+} else {
+  fitCameraToBounds(boundsOfBackground() || boundsOfAllContent(), 0.08);
+}
+
+redrawAll();
+showToast(`SVG imported: 0/${svgReveal.partIndices.length} (→ reveal)`);
   }
 
   function clearImportedSvgInk() {
@@ -3446,6 +3576,7 @@ function snapLinePoint(start, rawPt, ctrlHeld) {
 
     applyBgTransform();
     redrawAll();
+      autoFitIfNeeded();
   }
 
    function freshBoardSnapshot() {
