@@ -1,7 +1,7 @@
 /* =========================================================
    timer.js — PHS Quick Timer (FULL)
    - Presets + nudges
-   - Minutes/seconds mode
+   - Minutes/seconds mode  
    - Drift-proof end timestamp
    - Persist running timer across reload/PWA resume
    - Options dialog focus trap + scroll lock
