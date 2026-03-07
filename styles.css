@@ -123,6 +123,7 @@ body{
 .page-index .appNav__btn[data-nav="index"],
 .page-wheel .appNav__btn[data-nav="wheel"],
 .page-timer .appNav__btn[data-nav="timer"],
+.page-timer .appNav__btn[data-nav="whiteboard"],
 .page-noise .appNav__btn[data-nav="noise"],
 .page-brain .appNav__btn[data-nav="brain"]{
   background: rgba(0,0,0,0.10);
