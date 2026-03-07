@@ -20,7 +20,20 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
-
+   {
+      "id": "mensa",
+      "name": "Random Mensa Puzzle",
+      "type": "iframe",
+      "url": "./Mensa.html",
+      "tag": "game",
+      "seconds": null,
+      "steps": [
+        "Complete one of the hardest puzzles"
+      
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
     {
       "id": "scatogories",
       "name": "Scatogories",
