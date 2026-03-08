@@ -1,0 +1,2021 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PHS Class Clock</title>
+  <style>
+    :root{
+      --bgGrey:#9aa0a6;
+      --bgGreen:#2ecc71;
+      --bgOrange:#f39c12;
+      --bgRed:#e74c3c;
+      --stateBg:var(--bgGrey);
+      --panel:rgba(255,255,255,0.86);
+      --panel-strong:rgba(255,255,255,0.94);
+      --line:rgba(12,20,28,0.08);
+      --ink:#15202b;
+      --muted:#607080;
+      --accent:#4467f2;
+      --accent-soft:rgba(68,103,242,0.12);
+      --good:#2f9e5b;
+      --warn:#d48a00;
+      --bad:#d9485f;
+      --gold:#d8a200;
+      --silver:#8a98a8;
+      --bronze:#a1653b;
+      --shadow:0 16px 40px rgba(12,20,28,0.14);
+      --shadow-soft:0 8px 24px rgba(12,20,28,0.10);
+      --radius:20px;
+      --card-radius:16px;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--font);
+      color:var(--ink);
+      background:var(--stateBg);
+      transition: background-color 1200ms ease;
+    }
+
+    body.phase-inactive{ --stateBg: var(--bgGrey); }
+    body.phase-active{ --stateBg: var(--bgGreen); }
+    body.phase-warning{ --stateBg: var(--bgOrange); }
+
+    .app{
+      max-width:1600px;
+      margin:0 auto;
+      min-height:100vh;
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .shell{
+      background:rgba(255,255,255,0.28);
+      border:1px solid rgba(255,255,255,0.22);
+      backdrop-filter:blur(14px);
+      border-radius:26px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:calc(100vh - 20px);
+    }
+
+    .header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 14px;
+      background:rgba(255,255,255,0.18);
+      border-bottom:1px solid rgba(255,255,255,0.18);
+    }
+
+    .brandWrap{display:flex;align-items:center;gap:12px;min-width:0}
+    .brand{
+      font-size:clamp(22px,2.8vw,34px);
+      line-height:1;
+      font-weight:950;
+      letter-spacing:-0.06em;
+    }
+    .brandSub{font-size:12px;font-weight:800;color:var(--muted);margin-top:2px}
+
+    .miniClock{
+      min-width:90px;
+      text-align:center;
+      background:var(--panel-strong);
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:8px 12px;
+      font-weight:950;
+      box-shadow:var(--shadow-soft);
+    }
+
+    .topActions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+    button,input,textarea{font:inherit}
+    button{
+      border:0;
+      background:none;
+      color:inherit;
+      cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    .iconBtn,.btn,.ghostBtn,.dangerBtn,.classBtn,.jumpBtn,.modeBtn{
+      border:1px solid var(--line);
+      background:var(--panel-strong);
+      box-shadow:var(--shadow-soft);
+      border-radius:14px;
+      transition:transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease;
+    }
+    .iconBtn:hover,.btn:hover,.ghostBtn:hover,.dangerBtn:hover,.classBtn:hover,.jumpBtn:hover,.modeBtn:hover,
+    .iconBtn:focus-visible,.btn:focus-visible,.ghostBtn:focus-visible,.dangerBtn:focus-visible,.classBtn:focus-visible,.jumpBtn:focus-visible,.modeBtn:focus-visible,
+    .studentCard:hover,.studentCard:focus-visible{
+      transform:translateY(-1px);
+      box-shadow:0 10px 24px rgba(12,20,28,0.14);
+      outline:none;
+    }
+    .iconBtn{width:42px;height:42px;display:grid;place-items:center;font-size:20px}
+    .btn,.ghostBtn,.dangerBtn,.modeBtn{padding:10px 12px;font-weight:900}
+    .ghostBtn{background:rgba(255,255,255,0.72);box-shadow:none}
+    .dangerBtn{background:rgba(217,72,95,0.12);border-color:rgba(217,72,95,0.2);box-shadow:none}
+
+    .drawer{
+      padding:0 12px 12px;
+      display:grid;
+      gap:10px;
+    }
+    .drawer.hidden{display:none}
+    .drawerCard,.card,.studentTools,.hero,.activeStrip,.summaryPreview,.summaryPanel,.setupCard,.totalsCard{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:var(--card-radius);
+      box-shadow:var(--shadow-soft);
+    }
+
+    .drawerCard{padding:12px;display:grid;gap:12px}
+    .drawerTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .modeGroup{display:flex;gap:8px;flex-wrap:wrap}
+    .modeBtn.active,.navBtn.active,.classBtn.active,.jumpBtn.active{background:var(--accent-soft);border-color:rgba(68,103,242,0.2)}
+    .teacherTools{display:grid;gap:10px}
+    .navRow,.actionRow{display:flex;flex-wrap:wrap;gap:8px}
+    .navBtn{padding:10px 12px;font-weight:900}
+    .navBtn,.classBtn,.jumpBtn{border:1px solid var(--line);background:var(--panel-strong);border-radius:14px;box-shadow:var(--shadow-soft)}
+    .note{font-size:12px;font-weight:700;color:var(--muted)}
+
+    .main{padding:0 12px 12px;display:grid;gap:10px;flex:1}
+    .view.hidden{display:none !important}
+
+    .hero{
+      display:grid;
+      grid-template-columns:minmax(170px,220px) 1fr;
+      gap:10px;
+      padding:12px;
+      align-items:center;
+    }
+    .hero.compactHidden{display:none}
+    .bigClock{
+      background:var(--panel-strong);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:18px 10px;
+      text-align:center;
+      font-size:clamp(34px,6vw,56px);
+      line-height:1;
+      font-weight:950;
+      letter-spacing:-0.08em;
+    }
+    .heroTitle{font-size:clamp(24px,3vw,36px);font-weight:950;letter-spacing:-0.05em;line-height:1.04}
+    .heroSub{margin-top:6px;color:var(--muted);font-weight:800}
+    .heroMeta{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+
+    .activeStrip{
+      display:grid;
+      grid-template-columns:minmax(160px,1fr) auto minmax(220px,360px);
+      gap:10px;
+      align-items:center;
+      padding:10px 12px;
+    }
+    .activeStrip.hidden{display:none}
+    .stripTitle{font-size:22px;font-weight:950;letter-spacing:-0.04em;line-height:1}
+    .stripSub{font-size:12px;color:var(--muted);font-weight:800;margin-top:2px}
+    .stripCenter{display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
+    .stripActions{display:flex;align-items:center;gap:8px;justify-content:flex-end;min-width:0}
+    .stripActions .searchInput{flex:1 1 auto;min-width:120px}
+    .stripActions .dangerBtn{flex:0 0 auto;white-space:nowrap}
+    .stripBadge{
+      padding:8px 10px;
+      border-radius:999px;
+      background:var(--panel-strong);
+      border:1px solid var(--line);
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .toolbarCard{padding:10px 12px;display:grid;gap:10px}
+    .classButtons{display:flex;flex-wrap:wrap;gap:8px}
+    .classBtn{padding:8px 11px;font-weight:900}
+    .toolRow{display:grid;grid-template-columns:1fr;gap:8px;align-items:start}
+    .searchInput{
+      width:100%;
+      min-width:0;
+      border-radius:12px;
+      border:1px solid var(--line);
+      padding:10px 12px;
+      background:var(--panel-strong);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.65);
+    }
+    .letterJump{display:flex;flex-wrap:nowrap;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding-bottom:2px}
+    .jumpBtn{padding:5px 7px;font-size:11px;font-weight:900;min-width:28px;flex:0 0 auto}
+    .letterJump::-webkit-scrollbar{height:6px}
+    .letterJump::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.16);border-radius:999px}
+    .letterJump::-webkit-scrollbar-track{background:transparent}
+
+    .summaryPreview{
+      padding:10px 12px;
+      display:grid;
+      gap:8px;
+      background:rgba(255,255,255,0.76);
+    }
+    .summaryPreview.hidden,.summaryPanel.hidden{display:none}
+    .previewTop{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .previewTitle{font-weight:950;letter-spacing:-0.03em}
+    .previewPodium,.previewStats{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:900;
+      background:rgba(0,0,0,0.05);
+      white-space:nowrap;
+    }
+    .pill.good{background:rgba(47,158,91,0.12)}
+    .pill.warn{background:rgba(212,138,0,0.14)}
+    .pill.accent{background:var(--accent-soft)}
+
+    .studentGrid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
+      gap:8px;
+      align-content:start;
+    }
+    .studentCard{
+      border:1px solid var(--line);
+      border-radius:15px;
+      background:var(--panel-strong);
+      box-shadow:var(--shadow-soft);
+      padding:8px 9px;
+      min-height:94px;
+      display:grid;
+      gap:6px;
+      align-content:start;
+      text-align:left;
+      transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+    }
+    .studentCard.in{border-color:rgba(47,158,91,0.22);background:rgba(255,255,255,0.98)}
+    .studentCard.present .studentName{color:#1f7a46}
+    .studentCard.away .studentName{color:#a85f08}
+    .studentCard.idle .studentName{color:var(--ink)}
+    .studentCard.first{border-color:rgba(216,162,0,0.22);background:rgba(255,250,232,0.98)}
+    .studentCard.second{border-color:rgba(138,152,168,0.2);background:rgba(247,249,251,0.98)}
+    .studentCard.third{border-color:rgba(161,101,59,0.2);background:rgba(252,246,241,0.98)}
+    .studentCard.pop{animation:cardPop .45s ease}
+    @keyframes cardPop{
+      0%{transform:scale(1)}
+      35%{transform:scale(1.02)}
+      100%{transform:scale(1)}
+    }
+    .studentTop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .studentName{
+      font-weight:900;
+      letter-spacing:-0.03em;
+      line-height:1.05;
+      font-size:15px;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      min-height:31px;
+    }
+    .badge{
+      flex-shrink:0;
+      width:28px;
+      height:28px;
+      border-radius:999px;
+      display:grid;
+      place-items:center;
+      background:rgba(0,0,0,0.05);
+      font-size:17px;
+    }
+    .metaLine{font-size:13px;font-weight:900;letter-spacing:-0.02em}
+    .hintLine{font-size:11px;color:var(--muted);font-weight:800;line-height:1.2}
+    .miniTags{display:flex;gap:5px;flex-wrap:wrap}
+    .tag{
+      font-size:10px;
+      font-weight:900;
+      padding:3px 6px;
+      border-radius:999px;
+      background:rgba(0,0,0,0.05);
+    }
+
+    .summaryPanel{padding:12px;display:grid;gap:10px}
+    .summaryTitle{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .summaryTitle h3{margin:0;font-size:22px;letter-spacing:-0.04em}
+    .summaryGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+    .metricCard{
+      border-radius:14px;
+      padding:10px;
+      background:var(--panel-strong);
+      border:1px solid var(--line);
+    }
+    .metricLabel{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .metricValue{font-size:24px;font-weight:950;letter-spacing:-0.05em;line-height:1.05;margin-top:3px}
+    .metricSub{font-size:12px;color:var(--muted);font-weight:800;margin-top:3px}
+
+    .setupGrid,.totalsGrid{display:grid;grid-template-columns:1.15fr .95fr;gap:10px}
+    .setupCard,.totalsCard,.totalsWide{padding:12px;display:grid;gap:10px}
+    .sectionHead h2,.sectionHead h3,.totalsCard h3{margin:0;letter-spacing:-0.04em}
+    .sectionHead p{margin:4px 0 0;color:var(--muted);font-weight:800;font-size:13px}
+    .field{display:grid;gap:6px}
+    .field label{font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .field input,.field textarea{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:11px 12px;
+      background:var(--panel-strong);
+      color:var(--ink);
+    }
+    .field textarea{min-height:300px;resize:vertical}
+    .helperRow{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;font-weight:800;color:var(--muted)}
+    .buttonRow{display:flex;gap:8px;flex-wrap:wrap}
+    .classList{display:grid;gap:8px;max-height:520px;overflow:auto;padding-right:2px}
+    .classItem{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 11px;
+      background:var(--panel-strong);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+    }
+    .classItem.active{background:var(--accent-soft);border-color:rgba(68,103,242,0.22)}
+    .classItemTitle{font-weight:950;letter-spacing:-0.03em}
+    .classItemSub{font-size:12px;color:var(--muted);font-weight:800;margin-top:2px}
+
+    .totalsSummary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+    .bars{display:grid;gap:10px}
+    .barItem{display:grid;gap:5px}
+    .barTop{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px;font-weight:900}
+    .barLabel{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .barTrack{height:14px;border-radius:999px;background:rgba(0,0,0,0.06);overflow:hidden}
+    .barFill{height:100%;border-radius:999px;background:linear-gradient(90deg, rgba(68,103,242,0.68), rgba(68,103,242,0.95));transition:width .4s ease}
+    .barMeta{font-size:11px;color:var(--muted);font-weight:800}
+
+    .totalsBoard,.sessionList{display:grid;gap:8px}
+    .boardRow,.sessionRow{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:9px 10px;
+      background:var(--panel-strong);
+      display:grid;
+      gap:6px;
+    }
+    .boardTop,.sessionTop{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .boardName{font-weight:950;letter-spacing:-0.03em}
+    .boardMeta,.sessionMeta{font-size:12px;color:var(--muted);font-weight:800}
+    .boardStats{display:flex;flex-wrap:wrap;gap:6px}
+
+    .empty{
+      border:1px dashed rgba(0,0,0,0.12);
+      border-radius:14px;
+      padding:18px;
+      text-align:center;
+      background:rgba(255,255,255,0.48);
+      color:var(--muted);
+      font-weight:800;
+    }
+
+    .toast{
+      position:fixed;
+      left:50%;bottom:20px;transform:translateX(-50%) translateY(12px);
+      background:rgba(21,32,43,0.92);color:#fff;
+      padding:10px 14px;border-radius:999px;font-weight:900;font-size:13px;
+      opacity:0;pointer-events:none;transition:opacity .18s ease, transform .18s ease;z-index:50;
+      box-shadow:0 14px 28px rgba(0,0,0,0.24)
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    .hiddenInput{display:none}
+    .muted{color:var(--muted);font-weight:800}
+
+
+    .infoCard{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--panel-strong);box-shadow:var(--shadow-soft)}
+    .infoTitle{font-weight:950;letter-spacing:-0.03em}
+    .totalsActionRow,.boardActions{display:flex;gap:8px;flex-wrap:wrap}
+    .miniAction{padding:6px 8px;font-size:11px;font-weight:900;border-radius:10px;border:1px solid var(--line);background:var(--panel-strong)}
+    .miniAction.warn{background:rgba(212,138,0,0.12);border-color:rgba(212,138,0,0.18)}
+    .miniAction.good{background:rgba(47,158,91,0.12);border-color:rgba(47,158,91,0.18)}
+
+    @media (max-width:1100px){
+      .setupGrid,.totalsGrid{grid-template-columns:1fr}
+      .activeStrip{grid-template-columns:1fr;justify-items:start}
+      .stripActions{width:100%;justify-content:stretch;flex-wrap:wrap}
+      .stripActions .searchInput{min-width:0;width:100%}
+      .toolRow{grid-template-columns:1fr}
+    }
+    @media (max-width:720px){
+      .app{padding:6px}
+      .header{padding:8px 10px}
+      .main{padding:0 8px 8px}
+      .drawer{padding:0 8px 8px}
+      .hero{grid-template-columns:1fr}
+      .bigClock{font-size:40px;padding:12px 10px}
+      .studentGrid{grid-template-columns:repeat(auto-fit,minmax(108px,1fr))}
+      .studentCard{min-height:90px;padding:8px}
+      .themeInputs{grid-template-columns:1fr 1fr}
+      .themeInputs .btn{grid-column:1 / -1}
+      .brandSub{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="shell">
+      <header class="header">
+        <div class="brandWrap">
+          <div>
+            <div class="brand">Class Clock</div>
+            <div class="brandSub">Simple setup. Fast check in. Clear totals.</div>
+          </div>
+        </div>
+        <div class="topActions">
+          <div id="miniClock" class="miniClock">--:--</div>
+          <button id="settingsBtn" class="iconBtn" aria-label="Open settings">⚙️</button>
+        </div>
+      </header>
+
+      <div id="settingsDrawer" class="drawer hidden">
+        <div class="drawerCard">
+          <div class="drawerTop">
+            <div class="modeGroup">
+              <button id="modeStudentBtn" class="modeBtn">Student mode</button>
+              <button id="modeTeacherBtn" class="modeBtn">Teacher mode</button>
+            </div>
+            <button id="closeSettingsBtn" class="ghostBtn">Close</button>
+          </div>
+
+          <div id="teacherTools" class="teacherTools">
+            <div class="navRow">
+              <button id="navClock" class="navBtn">Clock</button>
+              <button id="navSetup" class="navBtn">Setup</button>
+              <button id="navTotals" class="navBtn">Totals</button>
+            </div>
+            <div class="actionRow">
+              <button id="exportBtn" class="btn">Export backup</button>
+              <button id="importBtn" class="btn">Import backup</button>
+              <button id="csvBtn" class="btn">Export CSV</button>
+              <button id="resetBtn" class="dangerBtn">Reset all</button>
+            </div>
+          </div>
+
+          <div class="infoCard">
+            <div class="infoTitle">Page colours</div>
+            <div class="autoThemeLegend">
+              <span class="pill">Grey when inactive</span>
+              <span class="pill good">Green in session</span>
+              <span class="pill warn">Orange in the last 10 min</span>
+            </div>
+            <div class="note">The first student to tap starts a 50 minute round for that class. When the round ends, active students finish automatically.</div>
+          </div>
+
+          <input id="fileInput" class="hiddenInput" type="file" accept="application/json" />
+        </div>
+      </div>
+
+      <main class="main">
+        <section id="clockView" class="view">
+          <div id="preRoundHero" class="hero">
+            <div id="bigClock" class="bigClock">--:--</div>
+            <div>
+              <div id="heroTitle" class="heroTitle">Choose a class</div>
+              <div id="heroSub" class="heroSub">The first clock-in starts a 50 minute round.</div>
+              <div id="heroMeta" class="heroMeta"></div>
+            </div>
+          </div>
+
+          <div id="activeStrip" class="activeStrip hidden">
+            <div>
+              <div id="stripTitle" class="stripTitle">Class</div>
+              <div id="stripSub" class="stripSub">Round active</div>
+            </div>
+            <div class="stripCenter">
+              <div id="stripTime" class="stripBadge">--:--</div>
+              <div id="stripRemaining" class="stripBadge">50m left</div>
+            </div>
+            <div class="stripActions">
+              <input id="searchInput" class="searchInput" type="search" placeholder="Search name" />
+              <button id="endClassBtn" class="dangerBtn" type="button">End class</button>
+            </div>
+          </div>
+
+          <div class="toolbarCard">
+            <div id="classButtons" class="classButtons"></div>
+            <div id="toolRow" class="toolRow">
+              <input id="searchInputIdle" class="searchInput" type="search" placeholder="Search name" />
+              <div id="letterJump" class="letterJump"></div>
+            </div>
+            <div id="summaryPreview" class="summaryPreview hidden"></div>
+          </div>
+
+          <div id="studentGrid" class="studentGrid"></div>
+          <div id="summaryPanel" class="summaryPanel hidden"></div>
+        </section>
+
+        <section id="setupView" class="view hidden">
+          <div class="setupGrid">
+            <div class="setupCard">
+              <div class="sectionHead">
+                <h2>Setup classes</h2>
+                <p>Type a class name, paste student names one per line, then save.</p>
+              </div>
+              <div class="field">
+                <label for="classNameInput">Class name</label>
+                <input id="classNameInput" type="text" placeholder="Example: 12DGT" />
+              </div>
+              <div class="field">
+                <label for="studentNamesInput">Student names</label>
+                <textarea id="studentNamesInput" placeholder="One name per line"></textarea>
+              </div>
+              <div class="helperRow">
+                <span id="nameCountHint">0 names</span>
+                <span id="duplicateHint"></span>
+              </div>
+              <div class="buttonRow">
+                <button id="saveClassBtn" class="btn">Save class</button>
+                <button id="newClassBtn" class="ghostBtn">New</button>
+                <button id="duplicateClassBtn" class="ghostBtn">Duplicate</button>
+                <button id="deleteClassBtn" class="dangerBtn">Delete</button>
+              </div>
+              <div class="note">Names are cleaned, de-duplicated, and sorted A–Z on save. Matching names keep their saved hours.</div>
+            </div>
+
+            <div class="setupCard">
+              <div class="sectionHead">
+                <h2>Saved classes</h2>
+                <p>Tap a class to edit it.</p>
+              </div>
+              <div id="classList" class="classList"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="totalsView" class="view hidden">
+          <div class="totalsCard">
+            <div class="sectionHead">
+              <h2>Totals</h2>
+              <p>Track today, this week, all time, and recent sessions.</p>
+            </div>
+            <div id="totalsClassButtons" class="classButtons"></div>
+            <div id="totalsSummary" class="totalsSummary"></div>
+            <div class="totalsActionRow">
+              <button id="clearClassTotalsBtn" class="dangerBtn" type="button">Clear selected class totals</button>
+            </div>
+          </div>
+
+          <div class="totalsGrid">
+            <div class="totalsCard">
+              <h3>Class hours</h3>
+              <div id="classChart" class="bars"></div>
+            </div>
+            <div class="totalsCard">
+              <h3 id="studentChartTitle">Student hours</h3>
+              <div id="studentChart" class="bars"></div>
+            </div>
+          </div>
+
+          <div class="totalsGrid">
+            <div class="totalsCard">
+              <h3>Selected class breakdown</h3>
+              <div class="note">Teacher tools: add 5 min, remove 5 min, or clear one student.</div>
+              <div id="totalsBoard" class="totalsBoard"></div>
+            </div>
+            <div class="totalsCard">
+              <h3>Recent sessions</h3>
+              <div id="sessionList" class="sessionList"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+  (() => {
+    const STORAGE_KEY = 'phs-class-clock-v7';
+    const LEGACY_KEYS = [
+      'phs-class-clock-v5',
+      'phs-simple-class-clock-v4',
+      'phs-simple-class-clock-v3',
+      'phs-simple-class-clock-v2',
+      'phs-simple-class-clock-v1'
+    ];
+    const ROUND_MINUTES = 50;
+    const LAST_TEN_MINUTES = 10;
+    const GOAL_MINUTES_PER_STUDENT = 50;
+    const COMBO_WINDOW_MINUTES = 5;
+    const COMBO_BONUS_XP = 5;
+    const BOSS_BONUS_XP = 5;
+    const LEVEL_STEP = 60;
+    const LEVEL_ICONS = ['🌱','🛠️','🚀','⚡','🏆','👑'];
+    const LEVEL_NAMES = ['Starter','Maker','Builder','Creator','Expert','Legend'];
+    const flashMap = new Map();
+
+    const AUTO_BACKGROUNDS = {
+      inactive: { preset: 'inactive' },
+      active: { preset: 'active' },
+      warning: { preset: 'warning' }
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      miniClock: $('miniClock'),
+      settingsBtn: $('settingsBtn'),
+      settingsDrawer: $('settingsDrawer'),
+      closeSettingsBtn: $('closeSettingsBtn'),
+      modeStudentBtn: $('modeStudentBtn'),
+      modeTeacherBtn: $('modeTeacherBtn'),
+      teacherTools: $('teacherTools'),
+      navClock: $('navClock'),
+      navSetup: $('navSetup'),
+      navTotals: $('navTotals'),
+      exportBtn: $('exportBtn'),
+      importBtn: $('importBtn'),
+      csvBtn: $('csvBtn'),
+      resetBtn: $('resetBtn'),
+      fileInput: $('fileInput'),
+      clockView: $('clockView'),
+      setupView: $('setupView'),
+      totalsView: $('totalsView'),
+      preRoundHero: $('preRoundHero'),
+      activeStrip: $('activeStrip'),
+      bigClock: $('bigClock'),
+      heroTitle: $('heroTitle'),
+      heroSub: $('heroSub'),
+      heroMeta: $('heroMeta'),
+      stripTitle: $('stripTitle'),
+      stripSub: $('stripSub'),
+      stripTime: $('stripTime'),
+      stripRemaining: $('stripRemaining'),
+      searchInput: $('searchInput'),
+      endClassBtn: $('endClassBtn'),
+      searchInputIdle: $('searchInputIdle'),
+      classButtons: $('classButtons'),
+      letterJump: $('letterJump'),
+      summaryPreview: $('summaryPreview'),
+      summaryPanel: $('summaryPanel'),
+      studentGrid: $('studentGrid'),
+      classNameInput: $('classNameInput'),
+      studentNamesInput: $('studentNamesInput'),
+      nameCountHint: $('nameCountHint'),
+      duplicateHint: $('duplicateHint'),
+      saveClassBtn: $('saveClassBtn'),
+      newClassBtn: $('newClassBtn'),
+      duplicateClassBtn: $('duplicateClassBtn'),
+      deleteClassBtn: $('deleteClassBtn'),
+      classList: $('classList'),
+      totalsClassButtons: $('totalsClassButtons'),
+      totalsSummary: $('totalsSummary'),
+      clearClassTotalsBtn: $('clearClassTotalsBtn'),
+      classChart: $('classChart'),
+      studentChartTitle: $('studentChartTitle'),
+      studentChart: $('studentChart'),
+      totalsBoard: $('totalsBoard'),
+      sessionList: $('sessionList'),
+      toast: $('toast')
+    };
+
+    const emptyState = () => ({
+      mode: 'teacher',
+      currentView: 'clock',
+      classes: [],
+      sessions: [],
+      activeSessions: {},
+      classRounds: {},
+      lastRoundSummaries: {},
+      adjustments: [],
+      selectedClassId: null,
+      editingClassId: null,
+      searchQuery: ''
+    });
+
+    const makeId = () => Math.random().toString(36).slice(2, 10);
+    const nowIso = () => new Date().toISOString();
+    const todayKey = (date = new Date()) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+    const keyToDate = (key) => {
+      const [y,m,d] = String(key || '').split('-').map(Number);
+      return new Date(y || 2000, (m || 1) - 1, d || 1);
+    };
+    const startOfWeek = (date = new Date()) => {
+      const copy = new Date(date);
+      const day = copy.getDay();
+      const offset = day === 0 ? -6 : 1 - day;
+      copy.setHours(0,0,0,0);
+      copy.setDate(copy.getDate() + offset);
+      return copy;
+    };
+    const previousSchoolDayKey = (key) => {
+      const d = keyToDate(key);
+      do {
+        d.setDate(d.getDate() - 1);
+      } while (d.getDay() === 0 || d.getDay() === 6);
+      return todayKey(d);
+    };
+    const calcSchoolStreak = (dayKeys) => {
+      const unique = Array.from(new Set((dayKeys || []).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+      if (!unique.length) return 0;
+      let streak = 1;
+      let expected = previousSchoolDayKey(unique[0]);
+      for (let i = 1; i < unique.length; i += 1) {
+        if (unique[i] === expected) {
+          streak += 1;
+          expected = previousSchoolDayKey(unique[i]);
+        } else {
+          break;
+        }
+      }
+      return streak;
+    };
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+    
+    const escapeHtml = (str) => String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const fmtMinutes = (mins) => {
+      const total = Math.max(0, Math.round(mins || 0));
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      return h ? `${h}h ${m}m` : `${m}m`;
+    };
+    const fmtHours = (mins) => ((mins || 0) / 60).toFixed(2);
+    const fmtClock = (date = new Date()) => new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const fmtDateTime = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || String(name || '');
+    const titleCaseSpaces = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+
+    function levelInfo(xp) {
+      const level = Math.max(1, Math.floor((xp || 0) / LEVEL_STEP) + 1);
+      const index = clamp(level - 1, 0, LEVEL_ICONS.length - 1);
+      return { level, icon: LEVEL_ICONS[index], title: LEVEL_NAMES[index] || LEVEL_NAMES[LEVEL_NAMES.length - 1] };
+    }
+
+    function sessionXp(minutes, flags = {}) {
+      let xp = Math.max(0, minutes || 0);
+      if (flags.combo) xp += COMBO_BONUS_XP;
+      if (flags.boss) xp += BOSS_BONUS_XP;
+      if (flags.mystery) xp += Math.max(0, minutes || 0);
+      return xp;
+    }
+
+    function normaliseNames(text) {
+      const raw = String(text || '').split(/\r?\n/).map(titleCaseSpaces).filter(Boolean);
+      const seen = new Set();
+      const duplicates = [];
+      const names = [];
+      for (const name of raw) {
+        const key = name.toLowerCase();
+        if (seen.has(key)) {
+          duplicates.push(name);
+        } else {
+          seen.add(key);
+          names.push(name);
+        }
+      }
+      names.sort((a,b) => a.localeCompare(b));
+      return { names, rawCount: raw.length, duplicateCount: duplicates.length };
+    }
+
+    function migrate(raw) {
+      const state = emptyState();
+      if (!raw || typeof raw !== 'object') return state;
+      state.mode = raw.mode === 'student' ? 'student' : 'teacher';
+      state.currentView = ['clock','setup','totals'].includes(raw.currentView) ? raw.currentView : 'clock';
+      state.searchQuery = typeof raw.searchQuery === 'string' ? raw.searchQuery : '';
+      state.selectedClassId = raw.selectedClassId || null;
+      state.editingClassId = raw.editingClassId || null;
+      state.classes = Array.isArray(raw.classes) ? raw.classes.map((cls) => ({
+        id: cls.id || makeId(),
+        name: titleCaseSpaces(cls.name || 'Class'),
+        students: Array.isArray(cls.students) ? cls.students.map((student) => ({
+          id: student.id || makeId(),
+          name: titleCaseSpaces(student.name || 'Student')
+        })) : []
+      })) : [];
+      state.sessions = Array.isArray(raw.sessions) ? raw.sessions.map((session) => ({
+        id: session.id || makeId(),
+        classId: session.classId || '',
+        studentId: session.studentId || '',
+        in: session.in || session.start || nowIso(),
+        out: session.out || session.end || nowIso(),
+        minutes: Number(session.minutes) || 0,
+        xp: Number(session.xp) || (Number(session.minutes) || 0) + (Number(session.bonusXp) || 0),
+        dateKey: session.dateKey || session.dayKey || todayKey(new Date(session.in || Date.now())),
+        roundId: session.roundId || session.windowId || null,
+        autoFinished: !!session.autoFinished,
+        combo: !!(session.combo || session.bonusFlags?.combo),
+        mystery: !!(session.mystery || session.bonusFlags?.mystery),
+        boss: !!(session.boss || session.bonusFlags?.boss)
+      })) : [];
+      if (raw.activeSessions && typeof raw.activeSessions === 'object') {
+        for (const [key, value] of Object.entries(raw.activeSessions)) {
+          if (!value || typeof value !== 'object') continue;
+          state.activeSessions[key] = {
+            classId: value.classId || key.split('::')[0] || '',
+            studentId: value.studentId || key.split('::')[1] || '',
+            in: value.in || value.start || nowIso(),
+            roundId: value.roundId || value.windowId || null,
+            roundEnd: value.roundEnd || value.windowEnd || nowIso(),
+            combo: !!(value.combo || value.bonusFlags?.combo),
+            mystery: !!(value.mystery || value.bonusFlags?.mystery),
+            boss: !!(value.boss || value.bonusFlags?.boss)
+          };
+        }
+      }
+      if (raw.classRounds && typeof raw.classRounds === 'object') {
+        for (const [classId, round] of Object.entries(raw.classRounds)) {
+          if (!round) continue;
+          state.classRounds[classId] = {
+            id: round.id || makeId(),
+            start: round.start || nowIso(),
+            end: round.end || new Date(Date.now() + ROUND_MINUTES * 60000).toISOString(),
+            dateKey: round.dateKey || todayKey(new Date(round.start || Date.now())),
+            startedByStudentId: round.startedByStudentId || null,
+            mysteryStudentId: round.mysteryStudentId || null,
+            boss: !!round.boss
+          };
+        }
+      } else if (raw.classWindows && typeof raw.classWindows === 'object') {
+        for (const [classId, round] of Object.entries(raw.classWindows)) {
+          if (!round) continue;
+          state.classRounds[classId] = {
+            id: round.id || makeId(),
+            start: round.start || nowIso(),
+            end: round.end || new Date(Date.now() + ROUND_MINUTES * 60000).toISOString(),
+            dateKey: round.dateKey || round.dayKey || todayKey(new Date(round.start || Date.now())),
+            startedByStudentId: round.startedByStudentId || null,
+            mysteryStudentId: round.mysteryStudentId || null,
+            boss: !!(round.boss || round.bossRound)
+          };
+        }
+      }
+      state.lastRoundSummaries = raw.lastRoundSummaries && typeof raw.lastRoundSummaries === 'object' ? raw.lastRoundSummaries : {};
+      state.adjustments = Array.isArray(raw.adjustments) ? raw.adjustments.map((adj) => ({
+        id: adj.id || makeId(),
+        classId: adj.classId || '',
+        studentId: adj.studentId || '',
+        minutes: Number(adj.minutes) || 0,
+        dateKey: adj.dateKey || todayKey(new Date(adj.createdAt || Date.now())),
+        createdAt: adj.createdAt || nowIso(),
+        roundId: adj.roundId || null,
+        note: titleCaseSpaces(adj.note || 'Teacher adjustment')
+      })) : [];
+      return state;
+    }
+
+    function loadState() {
+      try {
+        const current = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (current) return migrate(current);
+      } catch {}
+      for (const key of LEGACY_KEYS) {
+        try {
+          const legacy = JSON.parse(localStorage.getItem(key) || 'null');
+          if (legacy) return migrate(legacy);
+        } catch {}
+      }
+      return emptyState();
+    }
+
+    let state = loadState();
+    let toastTimer = null;
+    applyBackgroundTheme();
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function getPhaseBackground() {
+      const cls = getSelectedClass();
+      if (!cls) return { preset: 'inactive', ...AUTO_BACKGROUNDS.inactive };
+      const board = roundBoard(cls.id, new Date());
+      if (!board.active) return { preset: 'inactive', ...AUTO_BACKGROUNDS.inactive };
+      if (board.remainingMinutes <= LAST_TEN_MINUTES) return { preset: 'warning', ...AUTO_BACKGROUNDS.warning };
+      return { preset: 'active', ...AUTO_BACKGROUNDS.active };
+    }
+
+    function applyBackgroundTheme() {
+      const bg = getPhaseBackground();
+      document.body.classList.remove('phase-inactive', 'phase-active', 'phase-warning');
+      document.body.classList.add(`phase-${bg.preset || 'inactive'}`);
+    }
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => els.toast.classList.remove('show'), 1800);
+    }
+
+    function getClassById(id) {
+      return state.classes.find((cls) => cls.id === id) || null;
+    }
+
+    function ensureSelection() {
+      if (!state.classes.length) {
+        state.selectedClassId = null;
+        state.editingClassId = null;
+        return;
+      }
+      if (!getClassById(state.selectedClassId)) state.selectedClassId = state.classes[0].id;
+      if (state.editingClassId && !getClassById(state.editingClassId)) state.editingClassId = null;
+    }
+
+    function getSelectedClass() {
+      return getClassById(state.selectedClassId) || state.classes[0] || null;
+    }
+
+    function studentKey(classId, studentId) {
+      return `${classId}::${studentId}`;
+    }
+
+    function isBossRound(date = new Date()) {
+      return date.getDay() === 5 || date.getHours() >= 14;
+    }
+
+    function getRound(classId) {
+      return state.classRounds[classId] || null;
+    }
+
+    function createRound(classId, starterStudentId, now = new Date()) {
+      const cls = getClassById(classId);
+      if (!cls) return null;
+      const mysteryStudentId = cls.students.length ? cls.students[Math.floor(Math.random() * cls.students.length)].id : null;
+      const round = {
+        id: makeId(),
+        start: now.toISOString(),
+        end: new Date(now.getTime() + ROUND_MINUTES * 60000).toISOString(),
+        dateKey: todayKey(now),
+        startedByStudentId: starterStudentId,
+        mysteryStudentId,
+        boss: isBossRound(now)
+      };
+      state.classRounds[classId] = round;
+      delete state.lastRoundSummaries[classId];
+      return round;
+    }
+
+    function getOrCreateActiveRound(classId, starterStudentId, now = new Date()) {
+      const existing = getRound(classId);
+      if (existing && new Date(existing.end) > now) return existing;
+      if (existing) finalizeRound(classId, new Date(existing.end));
+      return createRound(classId, starterStudentId, now);
+    }
+
+    function getStudentAdjustments(classId, studentId) {
+      return (state.adjustments || []).filter((adj) => adj.classId === classId && adj.studentId === studentId);
+    }
+
+    function clearStudentTotals(classId, studentId) {
+      const cls = getClassById(classId);
+      const student = cls?.students.find((item) => item.id === studentId);
+      if (!cls || !student) return;
+      if (!confirm(`Clear all saved time for ${student.name}?`)) return;
+      state.sessions = state.sessions.filter((session) => !(session.classId === classId && session.studentId === studentId));
+      state.adjustments = state.adjustments.filter((adj) => !(adj.classId === classId && adj.studentId === studentId));
+      delete state.activeSessions[studentKey(classId, studentId)];
+      saveState();
+      render();
+      showToast(`${firstName(student.name)} reset.`);
+    }
+
+    function clearClassTotals() {
+      const cls = getSelectedClass();
+      if (!cls) return;
+      if (!confirm(`Clear all saved time for ${cls.name}?`)) return;
+      state.sessions = state.sessions.filter((session) => session.classId !== cls.id);
+      state.adjustments = state.adjustments.filter((adj) => adj.classId !== cls.id);
+      for (const key of Object.keys(state.activeSessions)) {
+        if (key.startsWith(cls.id + '::')) delete state.activeSessions[key];
+      }
+      delete state.classRounds[cls.id];
+      delete state.lastRoundSummaries[cls.id];
+      saveState();
+      render();
+      showToast(`${cls.name} totals cleared.`);
+    }
+
+    function addTeacherMinutes(classId, studentId, minutes) {
+      const cls = getClassById(classId);
+      const student = cls?.students.find((item) => item.id === studentId);
+      if (!cls || !student || !minutes) return;
+      const now = new Date();
+      const round = getRound(classId);
+      const activeRound = round && new Date(round.end) > now ? round : null;
+      state.adjustments.push({
+        id: makeId(),
+        classId,
+        studentId,
+        minutes,
+        dateKey: todayKey(now),
+        createdAt: now.toISOString(),
+        roundId: activeRound ? activeRound.id : null,
+        note: minutes > 0 ? 'Teacher +5 min' : 'Teacher -5 min'
+      });
+      flashMap.set(studentKey(classId, studentId), Date.now() + 500);
+      saveState();
+      render();
+      showToast(`${firstName(student.name)} ${minutes > 0 ? '+5 min' : '-5 min'}`);
+    }
+
+    function getStudentStats(classId, studentId, now = new Date()) {
+      const today = todayKey(now);
+      const weekStart = startOfWeek(now);
+      let todayMinutes = 0;
+      let weekMinutes = 0;
+      let totalMinutes = 0;
+      let totalXp = 0;
+      let personalBest = 0;
+      const dayKeys = [];
+      let completed = 0;
+      let adjustmentMinutes = 0;
+
+      for (const session of state.sessions) {
+        if (session.classId !== classId || session.studentId !== studentId) continue;
+        const mins = Number(session.minutes) || 0;
+        const xp = Number(session.xp) || mins;
+        const dateKey = session.dateKey || todayKey(new Date(session.in));
+        const date = keyToDate(dateKey);
+        totalMinutes += mins;
+        totalXp += xp;
+        personalBest = Math.max(personalBest, mins);
+        dayKeys.push(dateKey);
+        completed += 1;
+        if (dateKey === today) todayMinutes += mins;
+        if (date >= weekStart) weekMinutes += mins;
+      }
+
+      for (const adj of getStudentAdjustments(classId, studentId)) {
+        const mins = Number(adj.minutes) || 0;
+        const dateKey = adj.dateKey || todayKey(new Date(adj.createdAt || Date.now()));
+        const date = keyToDate(dateKey);
+        adjustmentMinutes += mins;
+        totalMinutes += mins;
+        if (dateKey === today) todayMinutes += mins;
+        if (date >= weekStart) weekMinutes += mins;
+      }
+
+      const active = state.activeSessions[studentKey(classId, studentId)] || null;
+      let runningMinutes = 0;
+      let runningXp = 0;
+      if (active && active.in) {
+        const start = new Date(active.in);
+        const endCap = new Date(active.roundEnd || now);
+        const effectiveEnd = now > endCap ? endCap : now;
+        runningMinutes = Math.max(0, (effectiveEnd - start) / 60000);
+        runningXp = sessionXp(runningMinutes, active);
+        totalMinutes += runningMinutes;
+        totalXp += runningXp;
+        if (todayKey(start) === today) todayMinutes += runningMinutes;
+        if (start >= weekStart) weekMinutes += runningMinutes;
+      }
+
+      totalMinutes = Math.max(0, totalMinutes);
+      todayMinutes = Math.max(0, todayMinutes);
+      weekMinutes = Math.max(0, weekMinutes);
+      totalXp = Math.max(0, totalXp);
+
+      return {
+        active,
+        adjustmentMinutes,
+        totalMinutes,
+        todayMinutes,
+        weekMinutes,
+        totalXp,
+        runningMinutes,
+        runningXp,
+        personalBest,
+        completed,
+        streak: calcSchoolStreak(dayKeys),
+        level: levelInfo(totalXp)
+      };
+    }
+
+    function getClassStats(classId, now = new Date()) {
+      const cls = getClassById(classId);
+      if (!cls) return { students: 0, activeCount: 0, todayMinutes: 0, weekMinutes: 0, totalMinutes: 0, totalXp: 0, sessions: 0 };
+      let activeCount = 0;
+      let todayMinutes = 0;
+      let weekMinutes = 0;
+      let totalMinutes = 0;
+      let totalXp = 0;
+      let sessions = 0;
+      for (const student of cls.students) {
+        const stats = getStudentStats(classId, student.id, now);
+        if (stats.active) activeCount += 1;
+        todayMinutes += stats.todayMinutes;
+        weekMinutes += stats.weekMinutes;
+        totalMinutes += stats.totalMinutes;
+        totalXp += stats.totalXp;
+        sessions += stats.completed;
+      }
+      return { students: cls.students.length, activeCount, todayMinutes, weekMinutes, totalMinutes, totalXp, sessions };
+    }
+
+    function roundBoard(classId, now = new Date()) {
+      const cls = getClassById(classId);
+      if (!cls) return { active: false, items: [], round: null, totalMinutes: 0, totalXp: 0, goalMinutes: 0, preview: null };
+      const round = getRound(classId);
+      const active = !!(round && new Date(round.end) > now);
+      const sortedAlpha = [...cls.students].sort((a,b) => a.name.localeCompare(b.name));
+      const alphaRank = new Map(sortedAlpha.map((student, index) => [student.id, index + 1]));
+      let totalMinutes = 0;
+      let totalXp = 0;
+
+      const items = cls.students.map((student) => {
+        const stats = getStudentStats(classId, student.id, now);
+        let roundMinutes = 0;
+        let roundXp = 0;
+        if (round) {
+          for (const session of state.sessions) {
+            if (session.classId === classId && session.studentId === student.id && session.roundId === round.id) {
+              roundMinutes += Number(session.minutes) || 0;
+              roundXp += Number(session.xp) || Number(session.minutes) || 0;
+            }
+          }
+          if (stats.active && stats.active.roundId === round.id) {
+            roundMinutes += stats.runningMinutes;
+            roundXp += stats.runningXp;
+          }
+          for (const adj of state.adjustments) {
+            if (adj.classId === classId && adj.studentId === student.id && adj.roundId === round.id) roundMinutes += Number(adj.minutes) || 0;
+          }
+        }
+        roundMinutes = Math.max(0, roundMinutes);
+        totalMinutes += roundMinutes;
+        totalXp += roundXp;
+        return {
+          student,
+          stats,
+          roundMinutes,
+          roundXp,
+          startRank: alphaRank.get(student.id) || 999
+        };
+      });
+
+      if (active) {
+        items.sort((a,b) => (b.roundMinutes - a.roundMinutes) || (b.roundXp - a.roundXp) || a.student.name.localeCompare(b.student.name));
+      } else {
+        items.sort((a,b) => a.student.name.localeCompare(b.student.name));
+      }
+
+      items.forEach((item, index) => {
+        item.rank = index + 1;
+        item.improvement = item.startRank - item.rank;
+      });
+
+      const biggestClimber = [...items].filter((item) => item.improvement > 0)
+        .sort((a,b) => (b.improvement - a.improvement) || (b.roundMinutes - a.roundMinutes) || a.student.name.localeCompare(b.student.name))[0] || null;
+      const consistency = [...items].filter((item) => item.stats.streak >= 3)
+        .sort((a,b) => (b.stats.streak - a.stats.streak) || (b.stats.totalMinutes - a.stats.totalMinutes) || a.student.name.localeCompare(b.student.name))[0] || null;
+
+      return {
+        active,
+        items,
+        round,
+        totalMinutes,
+        totalXp,
+        goalMinutes: cls.students.length * GOAL_MINUTES_PER_STUDENT,
+        remainingMinutes: active ? Math.max(0, (new Date(round.end) - now) / 60000) : 0,
+        biggestClimber,
+        consistency,
+        mysteryStudentId: round?.mysteryStudentId || null,
+        boss: !!round?.boss
+      };
+    }
+
+    function medalFor(rank, active) {
+      if (!active) return null;
+      if (rank === 1) return '🥇';
+      if (rank === 2) return '🥈';
+      if (rank === 3) return '🥉';
+      return null;
+    }
+
+    function activeKeyEntries(classId) {
+      return Object.entries(state.activeSessions).filter(([key]) => key.startsWith(classId + '::'));
+    }
+
+    function finalizeActiveSession(key, endedAt, auto = false) {
+      const active = state.activeSessions[key];
+      if (!active || !active.in) return null;
+      const classId = active.classId || key.split('::')[0];
+      const studentId = active.studentId || key.split('::')[1];
+      const endCap = new Date(active.roundEnd || endedAt);
+      const actualEnd = endedAt > endCap ? endCap : endedAt;
+      const minutes = Math.max(0, (actualEnd - new Date(active.in)) / 60000);
+      const xp = sessionXp(minutes, active);
+      const session = {
+        id: makeId(),
+        classId,
+        studentId,
+        in: active.in,
+        out: actualEnd.toISOString(),
+        minutes,
+        xp,
+        dateKey: todayKey(new Date(active.in)),
+        roundId: active.roundId || null,
+        autoFinished: !!auto,
+        combo: !!active.combo,
+        mystery: !!active.mystery,
+        boss: !!active.boss
+      };
+      state.sessions.push(session);
+      delete state.activeSessions[key];
+      return session;
+    }
+
+    function buildSummary(classId, round, now = new Date()) {
+      const cls = getClassById(classId);
+      if (!cls || !round) return null;
+      const board = roundBoard(classId, now);
+      const podium = board.items.slice(0,3).map((item, index) => ({
+        medal: medalFor(index + 1, true),
+        name: item.student.name,
+        minutes: Math.round(item.roundMinutes)
+      }));
+      const biggestClimber = board.biggestClimber ? {
+        name: board.biggestClimber.student.name,
+        rise: board.biggestClimber.improvement
+      } : null;
+      const starter = cls.students.find((student) => student.id === round.startedByStudentId);
+      const mystery = round.mysteryStudentId ? cls.students.find((student) => student.id === round.mysteryStudentId) : null;
+      return {
+        roundId: round.id,
+        classId,
+        className: cls.name,
+        start: round.start,
+        end: round.end,
+        totalMinutes: board.totalMinutes,
+        totalXp: board.totalXp,
+        goalMinutes: board.goalMinutes,
+        podium,
+        biggestClimber,
+        starterName: starter?.name || null,
+        mysteryName: mystery?.name || null,
+        boss: !!round.boss,
+        consistencyName: board.consistency?.student.name || null,
+        createdAt: nowIso()
+      };
+    }
+
+    function finalizeRound(classId, endedAt = new Date()) {
+      const round = getRound(classId);
+      if (!round) return null;
+      for (const [key] of activeKeyEntries(classId)) finalizeActiveSession(key, endedAt, true);
+      const summary = buildSummary(classId, round, endedAt);
+      if (summary) state.lastRoundSummaries[classId] = summary;
+      delete state.classRounds[classId];
+      return summary;
+    }
+
+    function closeExpiredRounds() {
+      const now = new Date();
+      let finishedCount = 0;
+      for (const [classId, round] of Object.entries(state.classRounds)) {
+        if (new Date(round.end) <= now) {
+          const summary = finalizeRound(classId, new Date(round.end));
+          if (summary) finishedCount += 1;
+        }
+      }
+      if (finishedCount) {
+        saveState();
+        showToast(finishedCount === 1 ? 'Round finished automatically.' : `${finishedCount} rounds finished automatically.`);
+      }
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const time = fmtClock(now);
+      els.miniClock.textContent = time;
+      els.bigClock.textContent = time;
+      els.stripTime.textContent = time;
+    }
+
+    function renderViews() {
+      const isStudent = state.mode === 'student';
+      if (isStudent && state.currentView !== 'clock') state.currentView = 'clock';
+      els.teacherTools.style.display = isStudent ? 'none' : 'grid';
+      els.modeStudentBtn.classList.toggle('active', isStudent);
+      els.modeTeacherBtn.classList.toggle('active', !isStudent);
+      els.navClock.classList.toggle('active', state.currentView === 'clock');
+      els.navSetup.classList.toggle('active', state.currentView === 'setup');
+      els.navTotals.classList.toggle('active', state.currentView === 'totals');
+      els.clockView.classList.toggle('hidden', state.currentView !== 'clock');
+      els.setupView.classList.toggle('hidden', state.currentView !== 'setup');
+      els.totalsView.classList.toggle('hidden', state.currentView !== 'totals');
+    }
+
+    function renderClassButtons() {
+      if (!state.classes.length) {
+        els.classButtons.innerHTML = '<div class="empty" style="width:100%">No classes yet. Open Setup to add one.</div>';
+        els.totalsClassButtons.innerHTML = '<div class="empty" style="width:100%">Add a class first.</div>';
+        return;
+      }
+      const selectedId = getSelectedClass()?.id;
+      const html = state.classes.map((cls) => {
+        const stats = getClassStats(cls.id);
+        return `<button class="classBtn ${cls.id === selectedId ? 'active' : ''}" data-class-id="${escapeHtml(cls.id)}">${escapeHtml(cls.name)} · ${stats.activeCount}/${stats.students}</button>`;
+      }).join('');
+      els.classButtons.innerHTML = html;
+      els.totalsClassButtons.innerHTML = html;
+      [...els.classButtons.querySelectorAll('[data-class-id]'), ...els.totalsClassButtons.querySelectorAll('[data-class-id]')].forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.selectedClassId = btn.dataset.classId;
+          state.searchQuery = '';
+          syncSearchInputs();
+          saveState();
+          render();
+        });
+      });
+    }
+
+    function syncSearchInputs() {
+      els.searchInput.value = state.searchQuery || '';
+      els.searchInputIdle.value = state.searchQuery || '';
+    }
+
+    function renderLetterJump(cls, items) {
+      if (!cls || cls.students.length < 12) {
+        els.letterJump.innerHTML = '';
+        return;
+      }
+      const letters = Array.from(new Set((items || cls.students).map((item) => (item.student ? item.student.name : item.name).trim().charAt(0).toUpperCase()).filter(Boolean)));
+      letters.sort();
+      const current = String(state.searchQuery || '').trim().toUpperCase();
+      els.letterJump.innerHTML = [`<button class="jumpBtn ${current === '' ? 'active' : ''}" data-letter="">All</button>`]
+        .concat(letters.map((letter) => `<button class="jumpBtn ${current === letter ? 'active' : ''}" data-letter="${escapeHtml(letter)}">${escapeHtml(letter)}</button>`))
+        .join('');
+      els.letterJump.querySelectorAll('[data-letter]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.searchQuery = btn.dataset.letter || '';
+          syncSearchInputs();
+          saveState();
+          renderClockArea();
+        });
+      });
+    }
+
+    function renderHeroAndStrip(cls, board) {
+      if (!cls) {
+        els.preRoundHero.classList.remove('compactHidden');
+        els.activeStrip.classList.add('hidden');
+        els.heroTitle.textContent = 'Choose a class';
+        els.heroSub.textContent = 'The first clock-in starts a 50 minute round.';
+        els.heroMeta.innerHTML = '<span class="pill">No class selected</span>';
+        return;
+      }
+      const stats = getClassStats(cls.id);
+      const summary = state.lastRoundSummaries[cls.id] || null;
+      if (board.active) {
+        els.preRoundHero.classList.add('compactHidden');
+        els.activeStrip.classList.remove('hidden');
+        els.searchInput.style.display = 'block';
+        els.searchInputIdle.style.display = 'none';
+        els.endClassBtn.style.display = state.mode === 'teacher' ? 'inline-flex' : 'none';
+        els.stripTitle.textContent = cls.name;
+        els.stripSub.textContent = `${stats.activeCount} clocked in · ends ${fmtClock(board.round.end)}`;
+        els.stripRemaining.textContent = `${Math.max(0, Math.ceil(board.remainingMinutes))}m left`;
+      } else {
+        els.endClassBtn.style.display = 'none';
+        els.preRoundHero.classList.remove('compactHidden');
+        els.activeStrip.classList.add('hidden');
+        els.searchInput.style.display = 'none';
+        els.searchInputIdle.style.display = 'block';
+        els.heroTitle.textContent = cls.name;
+        els.heroSub.textContent = summary ? `Last round finished at ${fmtClock(summary.end)}.` : 'The first clock-in starts a 50 minute round.';
+        const parts = [
+          `<span class="pill">${stats.students} students</span>`,
+          `<span class="pill">Today ${fmtMinutes(stats.todayMinutes)}</span>`,
+          `<span class="pill">All time ${fmtHours(stats.totalMinutes)} h</span>`
+        ];
+        if (summary) parts.push(`<span class="pill good">Last round ${fmtMinutes(summary.totalMinutes)}</span>`);
+        els.heroMeta.innerHTML = parts.join('');
+      }
+    }
+
+    function renderSummaryPreview(cls, board) {
+      if (!cls) {
+        els.summaryPreview.classList.add('hidden');
+        els.summaryPreview.innerHTML = '';
+        return;
+      }
+      if (!board.active || board.remainingMinutes > LAST_TEN_MINUTES) {
+        els.summaryPreview.classList.add('hidden');
+        els.summaryPreview.innerHTML = '';
+        return;
+      }
+      const podium = board.items.slice(0,3).map((item, index) => `<span class="pill ${index === 0 ? 'warn' : 'accent'}">${medalFor(index + 1, true)} ${escapeHtml(firstName(item.student.name))} ${fmtMinutes(item.roundMinutes)}</span>`).join('');
+      const goalPct = board.goalMinutes ? Math.round((board.totalMinutes / board.goalMinutes) * 100) : 0;
+      const extras = [
+        `<span class="pill">Goal ${goalPct}%</span>`,
+        `<span class="pill good">Class ${fmtMinutes(board.totalMinutes)}</span>`
+      ];
+      if (board.biggestClimber) extras.push(`<span class="pill accent">🚀 ${escapeHtml(firstName(board.biggestClimber.student.name))} +${board.biggestClimber.improvement}</span>`);
+      if (board.consistency) extras.push(`<span class="pill">🔥 ${escapeHtml(firstName(board.consistency.student.name))}</span>`);
+      els.summaryPreview.classList.remove('hidden');
+      els.summaryPreview.innerHTML = `
+        <div class="previewTop">
+          <div class="previewTitle">Final stretch</div>
+          <div class="muted">${Math.max(0, Math.ceil(board.remainingMinutes))} minutes to go</div>
+        </div>
+        <div class="previewPodium">${podium || '<span class="pill">No one clocked in yet</span>'}</div>
+        <div class="previewStats">${extras.join('')}</div>
+      `;
+    }
+
+    function renderSummaryPanel(cls) {
+      if (!cls) {
+        els.summaryPanel.classList.add('hidden');
+        els.summaryPanel.innerHTML = '';
+        return;
+      }
+      const summary = state.lastRoundSummaries[cls.id];
+      if (!summary) {
+        els.summaryPanel.classList.add('hidden');
+        els.summaryPanel.innerHTML = '';
+        return;
+      }
+      const goalPct = summary.goalMinutes ? Math.round((summary.totalMinutes / summary.goalMinutes) * 100) : 0;
+      els.summaryPanel.classList.remove('hidden');
+      els.summaryPanel.innerHTML = `
+        <div class="summaryTitle">
+          <h3>Round summary</h3>
+          <div class="muted">Ended ${escapeHtml(fmtDateTime(summary.end))}</div>
+        </div>
+        <div class="summaryGrid">
+          <div class="metricCard"><div class="metricLabel">Class total</div><div class="metricValue">${escapeHtml(fmtMinutes(summary.totalMinutes))}</div><div class="metricSub">${escapeHtml(Math.round(summary.totalXp))} XP</div></div>
+          <div class="metricCard"><div class="metricLabel">Goal</div><div class="metricValue">${escapeHtml(String(goalPct))}%</div><div class="metricSub">${escapeHtml(fmtMinutes(summary.goalMinutes))} target</div></div>
+          <div class="metricCard"><div class="metricLabel">Starter</div><div class="metricValue">${escapeHtml(firstName(summary.starterName || '—'))}</div><div class="metricSub">Started the round</div></div>
+          <div class="metricCard"><div class="metricLabel">Mystery</div><div class="metricValue">${escapeHtml(firstName(summary.mysteryName || '—'))}</div><div class="metricSub">Double XP target</div></div>
+        </div>
+        <div class="previewPodium">
+          ${(summary.podium || []).map((item) => `<span class="pill warn">${escapeHtml(item.medal)} ${escapeHtml(firstName(item.name))} ${escapeHtml(fmtMinutes(item.minutes))}</span>`).join('') || '<span class="pill">No podium yet</span>'}
+        </div>
+        <div class="previewStats">
+          ${summary.biggestClimber ? `<span class="pill accent">🚀 ${escapeHtml(firstName(summary.biggestClimber.name))} climbed ${escapeHtml(String(summary.biggestClimber.rise))}</span>` : ''}
+          ${summary.consistencyName ? `<span class="pill">🔥 ${escapeHtml(firstName(summary.consistencyName))} kept the streak going</span>` : ''}
+          ${summary.boss ? '<span class="pill">👾 Boss round bonus was active</span>' : ''}
+        </div>
+      `;
+    }
+
+    function promptForItem(item, board, previous) {
+      if (board.active) {
+        if (item.rank === 1) return 'Hold the lead';
+        const target = Math.max(1, Math.ceil((previous?.roundMinutes || 0) - item.roundMinutes));
+        return `+${target}m to move up`;
+      }
+      if (item.stats.streak >= 3) return `🔥 ${item.stats.streak}-day streak`;
+      if (item.stats.personalBest > 0) return `🎯 PB ${fmtMinutes(item.stats.personalBest)}`;
+      return 'Tap to clock in';
+    }
+
+    function tagsForItem(item, board) {
+      const tags = [];
+      if (board.active && item.stats.personalBest > 0 && item.roundMinutes >= item.stats.personalBest) tags.push('PB pace');
+      if (board.biggestClimber && board.biggestClimber.student.id === item.student.id && item.improvement > 0) tags.push(`+${item.improvement}`);
+      if (board.mysteryStudentId === item.student.id) tags.push('Mystery');
+      if (item.stats.active?.combo) tags.push('Combo');
+      return tags.slice(0, 2);
+    }
+
+    function cardClass(rank, active, isIn) {
+      const classes = ['studentCard'];
+      if (isIn) {
+        classes.push('in', 'present');
+      } else if (active) {
+        classes.push('away');
+      } else {
+        classes.push('idle');
+      }
+      if (active && rank === 1) classes.push('first');
+      if (active && rank === 2) classes.push('second');
+      if (active && rank === 3) classes.push('third');
+      return classes.join(' ');
+    }
+
+    function renderClockArea() {
+      const cls = getSelectedClass();
+      if (!cls) {
+        els.searchInput.style.display = 'none';
+        els.searchInputIdle.style.display = 'block';
+        renderHeroAndStrip(null, { active: false });
+        els.studentGrid.innerHTML = '<div class="empty" style="grid-column:1/-1">Open Setup and add a class to start.</div>';
+        els.summaryPreview.classList.add('hidden');
+        els.summaryPanel.classList.add('hidden');
+        els.letterJump.innerHTML = '';
+        return;
+      }
+      const board = roundBoard(cls.id, new Date());
+      renderHeroAndStrip(cls, board);
+      renderSummaryPreview(cls, board);
+      renderSummaryPanel(cls);
+
+      const query = String(state.searchQuery || '').trim().toLowerCase();
+      const filtered = board.items.filter((item) => {
+        if (!query) return true;
+        const lower = item.student.name.toLowerCase();
+        return query.length === 1 ? lower.startsWith(query) : lower.includes(query);
+      });
+      renderLetterJump(cls, board.items);
+
+      if (!filtered.length) {
+        els.studentGrid.innerHTML = '<div class="empty" style="grid-column:1/-1">No matching students.</div>';
+        return;
+      }
+
+      const now = Date.now();
+      els.studentGrid.innerHTML = filtered.map((item, index) => {
+        const medal = medalFor(item.rank, board.active);
+        const isIn = !!item.stats.active;
+        const badge = medal || item.stats.level.icon;
+        const meta = board.active
+          ? `${isIn ? 'IN' : 'OUT'} · ${fmtMinutes(item.roundMinutes)}`
+          : `${isIn ? 'IN' : 'TODAY'} · ${isIn ? fmtMinutes(item.stats.runningMinutes) : fmtMinutes(item.stats.todayMinutes)}`;
+        const hint = promptForItem(item, board, filtered[index - 1]);
+        const tags = tagsForItem(item, board);
+        const flashUntil = flashMap.get(studentKey(cls.id, item.student.id)) || 0;
+        const classes = `${cardClass(item.rank, board.active, isIn)} ${flashUntil > now ? 'pop' : ''}`;
+        return `
+          <button class="${classes}" data-student-id="${escapeHtml(item.student.id)}" title="${escapeHtml(item.student.name)}">
+            <div class="studentTop">
+              <div class="studentName">${escapeHtml(item.student.name)}</div>
+              <div class="badge">${escapeHtml(badge)}</div>
+            </div>
+            <div class="metaLine">${escapeHtml(meta)}</div>
+            <div class="hintLine">${escapeHtml(hint)}</div>
+            ${tags.length ? `<div class="miniTags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+          </button>
+        `;
+      }).join('');
+
+      els.studentGrid.querySelectorAll('[data-student-id]').forEach((btn) => {
+        btn.addEventListener('click', () => toggleStudent(cls.id, btn.dataset.studentId));
+      });
+    }
+
+    function renderSetupHints() {
+      const info = normaliseNames(els.studentNamesInput.value);
+      els.nameCountHint.textContent = `${info.names.length} names ready`;
+      els.duplicateHint.textContent = info.duplicateCount ? `${info.duplicateCount} duplicate${info.duplicateCount === 1 ? '' : 's'} removed on save` : '';
+    }
+
+    function renderSetupForm() {
+      const editing = state.editingClassId ? getClassById(state.editingClassId) : null;
+      els.classNameInput.value = editing ? editing.name : '';
+      els.studentNamesInput.value = editing ? [...editing.students].sort((a,b) => a.name.localeCompare(b.name)).map((student) => student.name).join('\n') : '';
+      renderSetupHints();
+    }
+
+    function renderClassList() {
+      if (!state.classes.length) {
+        els.classList.innerHTML = '<div class="empty">No classes saved yet.</div>';
+        return;
+      }
+      els.classList.innerHTML = state.classes.map((cls) => {
+        const stats = getClassStats(cls.id);
+        return `
+          <button class="classItem ${state.editingClassId === cls.id ? 'active' : ''}" data-edit-class="${escapeHtml(cls.id)}">
+            <div>
+              <div class="classItemTitle">${escapeHtml(cls.name)}</div>
+              <div class="classItemSub">${cls.students.length} students · ${fmtHours(stats.totalMinutes)} h total</div>
+            </div>
+            <div class="muted">Edit</div>
+          </button>
+        `;
+      }).join('');
+      els.classList.querySelectorAll('[data-edit-class]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.editingClassId = btn.dataset.editClass;
+          saveState();
+          renderSetupForm();
+          renderClassList();
+        });
+      });
+    }
+
+    function renderTotals() {
+      const now = new Date();
+      const selected = getSelectedClass();
+      let todayMinutes = 0;
+      let weekMinutes = 0;
+      let totalMinutes = 0;
+      let totalSessions = 0;
+      let activeCount = 0;
+      for (const cls of state.classes) {
+        const stats = getClassStats(cls.id, now);
+        todayMinutes += stats.todayMinutes;
+        weekMinutes += stats.weekMinutes;
+        totalMinutes += stats.totalMinutes;
+        totalSessions += stats.sessions;
+        activeCount += stats.activeCount;
+      }
+      els.totalsSummary.innerHTML = [
+        { label: 'Today', value: fmtMinutes(todayMinutes), sub: `${activeCount} clocked in now` },
+        { label: 'This week', value: fmtHours(weekMinutes) + ' h', sub: 'Monday to today' },
+        { label: 'All time', value: fmtHours(totalMinutes) + ' h', sub: `${totalSessions} finished sessions` },
+        { label: 'Selected class', value: selected ? selected.name : '—', sub: selected ? `${selected.students.length} students` : 'Pick a class' }
+      ].map((item) => `
+        <div class="metricCard">
+          <div class="metricLabel">${escapeHtml(item.label)}</div>
+          <div class="metricValue">${escapeHtml(item.value)}</div>
+          <div class="metricSub">${escapeHtml(item.sub)}</div>
+        </div>
+      `).join('');
+
+      const classChartItems = state.classes.map((cls) => {
+        const stats = getClassStats(cls.id, now);
+        return { label: cls.name, value: stats.totalMinutes, display: fmtHours(stats.totalMinutes) + ' h', meta: `Today ${fmtMinutes(stats.todayMinutes)} · ${stats.students} students` };
+      }).sort((a,b) => b.value - a.value || a.label.localeCompare(b.label));
+      renderBars(els.classChart, classChartItems, 'No hours recorded yet.');
+
+      if (!selected) {
+        els.studentChartTitle.textContent = 'Student hours';
+        renderBars(els.studentChart, [], 'Pick a class first.');
+        els.totalsBoard.innerHTML = '<div class="empty">Pick a class to see student totals.</div>';
+        els.sessionList.innerHTML = '<div class="empty">No sessions yet.</div>';
+        return;
+      }
+
+      els.studentChartTitle.textContent = `${selected.name} student hours`;
+      const studentChartItems = selected.students.map((student) => {
+        const stats = getStudentStats(selected.id, student.id, now);
+        return { label: student.name, value: stats.totalMinutes, display: fmtHours(stats.totalMinutes) + ' h', meta: `Today ${fmtMinutes(stats.todayMinutes)} · Week ${fmtMinutes(stats.weekMinutes)}` };
+      }).sort((a,b) => b.value - a.value || a.label.localeCompare(b.label));
+      renderBars(els.studentChart, studentChartItems, 'No student time yet.');
+
+      const rows = selected.students.map((student) => {
+        const stats = getStudentStats(selected.id, student.id, now);
+        return { student, stats };
+      }).sort((a,b) => (b.stats.totalMinutes - a.stats.totalMinutes) || a.student.name.localeCompare(b.student.name));
+
+      els.totalsBoard.innerHTML = rows.length ? rows.map(({ student, stats }) => `
+        <div class="boardRow">
+          <div class="boardTop">
+            <div class="boardName">${escapeHtml(student.name)}</div>
+            <div class="muted">${escapeHtml(stats.level.icon)} Lv ${escapeHtml(String(stats.level.level))}</div>
+          </div>
+          <div class="boardStats">
+            <span class="pill">Today ${escapeHtml(fmtMinutes(stats.todayMinutes))}</span>
+            <span class="pill">Week ${escapeHtml(fmtMinutes(stats.weekMinutes))}</span>
+            <span class="pill">All ${escapeHtml(fmtHours(stats.totalMinutes))} h</span>
+            <span class="pill">🔥 ${escapeHtml(String(stats.streak))}</span>
+            ${stats.adjustmentMinutes ? `<span class="pill ${stats.adjustmentMinutes > 0 ? 'good' : 'warn'}">Adj ${escapeHtml(fmtMinutes(Math.abs(stats.adjustmentMinutes)))} ${stats.adjustmentMinutes > 0 ? 'added' : 'removed'}</span>` : ''}
+          </div>
+          <div class="boardActions">
+            <button class="miniAction good" data-adjust-student="${escapeHtml(student.id)}" data-adjust-minutes="5" type="button">+5 min</button>
+            <button class="miniAction warn" data-adjust-student="${escapeHtml(student.id)}" data-adjust-minutes="-5" type="button">-5 min</button>
+            <button class="miniAction" data-clear-student="${escapeHtml(student.id)}" type="button">Clear student</button>
+          </div>
+        </div>
+      `).join('') : '<div class="empty">No students in this class.</div>';
+
+      els.totalsBoard.querySelectorAll('[data-adjust-student]').forEach((btn) => {
+        btn.addEventListener('click', () => addTeacherMinutes(selected.id, btn.dataset.adjustStudent, Number(btn.dataset.adjustMinutes)));
+      });
+      els.totalsBoard.querySelectorAll('[data-clear-student]').forEach((btn) => {
+        btn.addEventListener('click', () => clearStudentTotals(selected.id, btn.dataset.clearStudent));
+      });
+
+      const recent = state.sessions
+        .filter((session) => session.classId === selected.id)
+        .sort((a,b) => new Date(b.out) - new Date(a.out))
+        .slice(0, 14);
+      els.sessionList.innerHTML = recent.length ? recent.map((session) => {
+        const student = selected.students.find((item) => item.id === session.studentId);
+        const flags = [session.combo ? 'Combo' : '', session.mystery ? 'Mystery' : '', session.boss ? 'Boss' : '', session.autoFinished ? 'Auto' : '']
+          .filter(Boolean)
+          .join(' · ');
+        return `
+          <div class="sessionRow">
+            <div class="sessionTop">
+              <div class="boardName">${escapeHtml(student?.name || 'Unknown')}</div>
+              <div class="muted">${escapeHtml(fmtMinutes(session.minutes))}</div>
+            </div>
+            <div class="sessionMeta">${escapeHtml(fmtDateTime(session.in))} → ${escapeHtml(fmtClock(session.out))}</div>
+            <div class="boardStats">
+              <span class="pill">${escapeHtml(Math.round(session.xp))} XP</span>
+              ${flags ? `<span class="pill">${escapeHtml(flags)}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('') : '<div class="empty">No sessions recorded for this class yet.</div>';
+    }
+
+    function renderBars(target, items, emptyText) {
+      const clean = (items || []).filter((item) => item.value > 0);
+      if (!clean.length) {
+        target.innerHTML = `<div class="empty">${escapeHtml(emptyText)}</div>`;
+        return;
+      }
+      const max = Math.max(...clean.map((item) => item.value), 1);
+      target.innerHTML = clean.map((item) => {
+        const pct = clamp((item.value / max) * 100, 0, 100);
+        return `
+          <div class="barItem">
+            <div class="barTop">
+              <div class="barLabel">${escapeHtml(item.label)}</div>
+              <div>${escapeHtml(item.display)}</div>
+            </div>
+            <div class="barTrack"><div class="barFill" style="width:${pct}%"></div></div>
+            <div class="barMeta">${escapeHtml(item.meta || '')}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+
+    function endSelectedClass() {
+      const cls = getSelectedClass();
+      if (!cls) return;
+      const round = getRound(cls.id);
+      if (!round) {
+        showToast('No class is active right now.');
+        return;
+      }
+      if (!confirm(`End ${cls.name} now? Active students will be clocked out automatically.`)) return;
+      const summary = finalizeRound(cls.id, new Date());
+      saveState();
+      render();
+      showToast(summary ? `${cls.name} ended.` : 'Class ended.');
+    }
+
+    function toggleStudent(classId, studentId) {
+      const cls = getClassById(classId);
+      const student = cls?.students.find((item) => item.id === studentId);
+      if (!cls || !student) return;
+      const key = studentKey(classId, studentId);
+      const active = state.activeSessions[key];
+      if (active) {
+        const session = finalizeActiveSession(key, new Date(), false);
+        flashMap.set(key, Date.now() + 500);
+        saveState();
+        render();
+        if (session) showToast(`${firstName(student.name)} clocked out · ${Math.round(session.xp)} XP`);
+        return;
+      }
+
+      const now = new Date();
+      const round = getOrCreateActiveRound(classId, studentId, now);
+      state.activeSessions[key] = {
+        classId,
+        studentId,
+        in: now.toISOString(),
+        roundId: round.id,
+        roundEnd: round.end,
+        combo: now - new Date(round.start) <= COMBO_WINDOW_MINUTES * 60000,
+        mystery: round.mysteryStudentId === studentId,
+        boss: !!round.boss
+      };
+      flashMap.set(key, Date.now() + 500);
+      saveState();
+      render();
+      const bits = [];
+      if (state.activeSessions[key].combo) bits.push(`combo +${COMBO_BONUS_XP}`);
+      if (state.activeSessions[key].mystery) bits.push('mystery double XP');
+      if (state.activeSessions[key].boss) bits.push(`boss +${BOSS_BONUS_XP}`);
+      showToast(bits.length ? `${firstName(student.name)} clocked in · ${bits.join(' · ')}` : `${firstName(student.name)} clocked in`);
+    }
+
+    function saveClass() {
+      const className = titleCaseSpaces(els.classNameInput.value);
+      const info = normaliseNames(els.studentNamesInput.value);
+      if (!className) {
+        alert('Please enter a class name.');
+        return;
+      }
+      if (!info.names.length) {
+        alert('Please enter at least one student name.');
+        return;
+      }
+
+      const existing = state.editingClassId ? getClassById(state.editingClassId) : null;
+      const byName = new Map((existing?.students || []).map((student) => [student.name.toLowerCase(), student]));
+      const students = info.names.map((name) => {
+        const match = byName.get(name.toLowerCase());
+        return match ? { ...match, name } : { id: makeId(), name };
+      });
+
+      if (existing) {
+        existing.name = className;
+        existing.students = students;
+        const validIds = new Set(students.map((student) => student.id));
+        state.sessions = state.sessions.filter((session) => session.classId !== existing.id || validIds.has(session.studentId));
+        state.adjustments = state.adjustments.filter((adj) => adj.classId !== existing.id || validIds.has(adj.studentId));
+        for (const key of Object.keys(state.activeSessions)) {
+          if (!key.startsWith(existing.id + '::')) continue;
+          const studentId = key.split('::')[1];
+          if (!validIds.has(studentId)) delete state.activeSessions[key];
+        }
+        if (state.classRounds[existing.id] && !students.length) delete state.classRounds[existing.id];
+      } else {
+        const cls = { id: makeId(), name: className, students };
+        state.classes.push(cls);
+        state.selectedClassId = cls.id;
+      }
+      state.editingClassId = null;
+      saveState();
+      render();
+      state.currentView = 'clock';
+      saveState();
+      renderViews();
+      showToast(`${className} saved.`);
+    }
+
+    function startNewClass() {
+      state.editingClassId = null;
+      els.classNameInput.value = '';
+      els.studentNamesInput.value = '';
+      renderSetupHints();
+      renderClassList();
+    }
+
+    function duplicateEditingClass() {
+      const source = state.editingClassId ? getClassById(state.editingClassId) : getSelectedClass();
+      if (!source) return;
+      const clone = {
+        id: makeId(),
+        name: `${source.name} Copy`,
+        students: source.students.map((student) => ({ id: makeId(), name: student.name }))
+      };
+      state.classes.push(clone);
+      state.editingClassId = clone.id;
+      state.selectedClassId = clone.id;
+      saveState();
+      render();
+      state.currentView = 'setup';
+      renderViews();
+      showToast('Class duplicated.');
+    }
+
+    function deleteEditingClass() {
+      const cls = state.editingClassId ? getClassById(state.editingClassId) : null;
+      if (!cls) return;
+      if (!confirm(`Delete ${cls.name}? This removes its students and saved hours.`)) return;
+      state.classes = state.classes.filter((item) => item.id !== cls.id);
+      state.sessions = state.sessions.filter((session) => session.classId !== cls.id);
+      state.adjustments = state.adjustments.filter((adj) => adj.classId !== cls.id);
+      for (const key of Object.keys(state.activeSessions)) {
+        if (key.startsWith(cls.id + '::')) delete state.activeSessions[key];
+      }
+      delete state.classRounds[cls.id];
+      delete state.lastRoundSummaries[cls.id];
+      state.editingClassId = null;
+      if (state.selectedClassId === cls.id) state.selectedClassId = state.classes[0]?.id || null;
+      saveState();
+      render();
+      showToast(`${cls.name} deleted.`);
+    }
+
+    function exportBackup() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `class-clock-backup-${todayKey()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importBackup(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || 'null'));
+          state = migrate(parsed);
+          ensureSelection();
+          saveState();
+          render();
+          showToast('Backup imported.');
+        } catch {
+          alert('That file could not be imported.');
+        }
+        els.fileInput.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function exportCsv() {
+      const rows = [['Class','Student','Today Hours','Week Hours','All Time Hours','XP','Streak','Status','Clocked In At']];
+      for (const cls of state.classes) {
+        for (const student of cls.students) {
+          const stats = getStudentStats(cls.id, student.id, new Date());
+          rows.push([
+            cls.name,
+            student.name,
+            fmtHours(stats.todayMinutes),
+            fmtHours(stats.weekMinutes),
+            fmtHours(stats.totalMinutes),
+            String(Math.round(stats.totalXp)),
+            String(stats.streak),
+            stats.active ? 'In' : 'Out',
+            stats.active?.in || ''
+          ]);
+        }
+      }
+      const csv = rows.map((row) => row.map((cell) => {
+        const value = String(cell ?? '');
+        return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+      }).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `class-clock-hours-${todayKey()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetAll() {
+      if (!confirm('Reset everything? This removes all classes, sessions, and totals.')) return;
+      state = emptyState();
+      saveState();
+      render();
+    }
+
+    function toggleDrawer(force) {
+      const show = typeof force === 'boolean' ? force : els.settingsDrawer.classList.contains('hidden');
+      els.settingsDrawer.classList.toggle('hidden', !show);
+    }
+
+    function render() {
+      closeExpiredRounds();
+      ensureSelection();
+      applyBackgroundTheme();
+      updateClock();
+      syncSearchInputs();
+      renderViews();
+      renderClassButtons();
+      renderClockArea();
+      renderSetupForm();
+      renderClassList();
+      renderTotals();
+    }
+
+    els.settingsBtn.addEventListener('click', () => toggleDrawer());
+    els.closeSettingsBtn.addEventListener('click', () => toggleDrawer(false));
+    els.modeStudentBtn.addEventListener('click', () => { state.mode = 'student'; state.currentView = 'clock'; saveState(); render(); });
+    els.modeTeacherBtn.addEventListener('click', () => { state.mode = 'teacher'; saveState(); render(); });
+    els.navClock.addEventListener('click', () => { state.currentView = 'clock'; saveState(); render(); toggleDrawer(false); });
+    els.navSetup.addEventListener('click', () => { state.currentView = 'setup'; saveState(); render(); });
+    els.navTotals.addEventListener('click', () => { state.currentView = 'totals'; saveState(); render(); });
+    els.exportBtn.addEventListener('click', exportBackup);
+    els.importBtn.addEventListener('click', () => els.fileInput.click());
+    els.csvBtn.addEventListener('click', exportCsv);
+    els.resetBtn.addEventListener('click', resetAll);
+    els.clearClassTotalsBtn.addEventListener('click', clearClassTotals);
+    els.fileInput.addEventListener('change', (e) => importBackup(e.target.files?.[0]));
+    els.saveClassBtn.addEventListener('click', saveClass);
+    els.newClassBtn.addEventListener('click', startNewClass);
+    els.duplicateClassBtn.addEventListener('click', duplicateEditingClass);
+    els.deleteClassBtn.addEventListener('click', deleteEditingClass);
+    els.studentNamesInput.addEventListener('input', renderSetupHints);
+    els.endClassBtn.addEventListener('click', endSelectedClass);
+    els.searchInput.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value;
+      syncSearchInputs();
+      saveState();
+      renderClockArea();
+    });
+    els.searchInputIdle.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value;
+      syncSearchInputs();
+      saveState();
+      renderClockArea();
+    });
+
+    renderSetupForm();
+    render();
+
+    setInterval(() => {
+      updateClock();
+      closeExpiredRounds();
+      if (state.currentView === 'clock') renderClockArea();
+      if (state.currentView === 'totals') renderTotals();
+    }, 5000);
+  })();
+  </script>
+</body>
+</html>
