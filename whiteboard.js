@@ -35,6 +35,8 @@
 
   const dockBtns = Array.from(document.querySelectorAll(".dockBtn[data-tool]"));
   const clearBtn = document.getElementById("clearBtn");
+   const undoBtn = document.getElementById("undoBtn");
+const redoBtn = document.getElementById("redoBtn");
 
   const colorBtn = document.getElementById("colorBtn");
   const colorPop = document.getElementById("colorPop");
@@ -726,6 +728,127 @@
     closeLenBox();
   }
 
+ function syncStyleControlsFromSelection() {
+  const idx = state.selectionIndex;
+  if (idx < 0) {
+    updateBrushUI();
+    return;
+  }
+
+  const obj = state.objects[idx];
+  if (!obj) {
+    updateBrushUI();
+    return;
+  }
+
+  let color = state.color;
+  let opacity = state.opacity ?? 1;
+  let size = state.size ?? 5;
+  let lineStyle = state.lineStyle || "solid";
+
+  if (obj.kind === "polyFill") {
+    color = obj.fill || state.color;
+    opacity = obj.opacity ?? 1;
+  } else {
+    color = obj.color || state.color;
+    opacity = obj.opacity ?? 1;
+
+    if ((obj.kind === "rect" || obj.kind === "circle") && obj.filled && obj.fillColor) {
+      color = obj.fillColor;
+    }
+
+    if ("size" in obj) {
+      size = obj.size ?? size;
+    }
+
+    if (obj.kind === "text") {
+      size = Math.max(1, Math.round((obj.fontSize || 20) / 4));
+    }
+
+    if ("lineStyle" in obj && obj.lineStyle) {
+      lineStyle = obj.lineStyle;
+    }
+  }
+
+  state.color = color;
+  state.opacity = opacity;
+  state.size = size;
+  state.lineStyle = lineStyle;
+
+  if (colorInput) colorInput.value = color;
+  if (opacityRange) opacityRange.value = String(opacity);
+  if (brushSize) brushSize.value = String(size);
+  if (brushOut) brushOut.textContent = String(size);
+
+  updateBrushUI();
+}
+   
+function applyStyleToSelection(patch = {}) {
+  const idx = state.selectionIndex;
+  if (idx < 0) return false;
+
+  const obj = state.objects[idx];
+  if (!obj) return false;
+
+  state.undo.push(JSON.stringify(snapshot()));
+  state.redo.length = 0;
+
+  return applyStyleToSelectionLive(patch);
+}
+
+function applyStyleToSelectionLive(patch = {}) {
+  const idx = state.selectionIndex;
+  if (idx < 0) return false;
+
+  const obj = state.objects[idx];
+  if (!obj) return false;
+
+  if (patch.color != null) {
+    switch (obj.kind) {
+      case "polyFill":
+        obj.fill = patch.color;
+        break;
+
+      case "rect":
+      case "circle":
+        obj.color = patch.color;
+        if (obj.filled) obj.fillColor = patch.color;
+        break;
+
+      default:
+        obj.color = patch.color;
+        break;
+    }
+  }
+
+  if (patch.opacity != null) {
+    obj.opacity = clamp(patch.opacity, 0.05, 1);
+  }
+
+  if (patch.size != null) {
+    if ("size" in obj) {
+      obj.size = clamp(Number(patch.size), 1, 60);
+    } else if (obj.kind === "text") {
+      obj.fontSize = Math.max(14, Math.round(Number(patch.size) * 4));
+    }
+  }
+
+  if (patch.lineStyle != null) {
+    if (
+      obj.kind === "line" ||
+      obj.kind === "arrow" ||
+      obj.kind === "arc" ||
+      obj.kind === "rect" ||
+      obj.kind === "circle"
+    ) {
+      obj.lineStyle = patch.lineStyle;
+    }
+  }
+
+  redrawAll();
+  return true;
+}
+
   /* =========================
      SVG playback
   ========================= */
@@ -885,6 +1008,8 @@
   /* =========================
      Selection transforms
   ========================= */
+
+   
   function beginSelectionTransform(kind, w) {
     const idx = state.selectionIndex;
     if (idx < 0) return false;
@@ -988,8 +1113,10 @@ function commitPolyFill() {
   }
 
   // keep fills visually underneath outlines
-  state.objects.unshift(obj);
+  //state.objects.unshift(obj);
+state.objects.push(obj);
 
+   
   cancelPolyDraft();
   redrawAll();
   showToast("Poly filled");
@@ -1194,13 +1321,14 @@ function onPointerDown(e) {
         }
       }
 
-      const hit = findHit(w.x, w.y);
-      state.selectionIndex = hit;
-      redrawAll();
+const hit = findHit(w.x, w.y);
+state.selectionIndex = hit;
+syncStyleControlsFromSelection();
+redrawAll();
 
-      if (hit >= 0) beginSelectionTransform("move", w);
-      else gesture.mode = "select";
-      return;
+if (hit >= 0) beginSelectionTransform("move", w);
+else gesture.mode = "select";
+return;
     }
 
     if (state.tool === "bgMove" || state.tool === "bgScale" || state.tool === "bgRotate") {
@@ -1800,9 +1928,11 @@ function onPointerDown(e) {
         e.preventDefault();
         hardResetGesture();
         cancelPolyDraft();
-        if (state.undo.length) {
-          state.redo.push(JSON.stringify(snapshot()));
-          applySnapshot(JSON.parse(state.undo.pop()));
+     if (state.undo.length) {
+  state.redo.push(JSON.stringify(snapshot()));
+  applySnapshot(JSON.parse(state.undo.pop()));
+  syncStyleControlsFromSelection();
+
         }
         return;
       }
@@ -1810,10 +1940,11 @@ function onPointerDown(e) {
         e.preventDefault();
         hardResetGesture();
         cancelPolyDraft();
-        if (state.redo.length) {
-          state.undo.push(JSON.stringify(snapshot()));
-          applySnapshot(JSON.parse(state.redo.pop()));
-        }
+      if (state.redo.length) {
+  state.undo.push(JSON.stringify(snapshot()));
+  applySnapshot(JSON.parse(state.redo.pop()));
+  syncStyleControlsFromSelection();
+}
         return;
       }
     }
@@ -1915,7 +2046,80 @@ function onPointerDown(e) {
     setActiveTool("pen");
     redrawAll();
   });
+   let styleEditSnapshotTaken = false;
+   
+colorInput?.addEventListener("input", e => {
+  const value = e.target.value;
+  setColor(value);
 
+  if (state.selectionIndex >= 0) {
+    if (!styleEditSnapshotTaken) {
+      state.undo.push(JSON.stringify(snapshot()));
+      state.redo.length = 0;
+      styleEditSnapshotTaken = true;
+    }
+    applyStyleToSelectionLive({ color: value });
+  }
+});
+
+colorInput?.addEventListener("change", () => {
+  styleEditSnapshotTaken = false;
+});
+
+opacityRange?.addEventListener("input", e => {
+  const value = parseFloat(e.target.value || "1");
+  state.opacity = clamp(value, 0.05, 1);
+  updateBrushUI();
+
+  if (state.selectionIndex >= 0) {
+    if (!styleEditSnapshotTaken) {
+      state.undo.push(JSON.stringify(snapshot()));
+      state.redo.length = 0;
+      styleEditSnapshotTaken = true;
+    }
+    applyStyleToSelectionLive({ opacity: value });
+  }
+});
+
+opacityRange?.addEventListener("change", () => {
+  styleEditSnapshotTaken = false;
+});
+
+   brushSize?.addEventListener("input", e => {
+  const value = clamp(Number(e.target.value || 5), 1, 60);
+  setBrushSize(value);
+
+  if (state.selectionIndex >= 0) {
+    applyStyleToSelectionLive({ size: value });
+  }
+});
+
+lineStyleSolid?.addEventListener("click", () => {
+  state.lineStyle = "solid";
+  updateBrushUI();
+  if (state.selectionIndex >= 0) {
+    applyStyleToSelection({ lineStyle: "solid" });
+  }
+});
+
+lineStyleHidden?.addEventListener("click", () => {
+  state.lineStyle = "hidden";
+  updateBrushUI();
+  if (state.selectionIndex >= 0) {
+    applyStyleToSelection({ lineStyle: "hidden" });
+  }
+});
+
+lineStyleCenter?.addEventListener("click", () => {
+  state.lineStyle = "center";
+  updateBrushUI();
+  if (state.selectionIndex >= 0) {
+    applyStyleToSelection({ lineStyle: "center" });
+  }
+});
+
+
+   
   applyTitleBtn?.addEventListener("click", () => {
     state.undo.push(JSON.stringify(snapshot()));
     state.redo.length = 0;

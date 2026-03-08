@@ -735,12 +735,80 @@ window.WBGeometry = (() => {
       return snapToWholeMmLength(start, { x: s.x2, y: s.y2 });
     }
 
-    function snapPolyPoint(rawPt, bypassSnap) {
-      if (bypassSnap) return { x: rawPt.x, y: rawPt.y };
-      const hit = snapPointPreferEndsIntersections(rawPt);
-      if (hit) return hit;
-      return snapToMmGridWorld(rawPt);
+     function snapPolyPointDetailed(rawPt, bypassSnap) {
+  if (bypassSnap) {
+    return { x: rawPt.x, y: rawPt.y, snapKind: "free", ref: null };
+  }
+
+  const hit = snapPointPreferEndsIntersections(rawPt);
+  if (hit) {
+    return { x: hit.x, y: hit.y, snapKind: "node", ref: null };
+  }
+
+  const radiusWorld = SNAP_RADIUS_PX / (state.zoom || 1);
+  const cache = gesture.snapCache || { segments: [] };
+
+  let best = null;
+  let bestD = radiusWorld;
+
+  for (const seg of cache.segments || []) {
+    const p = nearestPointOnSegment(rawPt, seg);
+    const d = Math.hypot(rawPt.x - p.x, rawPt.y - p.y);
+    if (d <= bestD) {
+      bestD = d;
+      best = {
+        x: p.x,
+        y: p.y,
+        snapKind: "segment",
+        ref: seg.ref || null
+      };
     }
+  }
+
+  if (best) return best;
+
+  const g = snapToMmGridWorld(rawPt);
+  return { x: g.x, y: g.y, snapKind: "grid", ref: null };
+}
+     function nearestPointOnSegment(pt, seg) {
+  const dx = seg.x2 - seg.x1;
+  const dy = seg.y2 - seg.y1;
+  const len2 = dx * dx + dy * dy;
+
+  if (!len2) return { x: seg.x1, y: seg.y1 };
+
+  let t = ((pt.x - seg.x1) * dx + (pt.y - seg.y1) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+
+  return {
+    x: seg.x1 + dx * t,
+    y: seg.y1 + dy * t,
+    t
+  };
+}
+     
+function snapPolyPoint(rawPt, bypassSnap) {
+  if (bypassSnap) {
+    return { x: rawPt.x, y: rawPt.y, snapKind: "free", ref: null };
+  }
+
+  const hit = snapPointPreferEndsIntersections(rawPt);
+  if (hit) {
+    return {
+      x: hit.x,
+      y: hit.y,
+      snapKind: "node",
+      ref: null
+    };
+  }
+
+  return {
+    x: snapToMmGridWorld(rawPt).x,
+    y: snapToMmGridWorld(rawPt).y,
+    snapKind: "grid",
+    ref: null
+  };
+}
 
     function backgroundBounds() {
       if (!state.bg.src || !state.bg.natW || !state.bg.natH) return null;

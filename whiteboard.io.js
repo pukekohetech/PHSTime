@@ -93,6 +93,38 @@ window.WBIO = (() => {
       redrawAll();
     }
 
+     function performUndo() {
+  if (!state.undo.length) {
+    showToast("Nothing to undo");
+    return;
+  }
+
+  state.redo.push(JSON.stringify(snapshot()));
+  const snap = JSON.parse(state.undo.pop());
+
+  hardResetGesture();
+  cancelPolyDraft();
+  applySnapshot(snap);
+  updateBrushUI();
+  showToast("Undone");
+}
+
+function performRedo() {
+  if (!state.redo.length) {
+    showToast("Nothing to redo");
+    return;
+  }
+
+  state.undo.push(JSON.stringify(snapshot()));
+  const snap = JSON.parse(state.redo.pop());
+
+  hardResetGesture();
+  cancelPolyDraft();
+  applySnapshot(snap);
+  updateBrushUI();
+  showToast("Redone");
+}
+
     function loadBoardsIndex() {
       try {
         return JSON.parse(localStorage.getItem(LS_KEY) || "{}");
@@ -981,6 +1013,8 @@ const exportObjects = [
       });
 
       clearBgBtn?.addEventListener("click", clearBackground);
+      undoBtn?.addEventListener("click", performUndo);
+redoBtn?.addEventListener("click", performRedo); 
 
       document.addEventListener("paste", e => {
         try {
