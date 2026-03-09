@@ -47,7 +47,19 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
-
+      {
+      "id": "nznewsanagram",
+      "name": "Nz News Anagram",
+      "type": "iframe",
+      "url": "https://pukekohetech.github.io/anagram/",
+      "tag": "game",
+      "seconds": null,
+      "steps": [
+        "Be the first to name something for each category using the letter."
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
     {
       "id": "discovery_puzzle",
       "name": "Discovery Puzzle Maker",
