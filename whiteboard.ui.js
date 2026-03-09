@@ -300,7 +300,7 @@ window.WBUI = (() => {
       presetHidden?.addEventListener("click", () => {
         setColor(state.linePresetMap?.hidden?.color || "#1976d2");
         setLineStyle("hidden");
-        applyBrushPreset(state.linePresetMap?.hidden?.size || 5, 1);
+        applyBrushPreset(state.linePresetMap?.hidden?.size || 7, 1);
         toggleColorPop(false);
         redrawAll?.();
       });
@@ -308,7 +308,7 @@ window.WBUI = (() => {
       presetCenter?.addEventListener("click", () => {
         setColor(state.linePresetMap?.center?.color || "#d32f2f");
         setLineStyle("center");
-        applyBrushPreset(state.linePresetMap?.center?.size || 5, 1);
+        applyBrushPreset(state.linePresetMap?.center?.size || 7, 1);
         toggleColorPop(false);
         redrawAll?.();
       });
