@@ -190,6 +190,7 @@ window.WBShared = (() => {
 
   function getLineDash(style, size = 1) {
     const s = Math.max(1, Number(size) || 1);
+    if (style === "reference") return [s * 10, s * 3, s * 3, s * 3, s * 3, s * 3];
     if (style === "hidden") return [s * 4, s * 3];
     if (style === "center") return [s * 8, s * 3, s * 1.2, s * 3];
     return [];
@@ -205,7 +206,22 @@ window.WBShared = (() => {
       .map(v => parseFloat(v))
       .filter(v => isFinite(v) && v > 0);
     if (!nums.length) return "solid";
-    if (nums.length >= 4) return "center";
+
+    const s = Math.max(1, Number(size) || 1);
+    const norm = nums.map(v => v / s);
+    const first = norm[0] || 0;
+    const third = norm[2] || 0;
+
+    if (norm.length >= 6) return "reference";
+    if (norm.length >= 4) {
+      if (first >= 7 && third <= 2) return "center";
+      if (first >= 7 && third > 2) return "reference";
+      return "center";
+    }
+    if (norm.length >= 2) {
+      const ratio = nums[0] / Math.max(0.001, nums[1]);
+      return ratio >= 1.8 ? "reference" : "hidden";
+    }
     return "hidden";
   }
 

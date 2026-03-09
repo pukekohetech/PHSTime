@@ -53,6 +53,7 @@ window.WBIO = (() => {
         size: state.size,
         opacity: state.opacity,
         lineStyle: state.lineStyle || "solid",
+        linePresetMap: JSON.parse(JSON.stringify(state.linePresetMap || {})),
         zoom: state.zoom,
         panX: state.panX,
         panY: state.panY,
@@ -71,6 +72,12 @@ window.WBIO = (() => {
       state.size = snap.size || 5;
       state.opacity = Number(snap.opacity ?? 1);
       state.lineStyle = snap.lineStyle || "solid";
+      state.linePresetMap = {
+        reference: { color: "#1b5e20", size: 10 },
+        hidden: { color: "#1976d2", size: 5 },
+        center: { color: "#d32f2f", size: 5 },
+        ...(snap.linePresetMap || {})
+      };
 
       state.zoom = Number(snap.zoom || 1);
       state.panX = Number(snap.panX || 0);

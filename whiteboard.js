@@ -80,9 +80,20 @@ const redoBtn = document.getElementById("redoBtn");
   const presetConstruction = document.getElementById("presetConstruction");
   const presetOutline = document.getElementById("presetOutline");
   const presetColour = document.getElementById("presetColour");
+  const presetReference = document.getElementById("presetReference");
+  const presetHidden = document.getElementById("presetHidden");
+  const presetCenter = document.getElementById("presetCenter");
   const lineStyleSolid = document.getElementById("lineStyleSolid");
+  const lineStyleReference = document.getElementById("lineStyleReference");
   const lineStyleHidden = document.getElementById("lineStyleHidden");
   const lineStyleCenter = document.getElementById("lineStyleCenter");
+
+  const refColorInput = document.getElementById("refColorInput");
+  const refSizeInput = document.getElementById("refSizeInput");
+  const hiddenColorInput = document.getElementById("hiddenColorInput");
+  const hiddenSizeInput = document.getElementById("hiddenSizeInput");
+  const centerColorInput = document.getElementById("centerColorInput");
+  const centerSizeInput = document.getElementById("centerSizeInput");
 
   /* =========================
      State
@@ -96,6 +107,11 @@ const redoBtn = document.getElementById("redoBtn");
     opacity: 1,
     size: 5,
     lineStyle: "solid",
+    linePresetMap: {
+      reference: { color: "#1b5e20", size: 10 },
+      hidden: { color: "#1976d2", size: 5 },
+      center: { color: "#d32f2f", size: 5 }
+    },
 
     pixelRatio: 1,
 
@@ -111,8 +127,10 @@ const redoBtn = document.getElementById("redoBtn");
     objects: [],
     undo: [],
     redo: [],
-    selectionIndex: -1,
-
+  selectionIndex: -1,
+selection: [],
+clipboard: null,
+     
     viewW: 0,
     viewH: 0
   };
@@ -190,6 +208,101 @@ const redoBtn = document.getElementById("redoBtn");
 
   function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
+  }
+
+function copySelection() {
+  if (!state.selection || !state.selection.length) return;
+
+  state.clipboard = state.selection
+    .map(i => state.objects[i])
+    .filter(o => !!o)
+    .map(o => deepClone(o));
+
+  showToast(`Copied ${state.clipboard.length}`);
+}
+
+function pasteClipboard() {
+  if (!state.clipboard) return;
+
+  state.undo.push(JSON.stringify(snapshot()));
+  state.redo.length = 0;
+
+  const newSelection = [];
+
+  for (const src of state.clipboard) {
+    const obj = deepClone(src);
+
+    if ("x1" in obj) {
+      obj.x1 += 20;
+      obj.y1 += 20;
+    }
+    if ("x2" in obj) {
+      obj.x2 += 20;
+      obj.y2 += 20;
+    }
+    if ("x" in obj) {
+      obj.x += 20;
+      obj.y += 20;
+    }
+    if ("cx" in obj) {
+      obj.cx += 20;
+      obj.cy += 20;
+    }
+
+    ensureObjId(obj);
+
+    state.objects.push(obj);
+    newSelection.push(state.objects.length - 1);
+  }
+
+  state.selection = newSelection;
+  state.selectionIndex = newSelection[newSelection.length - 1];
+
+  redrawAll();
+  showToast("Pasted");
+}
+
+function cutSelection() {
+  if (state.selectionIndex < 0) return;
+
+  copySelection();
+
+  state.undo.push(JSON.stringify(snapshot()));
+  state.redo.length = 0;
+
+  state.objects.splice(state.selectionIndex, 1);
+ state.selectionIndex = -1;
+state.selection = [];
+   
+  redrawAll();
+  showToast("Cut");
+}
+
+  function syncLinePresetInputs() {
+    if (refColorInput) refColorInput.value = state.linePresetMap.reference.color;
+    if (refSizeInput) refSizeInput.value = String(state.linePresetMap.reference.size);
+    if (hiddenColorInput) hiddenColorInput.value = state.linePresetMap.hidden.color;
+    if (hiddenSizeInput) hiddenSizeInput.value = String(state.linePresetMap.hidden.size);
+    if (centerColorInput) centerColorInput.value = state.linePresetMap.center.color;
+    if (centerSizeInput) centerSizeInput.value = String(state.linePresetMap.center.size);
+  }
+
+  function applyLinePreset(kind) {
+    const preset = state.linePresetMap[kind];
+    if (!preset) return;
+    state.color = preset.color;
+    state.size = clamp(Number(preset.size || 1), 1, 60);
+    state.opacity = 1;
+    state.lineStyle = kind;
+    updateBrushUI();
+  }
+
+  function updateLinePreset(kind, patch = {}) {
+    const preset = state.linePresetMap[kind];
+    if (!preset) return;
+    if (patch.color != null) preset.color = String(patch.color);
+    if (patch.size != null) preset.size = clamp(Number(patch.size || preset.size), 1, 60);
+    syncLinePresetInputs();
   }
 
   function pxPerMm() {
@@ -603,7 +716,11 @@ const redoBtn = document.getElementById("redoBtn");
     presetConstruction,
     presetOutline,
     presetColour,
+    presetReference,
+    presetHidden,
+    presetCenter,
     lineStyleSolid,
+    lineStyleReference,
     lineStyleHidden,
     lineStyleCenter,
     showToastFallback: msg => console.log(msg),
@@ -1312,24 +1429,42 @@ function onPointerDown(e) {
       return;
     }
 
-    if (state.tool === "select") {
-      const handle = hitHandle(sx, sy);
-      if (handle) {
-        if (beginSelectionTransform(handle.kind, w)) {
-          redrawAll();
-          return;
-        }
-      }
-
-const hit = findHit(w.x, w.y);
-state.selectionIndex = hit;
-syncStyleControlsFromSelection();
-redrawAll();
-
-if (hit >= 0) beginSelectionTransform("move", w);
-else gesture.mode = "select";
-return;
+if (state.tool === "select") {
+  const handle = hitHandle(sx, sy);
+  if (handle && !e.shiftKey) {
+    if (beginSelectionTransform(handle.kind, w)) {
+      redrawAll();
+      return;
     }
+  }
+
+  const hit = findHit(w.x, w.y);
+
+  if (e.shiftKey) {
+    if (hit >= 0) {
+      const i = state.selection.indexOf(hit);
+      if (i >= 0) state.selection.splice(i, 1);
+      else state.selection.push(hit);
+    }
+  } else {
+    state.selection = hit >= 0 ? [hit] : [];
+  }
+
+  state.selectionIndex = state.selection.length
+    ? state.selection[state.selection.length - 1]
+    : -1;
+
+  syncStyleControlsFromSelection();
+  redrawAll();
+
+  if (!e.shiftKey && hit >= 0) {
+    beginSelectionTransform("move", w);
+  } else {
+    gesture.mode = "select";
+  }
+
+  return;
+}
 
     if (state.tool === "bgMove" || state.tool === "bgScale" || state.tool === "bgRotate") {
       beginToolTransformForSelectionOrBg(state.tool, w);
@@ -1896,17 +2031,27 @@ return;
       }
     }
 
-    if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
-      if (state.selectionIndex >= 0) {
-        state.undo.push(JSON.stringify(snapshot()));
-        state.redo.length = 0;
-        state.objects.splice(state.selectionIndex, 1);
-        state.selectionIndex = -1;
-        redrawAll();
-        showToast("Deleted");
-        return;
-      }
-    }
+if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
+
+  if (state.selection && state.selection.length) {
+
+    state.undo.push(JSON.stringify(snapshot()));
+    state.redo.length = 0;
+
+    state.selection
+      .sort((a,b)=>b-a)
+      .forEach(i => state.objects.splice(i,1));
+
+ 
+state.selectionIndex = -1;
+state.selection = [];
+
+    redrawAll();
+    showToast("Deleted");
+    return;
+  }
+
+}
 
     if (!typing) {
       const k = e.key.toLowerCase();
@@ -1924,6 +2069,24 @@ return;
 
     if (mod) {
       const key = e.key.toLowerCase();
+
+         if (key === "c") {
+    e.preventDefault();
+    copySelection();
+    return;
+  }
+
+  if (key === "v") {
+    e.preventDefault();
+    pasteClipboard();
+    return;
+  }
+
+  if (key === "x") {
+    e.preventDefault();
+    cutSelection();
+    return;
+  }
       if (key === "z" && !e.shiftKey) {
         e.preventDefault();
         hardResetGesture();
@@ -2042,7 +2205,8 @@ return;
     cancelPolyDraft();
     resetSvgRevealState();
     state.objects = [];
-    state.selectionIndex = -1;
+   state.selectionIndex = -1;
+    state.selection = [];
     setActiveTool("pen");
     redrawAll();
   });
@@ -2102,6 +2266,14 @@ lineStyleSolid?.addEventListener("click", () => {
   }
 });
 
+lineStyleReference?.addEventListener("click", () => {
+  state.lineStyle = "reference";
+  updateBrushUI();
+  if (state.selectionIndex >= 0) {
+    applyStyleToSelection({ lineStyle: "reference" });
+  }
+});
+
 lineStyleHidden?.addEventListener("click", () => {
   state.lineStyle = "hidden";
   updateBrushUI();
@@ -2120,6 +2292,56 @@ lineStyleCenter?.addEventListener("click", () => {
 
 
    
+
+  const bindPresetField = (input, kind, prop) => {
+    input?.addEventListener("input", e => {
+      const value = prop === "size" ? clamp(Number(e.target.value || 1), 1, 60) : e.target.value;
+      updateLinePreset(kind, { [prop]: value });
+      if (state.lineStyle === kind) {
+        if (prop === "color") state.color = value;
+        if (prop === "size") state.size = value;
+        updateBrushUI();
+      }
+      if (state.selectionIndex >= 0) {
+        const obj = state.objects[state.selectionIndex];
+        if (obj && obj.lineStyle === kind) {
+          if (prop === "color") applyStyleToSelectionLive({ color: value });
+          if (prop === "size") applyStyleToSelectionLive({ size: value });
+        }
+      }
+    });
+  };
+
+  bindPresetField(refColorInput, "reference", "color");
+  bindPresetField(refSizeInput, "reference", "size");
+  bindPresetField(hiddenColorInput, "hidden", "color");
+  bindPresetField(hiddenSizeInput, "hidden", "size");
+  bindPresetField(centerColorInput, "center", "color");
+  bindPresetField(centerSizeInput, "center", "size");
+
+  presetReference?.addEventListener("click", () => {
+    applyLinePreset("reference");
+    if (state.selectionIndex >= 0) {
+      applyStyleToSelection({ color: state.color, size: state.size, lineStyle: "reference", opacity: 1 });
+    }
+  });
+
+  presetHidden?.addEventListener("click", () => {
+    applyLinePreset("hidden");
+    if (state.selectionIndex >= 0) {
+      applyStyleToSelection({ color: state.color, size: state.size, lineStyle: "hidden", opacity: 1 });
+    }
+  });
+
+  presetCenter?.addEventListener("click", () => {
+    applyLinePreset("center");
+    if (state.selectionIndex >= 0) {
+      applyStyleToSelection({ color: state.color, size: state.size, lineStyle: "center", opacity: 1 });
+    }
+  });
+
+  syncLinePresetInputs();
+
   applyTitleBtn?.addEventListener("click", () => {
     state.undo.push(JSON.stringify(snapshot()));
     state.redo.length = 0;

@@ -20,7 +20,8 @@
   </nav>
 
 
-<div class="toast" id="toast" aria-live="polite">Saved</div>
+
+  <div class="toast" id="toast" aria-live="polite">Saved</div>
 
   <main class="wb">
     <aside class="dock" aria-label="Tools">
@@ -49,20 +50,28 @@
 
           <div class="dockPop__section">
             <div class="dockPop__subhead">Presets</div>
-            <div class="presetRow">
+            <div class="presetRow presetRow--triple">
               <button type="button" class="panel__btn" id="presetConstruction">Construction</button>
               <button type="button" class="panel__btn" id="presetOutline">Outline</button>
               <button type="button" class="panel__btn" id="presetColour">Fill</button>
             </div>
-            <div class="dockPop__note">Construction + Outline now use black automatically.</div>
-            <div class="dockPop__note">Construction: 5 px / 85% • Outline: 15 px / 100% • Fill: 40 px / 25%</div>
+            <div class="presetRow presetRow--triple">
+              <button type="button" class="panel__btn" id="presetReference">Reference</button>
+              <button type="button" class="panel__btn" id="presetHidden">Hidden</button>
+              <button type="button" class="panel__btn" id="presetCenter">Center</button>
+            </div>
+            <div class="dockPop__note">Construction + Outline use black automatically.</div>
+            <div class="dockPop__note">Reference, Hidden, and Center use the line options below.</div>
           </div>
 
           <div class="dockPop__section">
             <div class="dockPop__subhead">Line style</div>
-            <div class="presetRow lineStyleRow">
+            <div class="presetRow lineStyleRow lineStyleRow--four">
               <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleSolid" title="Solid line" aria-label="Solid line">
                 <span class="lineIcon lineIcon--solid" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleReference" title="Reference line" aria-label="Reference line">
+                <span class="lineIcon lineIcon--reference" aria-hidden="true"></span>
               </button>
               <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleHidden" title="Hidden line" aria-label="Hidden line">
                 <span class="lineIcon lineIcon--hidden" aria-hidden="true"></span>
@@ -71,7 +80,7 @@
                 <span class="lineIcon lineIcon--center" aria-hidden="true"></span>
               </button>
             </div>
-            <div class="dockPop__note">Solid • Hidden • Center. Snapping still uses the true line/curve geometry.</div>
+            <div class="dockPop__note">Solid • Reference • Hidden • Center. Snapping still uses the true line/curve geometry.</div>
             <div class="dockPop__note">Right-click: finish PolyFill • reset Arc</div>
           </div>
 
@@ -197,6 +206,46 @@
                 <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">SVG</button>
                 <button id="printBtn" class="panel__btn panel__btn--primary" type="button">Print</button>
               </div>
+            </div>
+
+            <div class="panel__group panel__group--wide">
+              <label class="panel__label">Line options</label>
+              <div class="linePresetGrid">
+                <div class="linePresetCard">
+                  <div class="linePresetCard__top">
+                    <span class="linePresetCard__title">Reference</span>
+                    <span class="lineIcon lineIcon--reference" aria-hidden="true"></span>
+                  </div>
+                  <div class="panel__row panel__row--wrap">
+                    <input id="refColorInput" class="panel__input panel__input--color" type="color" value="#1b5e20" />
+                    <input id="refSizeInput" class="panel__input panel__input--number" type="number" min="1" max="60" step="1" value="10" />
+                    <span class="panel__note">px</span>
+                  </div>
+                </div>
+                <div class="linePresetCard">
+                  <div class="linePresetCard__top">
+                    <span class="linePresetCard__title">Hidden</span>
+                    <span class="lineIcon lineIcon--hidden" aria-hidden="true"></span>
+                  </div>
+                  <div class="panel__row panel__row--wrap">
+                    <input id="hiddenColorInput" class="panel__input panel__input--color" type="color" value="#1976d2" />
+                    <input id="hiddenSizeInput" class="panel__input panel__input--number" type="number" min="1" max="60" step="1" value="5" />
+                    <span class="panel__note">px</span>
+                  </div>
+                </div>
+                <div class="linePresetCard">
+                  <div class="linePresetCard__top">
+                    <span class="linePresetCard__title">Center</span>
+                    <span class="lineIcon lineIcon--center" aria-hidden="true"></span>
+                  </div>
+                  <div class="panel__row panel__row--wrap">
+                    <input id="centerColorInput" class="panel__input panel__input--color" type="color" value="#d32f2f" />
+                    <input id="centerSizeInput" class="panel__input panel__input--number" type="number" min="1" max="60" step="1" value="5" />
+                    <span class="panel__note">px</span>
+                  </div>
+                </div>
+              </div>
+              <div class="panel__note">These settings drive the quick Reference, Hidden, and Center preset buttons.</div>
             </div>
 
             <div class="panel__group panel__group--wide">

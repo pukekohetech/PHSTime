@@ -287,6 +287,32 @@ window.WBRender = (() => {
         uiCtx.restore();
       }
 
+       if (state.tool === "select" && state.selection && state.selection.length) {
+  uiCtx.save();
+  uiCtx.setLineDash([8, 6]);
+  uiCtx.lineWidth = 2;
+  uiCtx.strokeStyle = "rgba(0, 120, 255, 0.9)";
+
+  for (const idx of state.selection) {
+    if (idx === state.selectionIndex) continue; // main one already has handles
+    const obj = state.objects[idx];
+    if (!obj) continue;
+
+    const b = objectBounds(obj);
+    const p1 = worldToScreen(b.minX, b.minY);
+    const p2 = worldToScreen(b.maxX, b.maxY);
+
+    const x = Math.min(p1.x, p2.x);
+    const y = Math.min(p1.y, p2.y);
+    const w = Math.abs(p2.x - p1.x);
+    const h = Math.abs(p2.y - p1.y);
+
+    uiCtx.strokeRect(x, y, w, h);
+  }
+
+  uiCtx.restore();
+}
+
       if (state.tool === "polyFill" && polyDraft.active && polyDraft.pts.length) {
         uiCtx.save();
         uiCtx.setTransform(pr, 0, 0, pr, 0, 0);

@@ -26,7 +26,11 @@ window.WBUI = (() => {
       presetConstruction,
       presetOutline,
       presetColour,
+      presetReference,
+      presetHidden,
+      presetCenter,
       lineStyleSolid,
+      lineStyleReference,
       lineStyleHidden,
       lineStyleCenter,
       showToastFallback,
@@ -285,8 +289,37 @@ window.WBUI = (() => {
         redrawAll?.();
       });
 
+      presetReference?.addEventListener("click", () => {
+        setColor(state.linePresetMap?.reference?.color || "#1b5e20");
+        setLineStyle("reference");
+        applyBrushPreset(state.linePresetMap?.reference?.size || 10, 1);
+        toggleColorPop(false);
+        redrawAll?.();
+      });
+
+      presetHidden?.addEventListener("click", () => {
+        setColor(state.linePresetMap?.hidden?.color || "#1976d2");
+        setLineStyle("hidden");
+        applyBrushPreset(state.linePresetMap?.hidden?.size || 5, 1);
+        toggleColorPop(false);
+        redrawAll?.();
+      });
+
+      presetCenter?.addEventListener("click", () => {
+        setColor(state.linePresetMap?.center?.color || "#d32f2f");
+        setLineStyle("center");
+        applyBrushPreset(state.linePresetMap?.center?.size || 5, 1);
+        toggleColorPop(false);
+        redrawAll?.();
+      });
+
       lineStyleSolid?.addEventListener("click", () => {
         setLineStyle("solid");
+        redrawAll?.();
+      });
+
+      lineStyleReference?.addEventListener("click", () => {
+        setLineStyle("reference");
         redrawAll?.();
       });
 
