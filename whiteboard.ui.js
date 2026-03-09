@@ -226,6 +226,35 @@ window.WBUI = (() => {
       lenInput.placeholder = "mm";
     }
 
+    const BUILT_IN_PRESETS = {
+      construction: { color: "#111111", size: 5, opacity: 0.85, lineStyle: "solid" },
+      outline: { color: "#111111", size: 15, opacity: 1, lineStyle: "solid" },
+      fill: { color: null, size: 40, opacity: 0.25, lineStyle: "solid" }
+    };
+
+    function getNamedPreset(name) {
+      if (name === "reference" || name === "hidden" || name === "center") {
+        const p = state.linePresetMap?.[name] || {};
+        return {
+          color: p.color || (name === "reference" ? "#1b5e20" : name === "hidden" ? "#1976d2" : "#d32f2f"),
+          size: Number(p.size || 10),
+          opacity: 1,
+          lineStyle: name
+        };
+      }
+      return BUILT_IN_PRESETS[name] || null;
+    }
+
+    function applyPreset(name) {
+      const preset = getNamedPreset(name);
+      if (!preset) return;
+      if (preset.color) setColor(preset.color);
+      setLineStyle(preset.lineStyle);
+      applyBrushPreset(preset.size, preset.opacity);
+      toggleColorPop(false);
+      redrawAll?.();
+    }
+
     function bindUI() {
       colorBtn?.addEventListener("click", e => {
         e.stopPropagation();
@@ -266,52 +295,12 @@ window.WBUI = (() => {
         });
       });
 
-      presetConstruction?.addEventListener("click", () => {
-        setColor("#111111");
-        setLineStyle("solid");
-        applyBrushPreset(5, 0.85);
-        toggleColorPop(false);
-        redrawAll?.();
-      });
-
-      presetOutline?.addEventListener("click", () => {
-        setColor("#111111");
-        setLineStyle("solid");
-        applyBrushPreset(15, 1);
-        toggleColorPop(false);
-        redrawAll?.();
-      });
-
-      presetColour?.addEventListener("click", () => {
-        setLineStyle("solid");
-        applyBrushPreset(40, 0.25);
-        toggleColorPop(false);
-        redrawAll?.();
-      });
-
-      presetReference?.addEventListener("click", () => {
-        setColor(state.linePresetMap?.reference?.color || "#1b5e20");
-        setLineStyle("reference");
-        applyBrushPreset(state.linePresetMap?.reference?.size || 10, 1);
-        toggleColorPop(false);
-        redrawAll?.();
-      });
-
-      presetHidden?.addEventListener("click", () => {
-        setColor(state.linePresetMap?.hidden?.color || "#1976d2");
-        setLineStyle("hidden");
-        applyBrushPreset(state.linePresetMap?.hidden?.size || 7, 1);
-        toggleColorPop(false);
-        redrawAll?.();
-      });
-
-      presetCenter?.addEventListener("click", () => {
-        setColor(state.linePresetMap?.center?.color || "#d32f2f");
-        setLineStyle("center");
-        applyBrushPreset(state.linePresetMap?.center?.size || 7, 1);
-        toggleColorPop(false);
-        redrawAll?.();
-      });
+      presetConstruction?.addEventListener("click", () => applyPreset("construction"));
+      presetOutline?.addEventListener("click", () => applyPreset("outline"));
+      presetColour?.addEventListener("click", () => applyPreset("fill"));
+      presetReference?.addEventListener("click", () => applyPreset("reference"));
+      presetHidden?.addEventListener("click", () => applyPreset("hidden"));
+      presetCenter?.addEventListener("click", () => applyPreset("center"));
 
       lineStyleSolid?.addEventListener("click", () => {
         setLineStyle("solid");

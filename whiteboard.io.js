@@ -75,7 +75,7 @@ window.WBIO = (() => {
       state.linePresetMap = {
         reference: { color: "#1b5e20", size: 10 },
         hidden: { color: "#1976d2", size: 10 },
-        center: { color: "#d32f2f", size: 10},
+        center: { color: "#d32f2f", size: 10 },
         ...(snap.linePresetMap || {})
       };
 

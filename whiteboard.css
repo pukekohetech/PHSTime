@@ -1108,47 +1108,36 @@ html, body{ height:100%; }
   background: repeating-linear-gradient(90deg, currentColor 0 10px, transparent 10px 14px, currentColor 14px 16px, transparent 16px 20px);
 }
 
-.presetRow--triple{
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.lineStyleRow--four{
-  grid-template-columns: repeat(4, 1fr);
-}
 
 .lineIcon--reference{
   border-top: 0;
-  height: 3px;
-  background: repeating-linear-gradient(90deg, currentColor 0 12px, transparent 12px 16px, currentColor 16px 19px, transparent 19px 23px, currentColor 23px 26px, transparent 26px 30px);
+  height: 2px;
+  background: repeating-linear-gradient(90deg, currentColor 0 12px, transparent 12px 15px, currentColor 15px 18px, transparent 18px 21px, currentColor 21px 24px, transparent 24px 27px);
 }
 
 .linePresetGrid{
   display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap:10px;
 }
 
 .linePresetCard{
   border:1px solid rgba(0,0,0,0.08);
-  border-radius:12px;
+  border-radius:14px;
   padding:10px;
-  background: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.7);
 }
 
 .linePresetCard__top{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
+  gap:8px;
   margin-bottom:8px;
 }
 
 .linePresetCard__title{
-  font-size:12px;
   font-weight:700;
-  letter-spacing:0.03em;
-  text-transform:uppercase;
-  color: rgba(50,58,68,0.78);
 }
 
 .panel__input--color{

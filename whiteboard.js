@@ -109,8 +109,8 @@ const redoBtn = document.getElementById("redoBtn");
     lineStyle: "solid",
     linePresetMap: {
       reference: { color: "#1b5e20", size: 10 },
-      hidden: { color: "#1976d2", size: 5 },
-      center: { color: "#d32f2f", size: 5 }
+      hidden: { color: "#1976d2", size: 10 },
+      center: { color: "#d32f2f", size: 10 }
     },
 
     pixelRatio: 1,
@@ -278,6 +278,7 @@ state.selection = [];
   showToast("Cut");
 }
 
+
   function syncLinePresetInputs() {
     if (refColorInput) refColorInput.value = state.linePresetMap.reference.color;
     if (refSizeInput) refSizeInput.value = String(state.linePresetMap.reference.size);
@@ -287,18 +288,8 @@ state.selection = [];
     if (centerSizeInput) centerSizeInput.value = String(state.linePresetMap.center.size);
   }
 
-  function applyLinePreset(kind) {
-    const preset = state.linePresetMap[kind];
-    if (!preset) return;
-    state.color = preset.color;
-    state.size = clamp(Number(preset.size || 1), 1, 60);
-    state.opacity = 1;
-    state.lineStyle = kind;
-    updateBrushUI();
-  }
-
   function updateLinePreset(kind, patch = {}) {
-    const preset = state.linePresetMap[kind];
+    const preset = state.linePresetMap?.[kind];
     if (!preset) return;
     if (patch.color != null) preset.color = String(patch.color);
     if (patch.size != null) preset.size = clamp(Number(patch.size || preset.size), 1, 60);
@@ -1851,12 +1842,12 @@ if (state.tool === "select") {
       if (wasPlaying) showToast("Presentation stopped");
       return;
     }
-
-    if (e.code === "Space") {
-      spacePanning = true;
-      e.preventDefault();
-      return;
-    }
+     
+if (!typing && e.code === "Space") {
+  spacePanning = true;
+  e.preventDefault();
+  return;
+}
 
     if (!typing && (e.key === "f" || e.key === "F")) {
       const idx = state.selectionIndex;
@@ -2146,12 +2137,16 @@ state.selection = [];
     }
   });
 
-  document.addEventListener("keyup", e => {
-    if (e.code === "Space") {
-      spacePanning = false;
-      if (!gesture.active) updateCursorFromTool();
-    }
-  });
+document.addEventListener("keyup", e => {
+  const activeEl = document.activeElement;
+  const tag = (activeEl && activeEl.tagName) || "";
+  const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") && activeEl !== lenInput;
+
+  if (!typing && e.code === "Space") {
+    spacePanning = false;
+    if (!gesture.active) updateCursorFromTool();
+  }
+});
 
   /* =========================
      Canvas events
@@ -2292,25 +2287,13 @@ lineStyleCenter?.addEventListener("click", () => {
 
 
    
-
-  const bindPresetField = (input, kind, prop) => {
+  function bindPresetField(input, kind, prop) {
     input?.addEventListener("input", e => {
-      const value = prop === "size" ? clamp(Number(e.target.value || 1), 1, 60) : e.target.value;
+      let value = e.target.value;
+      if (prop === "size") value = clamp(Number(value || 1), 1, 60);
       updateLinePreset(kind, { [prop]: value });
-      if (state.lineStyle === kind) {
-        if (prop === "color") state.color = value;
-        if (prop === "size") state.size = value;
-        updateBrushUI();
-      }
-      if (state.selectionIndex >= 0) {
-        const obj = state.objects[state.selectionIndex];
-        if (obj && obj.lineStyle === kind) {
-          if (prop === "color") applyStyleToSelectionLive({ color: value });
-          if (prop === "size") applyStyleToSelectionLive({ size: value });
-        }
-      }
     });
-  };
+  }
 
   bindPresetField(refColorInput, "reference", "color");
   bindPresetField(refSizeInput, "reference", "size");
@@ -2318,27 +2301,6 @@ lineStyleCenter?.addEventListener("click", () => {
   bindPresetField(hiddenSizeInput, "hidden", "size");
   bindPresetField(centerColorInput, "center", "color");
   bindPresetField(centerSizeInput, "center", "size");
-
-  presetReference?.addEventListener("click", () => {
-    applyLinePreset("reference");
-    if (state.selectionIndex >= 0) {
-      applyStyleToSelection({ color: state.color, size: state.size, lineStyle: "reference", opacity: 1 });
-    }
-  });
-
-  presetHidden?.addEventListener("click", () => {
-    applyLinePreset("hidden");
-    if (state.selectionIndex >= 0) {
-      applyStyleToSelection({ color: state.color, size: state.size, lineStyle: "hidden", opacity: 1 });
-    }
-  });
-
-  presetCenter?.addEventListener("click", () => {
-    applyLinePreset("center");
-    if (state.selectionIndex >= 0) {
-      applyStyleToSelection({ color: state.color, size: state.size, lineStyle: "center", opacity: 1 });
-    }
-  });
 
   syncLinePresetInputs();
 
@@ -2405,6 +2367,7 @@ lineStyleCenter?.addEventListener("click", () => {
     setBrushSize(brushSize?.value || 5);
     state.opacity = parseFloat(opacityRange?.value || "1");
     updateBrushUI();
+    syncLinePresetInputs();
     setActiveTool("pen");
     updateScaleOut();
     refreshBoardSelect();
