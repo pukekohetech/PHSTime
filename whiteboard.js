@@ -2061,44 +2061,52 @@ state.selection = [];
     if (mod) {
       const key = e.key.toLowerCase();
 
-         if (key === "c") {
-    e.preventDefault();
-    copySelection();
-    return;
-  }
+      if (key === "c") {
+        e.preventDefault();
+        copySelection();
+        return;
+      }
 
-  if (key === "v") {
-    e.preventDefault();
-    pasteClipboard();
-    return;
-  }
+      if (key === "v") {
+        const hasObjectClipboard =
+          Array.isArray(state.clipboard) && state.clipboard.length > 0;
 
-  if (key === "x") {
-    e.preventDefault();
-    cutSelection();
-    return;
-  }
+        if (hasObjectClipboard) {
+          e.preventDefault();
+          pasteClipboard();
+          return;
+        }
+      }
+
+      if (key === "x") {
+        e.preventDefault();
+        cutSelection();
+        return;
+      }
+
       if (key === "z" && !e.shiftKey) {
         e.preventDefault();
         hardResetGesture();
         cancelPolyDraft();
-     if (state.undo.length) {
-  state.redo.push(JSON.stringify(snapshot()));
-  applySnapshot(JSON.parse(state.undo.pop()));
-  syncStyleControlsFromSelection();
 
+        if (state.undo.length) {
+          state.redo.push(JSON.stringify(snapshot()));
+          applySnapshot(JSON.parse(state.undo.pop()));
+          syncStyleControlsFromSelection();
         }
         return;
       }
+
       if (key === "y" || (key === "z" && e.shiftKey)) {
         e.preventDefault();
         hardResetGesture();
         cancelPolyDraft();
-      if (state.redo.length) {
-  state.undo.push(JSON.stringify(snapshot()));
-  applySnapshot(JSON.parse(state.redo.pop()));
-  syncStyleControlsFromSelection();
-}
+
+        if (state.redo.length) {
+          state.undo.push(JSON.stringify(snapshot()));
+          applySnapshot(JSON.parse(state.redo.pop()));
+          syncStyleControlsFromSelection();
+        }
         return;
       }
     }
@@ -2113,11 +2121,13 @@ state.selection = [];
         showToast(`Stroke ${v}px`);
         return;
       }
+
       if (e.key === "=" || e.key === "+") {
         e.preventDefault();
         setBrushSize(clamp(state.size + (e.shiftKey ? 8 : 16), 1, 60));
         return;
       }
+
       if (e.key === "-" || e.key === "_") {
         e.preventDefault();
         setBrushSize(clamp(state.size - (e.shiftKey ? 8 : 16), 1, 60));
@@ -2137,16 +2147,16 @@ state.selection = [];
     }
   });
 
-document.addEventListener("keyup", e => {
-  const activeEl = document.activeElement;
-  const tag = (activeEl && activeEl.tagName) || "";
-  const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") && activeEl !== lenInput;
+  document.addEventListener("keyup", e => {
+    const activeEl = document.activeElement;
+    const tag = (activeEl && activeEl.tagName) || "";
+    const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") && activeEl !== lenInput;
 
-  if (!typing && e.code === "Space") {
-    spacePanning = false;
-    if (!gesture.active) updateCursorFromTool();
-  }
-});
+    if (!typing && e.code === "Space") {
+      spacePanning = false;
+      if (!gesture.active) updateCursorFromTool();
+    }
+  });
 
   /* =========================
      Canvas events
