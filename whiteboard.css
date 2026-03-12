@@ -1,4 +1,8 @@
-.page-whiteboard{ min-height:100vh; }
+.page-whiteboard{
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
 
 .wb{
   width: min(1500px, calc(100vw - 24px));
@@ -303,7 +307,7 @@ html, body{ height:100%; }
 }
 .stageWrap{ min-height: 0; }
 .stage{
-  height: calc(100vh - 120px);
+  height: calc(100dvh - 120px);
   min-height: 420px;
 }
 /* Danger button (settings panel) */
@@ -560,14 +564,18 @@ html, body{ height:100%; }
 .dock{
   position: sticky;
   top: 12px;
+  align-self: start;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 8px calc(14px + env(safe-area-inset-bottom));
   background: rgba(255,255,255,0.86);
   border-radius: 18px;
   box-shadow: 0 12px 34px rgba(0,0,0,0.16);
-  padding: 10px 8px;
   display: grid;
   gap: 8px;
   justify-items: center;
-  z-index: 20; /* ensure popovers appear above stage */
+  z-index: 20;
 }
 
 .dockSep{
@@ -835,11 +843,16 @@ html, body{ height:100%; }
 }
 .page-whiteboard .appNav{ flex:0 0 auto; }
 .wb{
-  flex:1 1 auto;
+  flex: 1 1 auto;
   width: calc(100vw - 24px);
   max-width: none;
   margin: 12px auto;
   min-height: 0;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  position: relative;
 }
 .stageWrap{ min-height: 0; }
 .stage{
