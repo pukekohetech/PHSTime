@@ -19,6 +19,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
+    {
      "id": "codecrack",
       "name": "Emoji Puzzle",
       "type": "iframe",
