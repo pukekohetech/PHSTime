@@ -21,7 +21,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     },
     {
      "id": "codecrack",
-      "name": "Emoji Puzzle",
+      "name": "Code Cracker",
       "type": "iframe",
       "url": "https://pukekohetech.github.io/TeMahuri/code_cracker_game.html",
       "tag": "",
