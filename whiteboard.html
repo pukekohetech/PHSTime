@@ -102,19 +102,22 @@
 
       <div class="dockSep"></div>
 
-      <button class="dockBtn" data-tool="select" type="button" title="Select / Move (V)">🖱️</button>
+      <button class="dockBtn" data-tool="select" type="button" title="Select / Move (V) — Shift-click adds/removes from selection">🖱️</button>
 
       <div class="dockSep"></div>
 
       <button class="dockBtn is-active" data-tool="pen" type="button" title="Freehand (P)">✏️</button>
-      <button class="dockBtn" data-tool="line" type="button" title="Line (L)">／</button>
-      <button class="dockBtn" data-tool="rect" type="button" title="Rectangle (R)">▭</button>
-      <button class="dockBtn" data-tool="circle" type="button" title="Circle (C)">◯</button>
-      <button class="dockBtn" data-tool="arc" type="button" title="Arc (G)">⌒</button>
-      <button class="dockBtn" data-tool="arrow" type="button" title="Arrow (A)">➤</button>
+      <button class="dockBtn" data-tool="line" type="button" title="Line (L): snap/link endpoints. Start from shape corner/end and draw toward a red VP to make a live perspective line. Press L to repair/auto-link overlaps.">／</button>
+      <button class="dockBtn" data-tool="rect" type="button" title="Rectangle (R): drag to draw. Hold Shift while drawing to fill with current colour.">▭</button>
+      <button class="dockBtn" data-tool="circle" type="button" title="Circle (C): drag to draw. Hold Shift while drawing to fill. Perspective guides use tangent points.">◯</button>
+      <button class="dockBtn" data-tool="arc" type="button" title="Arc (G): click/drag to set centre/radius/angle. Right-click or Esc resets while drawing. Perspective guides use tangent points.">⌒</button>
+      <button class="dockBtn" data-tool="arrow" type="button" title="Arrow (A): line snapping/linking with an arrow head. Can be used for live perspective construction.">➤</button>
       <button class="dockBtn" data-tool="text" type="button" title="Text (T)">T</button>
       <button class="dockBtn" data-tool="eraser" type="button" title="Eraser (E)">🧽</button>
-      <button class="dockBtn" data-tool="polyFill" type="button" title="Polygon Fill (K)">⬠</button>
+      <button class="dockBtn" data-tool="polyFill" type="button" title="Polygon Fill (K): click 3+ corners. Corners snap/link to joints, endpoints, intersections, and line bodies. Hold Ctrl/Cmd for a free corner. Finish with Enter, double-click, right-click, or click near the first point.">⬠</button>
+      <button class="dockBtn" data-tool="perspective1" type="button" title="1-point perspective: select a shape/line/circle/arc first. Adds red projection rays and a movable VP. Select the guide, then click/drag the highlighted SOURCE box to grab the starting shape/line easily.">1P</button>
+      <button class="dockBtn" data-tool="perspective2" type="button" title="2-point perspective: select a shape/line/circle/arc first. Adds red projection rays and two movable VPs. Select the guide, then click/drag the highlighted SOURCE box to grab the starting shape/line easily.">2P</button>
+      <button class="dockBtn" id="snipJoinBtn" type="button" title="Snip + Join (J): uses selected line, or the last drawn line if none is selected. Hover near the crossing line/intersection, then trim/link at the true intersection.">✂</button>
 
       <button class="dockBtn" id="undoBtn" type="button" title="Undo">↶</button>
       <button class="dockBtn" id="redoBtn" type="button" title="Redo">↷</button>
@@ -258,10 +261,19 @@
             </div>
           </div>
         </div>
+        <div class="linkInspector is-hidden" id="linkInspector" aria-live="polite">
+          <div class="linkInspector__top">
+            <div class="linkInspector__title">Link Inspector</div>
+            <button class="linkInspector__btn" id="linkInspectorCheckBtn" type="button" title="Check the selected links and show coloured markers">Check</button>
+            <button class="linkInspector__btn linkInspector__btn--primary" id="linkInspectorRepairBtn" type="button" title="Repair missing or broken links near selected endpoints/corners">Repair</button>
+          </div>
+          <div class="linkInspector__body" id="linkInspectorBody">Select a linked line, PolyFill, or perspective guide.</div>
+        </div>
+
       </div>
 
       <div class="hint">
-        Wheel zooms • Space + drag pans • Ctrl/Cmd bypasses snapping • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected
+        Wheel zooms • Space + drag pans • Ctrl/Cmd bypasses snapping/free page points • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
       </div>
     </section>
   </main>

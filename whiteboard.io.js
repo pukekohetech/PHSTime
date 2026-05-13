@@ -40,6 +40,7 @@ window.WBIO = (() => {
       exportWorldBounds,
       ensureObjId,
       findObjById,
+      perspectiveTargetPoints,
       stopSvgPlayback,
       resetSvgRevealState
     } = ctx;
@@ -320,6 +321,25 @@ const exportObjects = [
             .map(p => `${(p.x + offsetX).toFixed(2)},${(p.y + offsetY).toFixed(2)}`)
             .join(" ");
           currentLayer += `<polygon points="${pts}" fill="${obj.fill || obj.color}" fill-opacity="${op}" stroke="none" />`;
+          continue;
+        }
+
+
+        if (obj.kind === "perspectiveGuide") {
+          const target = findObjById ? findObjById(obj.targetId) : null;
+          const vps = [];
+          if (obj.vp1) vps.push(obj.vp1);
+          if ((obj.mode || 1) >= 2 && obj.vp2) vps.push(obj.vp2);
+          const perspectiveColor = "#d32f2f";
+          const perspectiveWidth = Math.max(3.5, Number(obj.size || 0));
+          const dashAttr = svgDashArray(obj.lineStyle || "reference", perspectiveWidth);
+          for (const vp of vps) {
+            const srcPts = perspectiveTargetPoints ? perspectiveTargetPoints(target, vp, obj) : [];
+            for (const p of srcPts) {
+              currentLayer += `<line x1="${p.x + offsetX}" y1="${p.y + offsetY}" x2="${vp.x + offsetX}" y2="${vp.y + offsetY}" stroke="${perspectiveColor}" stroke-opacity="${op}" stroke-width="${perspectiveWidth}" stroke-linecap="round"${dashAttr ? ` stroke-dasharray="${dashAttr}"` : ""} />`;
+            }
+            currentLayer += `<circle cx="${vp.x + offsetX}" cy="${vp.y + offsetY}" r="7" fill="${perspectiveColor}" fill-opacity="${op}" stroke="white" stroke-width="2" />`;
+          }
           continue;
         }
 

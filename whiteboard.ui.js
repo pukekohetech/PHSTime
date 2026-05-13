@@ -102,7 +102,7 @@ window.WBUI = (() => {
       toast.textContent = msg;
       toast.classList.add("show");
       clearTimeout(showToast._t);
-      showToast._t = setTimeout(() => toast.classList.remove("show"), 1200);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), Math.min(2800, Math.max(1400, String(msg || "").length * 32)));
     }
 
     function updateSwatch() {
@@ -187,12 +187,23 @@ window.WBUI = (() => {
       inkCanvas.style.cursor = "default";
     }
 
+    const TOOL_HINTS = {
+      line: "Line: snap to endpoints/intersections. Start from a corner and draw toward a red VP to link perspective. For snip/join, select one line and hover near another, or Shift-click two lines, then press J.",
+      arrow: "Arrow: same snapping/linking as Line, with an arrow head.",
+      polyFill: "PolyFill: click 3+ corners, then Enter, double-click, right-click, or click near the first point to fill.",
+      perspective1: "1P: select a shape/line first, then click 1P. Select the guide later and drag the orange SOURCE box to grab the starting object.",
+      perspective2: "2P: select a shape/line first, then click 2P. Select the guide later and drag the orange SOURCE box to grab the starting object; drag either VP to adjust perspective.",
+      arc: "Arc: click centre, drag radius/angle. Right-click or Esc resets while drawing."
+    };
+
     function setActiveTool(tool) {
       hideMeasureTip();
+      const changed = state.tool !== tool;
       state.tool = tool;
       dockBtns.forEach(b => b.classList.toggle("is-active", b.dataset.tool === tool));
       updateCursorFromTool();
       if (tool !== "polyFill") cancelPolyDraft?.();
+      if (changed && TOOL_HINTS[tool]) showToast(TOOL_HINTS[tool]);
     }
 
     function showMeasureTip(sx, sy, text) {
