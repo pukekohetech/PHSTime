@@ -35,6 +35,10 @@
 
   const dockBtns = Array.from(document.querySelectorAll(".dockBtn[data-tool]"));
   const clearBtn = document.getElementById("clearBtn");
+  const hideSelectedBtn = document.getElementById("hideSelectedBtn");
+  const unhideAllBtn = document.getElementById("unhideAllBtn");
+  const hideSelectedPanelBtn = document.getElementById("hideSelectedPanelBtn");
+  const unhideAllPanelBtn = document.getElementById("unhideAllPanelBtn");
   const snipJoinBtn = document.getElementById("snipJoinBtn");
   const linkInspector = document.getElementById("linkInspector");
   const linkInspectorBody = document.getElementById("linkInspectorBody");
@@ -2263,6 +2267,59 @@ function applyStyleToSelectionLive(patch = {}) {
 }
 
   /* =========================
+     Hide / unhide visibility
+  ========================= */
+  function syncSvgRevealCountFromVisibility() {
+    if (!svgReveal.active || !Array.isArray(svgReveal.partIds) || !svgReveal.partIds.length) return;
+    let shown = 0;
+    for (const id of svgReveal.partIds) {
+      const obj = findObjById(id);
+      if (obj && !obj.hidden) shown += 1;
+    }
+    svgReveal.revealed = clamp(shown, 0, svgReveal.partIds.length);
+  }
+
+  function hideSelectedObjects() {
+    const indices = (state.selection && state.selection.length ? state.selection : (state.selectionIndex >= 0 ? [state.selectionIndex] : []))
+      .filter(i => state.objects[i] && !state.objects[i].hidden);
+
+    if (!indices.length) {
+      showToast("Select something to hide");
+      return false;
+    }
+
+    state.undo.push(JSON.stringify(snapshot()));
+    state.redo.length = 0;
+
+    for (const i of indices) state.objects[i].hidden = true;
+
+    state.selection = [];
+    state.selectionIndex = -1;
+    hardResetGesture();
+    syncSvgRevealCountFromVisibility();
+    redrawAll();
+    showToast(indices.length === 1 ? "Hidden" : `${indices.length} objects hidden`);
+    return true;
+  }
+
+  function unhideAllObjects() {
+    const hidden = state.objects.filter(o => o && o.hidden);
+    if (!hidden.length) {
+      showToast("Nothing hidden");
+      return false;
+    }
+
+    state.undo.push(JSON.stringify(snapshot()));
+    state.redo.length = 0;
+
+    hidden.forEach(o => { o.hidden = false; });
+    syncSvgRevealCountFromVisibility();
+    redrawAll();
+    showToast(hidden.length === 1 ? "Unhidden" : `${hidden.length} objects unhidden`);
+    return true;
+  }
+
+  /* =========================
      SVG playback
   ========================= */
   function clearSvgPlaybackTimer() {
@@ -3530,6 +3587,13 @@ if (!typing && e.code === "Space") {
       }
     }
 
+    if (!typing && !mod && (e.key === "h" || e.key === "H")) {
+      e.preventDefault();
+      if (e.shiftKey) unhideAllObjects();
+      else hideSelectedObjects();
+      return;
+    }
+
     if (!typing && svgReveal.active && e.shiftKey && (e.key === ">" || e.code === "Period")) {
       e.preventDefault();
       toggleSvgPlayback();
@@ -3751,6 +3815,11 @@ state.selection = [];
   bindBoards(newBoardBtn, saveBoardBtn, loadBoardBtn, deleteBoardBtn, deleteAllBoardsBtn);
   bindSvgInput(svgInkFile, clearSvgInkBtn);
   bindExport(exportBtn, exportSvgBtn, printBtn);
+
+  hideSelectedBtn?.addEventListener("click", hideSelectedObjects);
+  unhideAllBtn?.addEventListener("click", unhideAllObjects);
+  hideSelectedPanelBtn?.addEventListener("click", hideSelectedObjects);
+  unhideAllPanelBtn?.addEventListener("click", unhideAllObjects);
 
   clearBtn?.addEventListener("click", () => {
     state.undo.push(JSON.stringify(snapshot()));
