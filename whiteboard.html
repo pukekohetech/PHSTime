@@ -136,6 +136,10 @@
 
       <button class="dockBtn" id="hideSelectedBtn" type="button" title="Hide selected object(s) (H)">🙈</button>
       <button class="dockBtn" id="unhideAllBtn" type="button" title="Unhide all hidden objects (Shift+H)">👁</button>
+      <button class="dockBtn" id="visibilityPrevBtn" type="button" title="Hide previous / step back through hidden objects (,)">◀</button>
+      <button class="dockBtn" id="visibilityNextBtn" type="button" title="Reveal next hidden object (.)">▶</button>
+      <button class="dockBtn" id="visibilityPlayBtn" type="button" title="Timed reveal / pause (Shift+>)">⏱</button>
+      <button class="dockBtn" id="visibilityTimingBtn" type="button" title="Set reveal timing (Shift+<)">⚙</button>
 
       <div class="dockSep"></div>
 
@@ -199,7 +203,13 @@
                 <button id="hideSelectedPanelBtn" class="panel__btn" type="button" title="Hide selected object(s) (H)">Hide selected</button>
                 <button id="unhideAllPanelBtn" class="panel__btn" type="button" title="Unhide all hidden objects (Shift+H)">Unhide all</button>
               </div>
-              <div class="panel__note">Hidden objects stay saved but are ignored by select, snap, export, and print until unhidden.</div>
+              <div class="panel__row panel__row--wrap">
+                <button id="visibilityPrevPanelBtn" class="panel__btn" type="button" title="Hide previous / step back through hidden objects (,)">◀ Back</button>
+                <button id="visibilityNextPanelBtn" class="panel__btn" type="button" title="Reveal next hidden object (.)">Next ▶</button>
+                <button id="visibilityPlayPanelBtn" class="panel__btn" type="button" title="Timed reveal / pause (Shift+>)">Timed show</button>
+                <button id="visibilityTimingPanelBtn" class="panel__btn" type="button" title="Set reveal timing (Shift+<)">Timing</button>
+              </div>
+              <div class="panel__note">Hidden objects stay saved but are ignored by select, snap, export, and print until unhidden. Cycle hidden objects with . and , or use Timed show.</div>
             </div>
 
             <div class="panel__group panel__group--wide">
@@ -287,7 +297,7 @@
       </div>
 
       <div class="hint">
-        Wheel zooms • Space + drag pans • H hides selected • Shift+H unhides all • Ctrl/Cmd bypasses snapping/free page points • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
+        Wheel zooms • Space + drag pans • H hides selected • Shift+H unhides all • . / , cycle hidden objects • Shift+> timed show • Ctrl/Cmd bypasses snapping/free page points • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
       </div>
     </section>
   </main>

@@ -39,6 +39,14 @@
   const unhideAllBtn = document.getElementById("unhideAllBtn");
   const hideSelectedPanelBtn = document.getElementById("hideSelectedPanelBtn");
   const unhideAllPanelBtn = document.getElementById("unhideAllPanelBtn");
+  const visibilityPrevBtn = document.getElementById("visibilityPrevBtn");
+  const visibilityNextBtn = document.getElementById("visibilityNextBtn");
+  const visibilityPlayBtn = document.getElementById("visibilityPlayBtn");
+  const visibilityTimingBtn = document.getElementById("visibilityTimingBtn");
+  const visibilityPrevPanelBtn = document.getElementById("visibilityPrevPanelBtn");
+  const visibilityNextPanelBtn = document.getElementById("visibilityNextPanelBtn");
+  const visibilityPlayPanelBtn = document.getElementById("visibilityPlayPanelBtn");
+  const visibilityTimingPanelBtn = document.getElementById("visibilityTimingPanelBtn");
   const snipJoinBtn = document.getElementById("snipJoinBtn");
   const linkInspector = document.getElementById("linkInspector");
   const linkInspectorBody = document.getElementById("linkInspectorBody");
@@ -150,6 +158,7 @@ clipboard: null,
   // SVG reveal state
   let _nextObjId = 1;
   const svgReveal = { active: false, groupId: null, partIds: [], revealed: 0 };
+  const MANUAL_HIDDEN_REVEAL_GROUP = "__manual_hidden_objects__";
 
   function ensureObjId(o) {
     if (!o) return null;
@@ -2269,6 +2278,54 @@ function applyStyleToSelectionLive(patch = {}) {
   /* =========================
      Hide / unhide visibility
   ========================= */
+  function revealLabel() {
+    return svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP ? "Hidden" : "SVG";
+  }
+
+  function hiddenObjectIds() {
+    return state.objects.filter(o => o && o.hidden && o._id).map(o => o._id);
+  }
+
+  function visibleObjectIds() {
+    return state.objects.filter(o => o && !o.hidden && o._id).map(o => o._id);
+  }
+
+  function rebuildManualHiddenRevealList(extraIds = []) {
+    const existing = svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP && Array.isArray(svgReveal.partIds)
+      ? new Set(svgReveal.partIds)
+      : new Set();
+    for (const id of extraIds || []) if (id) existing.add(id);
+
+    const ids = [];
+    for (const obj of state.objects) {
+      if (!obj || !obj._id) continue;
+      if (obj.hidden || existing.has(obj._id)) ids.push(obj._id);
+    }
+
+    svgReveal.active = ids.length > 0;
+    svgReveal.groupId = ids.length ? MANUAL_HIDDEN_REVEAL_GROUP : null;
+    svgReveal.partIds = ids;
+    syncSvgRevealCountFromVisibility();
+    return ids.length > 0;
+  }
+
+  function ensureVisibilityRevealFromHidden(showMessage = false) {
+    if (svgReveal.active && Array.isArray(svgReveal.partIds) && svgReveal.partIds.length) return true;
+
+    const hiddenIds = hiddenObjectIds();
+    if (!hiddenIds.length) {
+      if (showMessage) showToast("No hidden objects to cycle");
+      return false;
+    }
+
+    svgReveal.active = true;
+    svgReveal.groupId = MANUAL_HIDDEN_REVEAL_GROUP;
+    svgReveal.partIds = hiddenIds;
+    svgReveal.revealed = 0;
+    if (showMessage) showToast(`Hidden: 0/${hiddenIds.length}`);
+    return true;
+  }
+
   function syncSvgRevealCountFromVisibility() {
     if (!svgReveal.active || !Array.isArray(svgReveal.partIds) || !svgReveal.partIds.length) return;
     let shown = 0;
@@ -2291,14 +2348,23 @@ function applyStyleToSelectionLive(patch = {}) {
     state.undo.push(JSON.stringify(snapshot()));
     state.redo.length = 0;
 
-    for (const i of indices) state.objects[i].hidden = true;
+    const hiddenIds = [];
+    for (const i of indices) {
+      state.objects[i].hidden = true;
+      if (state.objects[i]._id) hiddenIds.push(state.objects[i]._id);
+    }
+
+    if (!svgReveal.active || svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP) {
+      rebuildManualHiddenRevealList(hiddenIds);
+    } else {
+      syncSvgRevealCountFromVisibility();
+    }
 
     state.selection = [];
     state.selectionIndex = -1;
     hardResetGesture();
-    syncSvgRevealCountFromVisibility();
     redrawAll();
-    showToast(indices.length === 1 ? "Hidden" : `${indices.length} objects hidden`);
+    showToast(indices.length === 1 ? "Hidden — use ▶ / . to reveal" : `${indices.length} objects hidden — use ▶ / . to reveal`);
     return true;
   }
 
@@ -2317,6 +2383,26 @@ function applyStyleToSelectionLive(patch = {}) {
     redrawAll();
     showToast(hidden.length === 1 ? "Unhidden" : `${hidden.length} objects unhidden`);
     return true;
+  }
+
+  function revealNextStep() {
+    if (!ensureVisibilityRevealFromHidden(true)) return false;
+    if (svgPlayback.running) stopSvgPlayback(true);
+    const total = svgReveal.partIds.length;
+    if (!total) return false;
+    const moved = revealNextSvgPart();
+    showToast(`${revealLabel()}: ${Math.min(svgReveal.revealed, total)}/${total}`);
+    return moved;
+  }
+
+  function revealPrevStep() {
+    if (!ensureVisibilityRevealFromHidden(true)) return false;
+    if (svgPlayback.running) stopSvgPlayback(true);
+    const total = svgReveal.partIds.length;
+    if (!total) return false;
+    const moved = hidePrevSvgPart();
+    showToast(`${revealLabel()}: ${Math.max(svgReveal.revealed, 0)}/${total}`);
+    return moved;
   }
 
   /* =========================
@@ -2407,7 +2493,7 @@ function applyStyleToSelectionLive(patch = {}) {
 
     if (!svgReveal.active || !svgReveal.partIds.length) {
       stopSvgPlayback(true);
-      showToast("No SVG reveal loaded");
+      showToast("No reveal list loaded");
       return;
     }
 
@@ -2425,8 +2511,10 @@ function applyStyleToSelectionLive(patch = {}) {
 
   function startSvgPlayback() {
     if (!svgReveal.active || !svgReveal.partIds.length) {
-      showToast("Import SVG reveal first");
-      return;
+      if (!ensureVisibilityRevealFromHidden(false)) {
+        showToast("Import SVG or hide objects first");
+        return;
+      }
     }
 
     stopSvgPlayback(true);
@@ -2441,7 +2529,7 @@ function applyStyleToSelectionLive(patch = {}) {
       firstDelay = svgPlayback.stepMs;
     }
 
-    showToast(`Presentation ▶ ${svgReveal.revealed}/${total}`);
+    showToast(`${revealLabel()} ▶ ${svgReveal.revealed}/${total}`);
     scheduleSvgPlayback(firstDelay, token, () => svgPlaybackTick(token));
   }
 
@@ -3594,13 +3682,13 @@ if (!typing && e.code === "Space") {
       return;
     }
 
-    if (!typing && svgReveal.active && e.shiftKey && (e.key === ">" || e.code === "Period")) {
+    if (!typing && e.shiftKey && (e.key === ">" || e.code === "Period")) {
       e.preventDefault();
       toggleSvgPlayback();
       return;
     }
 
-    if (!typing && svgReveal.active && e.shiftKey && (e.key === "<" || e.code === "Comma")) {
+    if (!typing && e.shiftKey && (e.key === "<" || e.code === "Comma")) {
       e.preventDefault();
       configureSvgPlayback();
       return;
@@ -3610,23 +3698,16 @@ if (!typing && e.code === "Space") {
       !e.shiftKey &&
       (e.key === "." || e.key === "," || e.code === "Period" || e.code === "Comma" || e.code === "NumpadDecimal");
 
-    if (!typing && svgReveal.active && isRevealKey) {
+    if (!typing && isRevealKey) {
       e.preventDefault();
 
-      if (svgPlayback.running) stopSvgPlayback(true);
-
-      const total = svgReveal.partIds.length;
-      if (!total) return;
-
       if (e.key === "." || e.code === "Period" || e.code === "NumpadDecimal") {
-        revealNextSvgPart();
-        showToast(`SVG: ${Math.min(svgReveal.revealed, total)}/${total}`);
+        revealNextStep();
         return;
       }
 
       if (e.key === "," || e.code === "Comma") {
-        hidePrevSvgPart();
-        showToast(`SVG: ${Math.max(svgReveal.revealed, 0)}/${total}`);
+        revealPrevStep();
         return;
       }
     }
@@ -3820,6 +3901,14 @@ state.selection = [];
   unhideAllBtn?.addEventListener("click", unhideAllObjects);
   hideSelectedPanelBtn?.addEventListener("click", hideSelectedObjects);
   unhideAllPanelBtn?.addEventListener("click", unhideAllObjects);
+  visibilityPrevBtn?.addEventListener("click", revealPrevStep);
+  visibilityNextBtn?.addEventListener("click", revealNextStep);
+  visibilityPlayBtn?.addEventListener("click", toggleSvgPlayback);
+  visibilityTimingBtn?.addEventListener("click", configureSvgPlayback);
+  visibilityPrevPanelBtn?.addEventListener("click", revealPrevStep);
+  visibilityNextPanelBtn?.addEventListener("click", revealNextStep);
+  visibilityPlayPanelBtn?.addEventListener("click", toggleSvgPlayback);
+  visibilityTimingPanelBtn?.addEventListener("click", configureSvgPlayback);
 
   clearBtn?.addEventListener("click", () => {
     state.undo.push(JSON.stringify(snapshot()));
