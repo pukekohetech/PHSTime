@@ -143,9 +143,31 @@ window.WBUI = (() => {
       updateBrushUI();
     }
 
+    function positionColorPop() {
+      if (!colorPop || !colorBtn) return;
+      const r = colorBtn.getBoundingClientRect();
+      const gap = 10;
+      const width = Math.min(300, Math.max(240, window.innerWidth - 86));
+      colorPop.style.width = width + "px";
+
+      let left = r.right + gap;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, r.left - width - gap);
+      }
+
+      const popHeight = Math.min(colorPop.scrollHeight || 520, window.innerHeight - 28);
+      const maxTop = Math.max(8, window.innerHeight - popHeight - 8);
+      const top = Math.max(8, Math.min(r.top - 2, maxTop));
+
+      colorPop.style.left = left + "px";
+      colorPop.style.top = top + "px";
+    }
+
     function toggleColorPop(open) {
+      if (!colorPop) return;
       const shouldOpen = open ?? colorPop.classList.contains("is-hidden");
       colorPop.classList.toggle("is-hidden", !shouldOpen);
+      if (shouldOpen) requestAnimationFrame(positionColorPop);
     }
 
     function openSettings(open) {
@@ -284,6 +306,13 @@ window.WBUI = (() => {
           if (!inside && !onGear) openSettings(false);
         }
       });
+
+      window.addEventListener("resize", () => {
+        if (colorPop && !colorPop.classList.contains("is-hidden")) positionColorPop();
+      });
+      document.addEventListener("scroll", () => {
+        if (colorPop && !colorPop.classList.contains("is-hidden")) positionColorPop();
+      }, true);
 
       colorInput?.addEventListener("input", () => {
         setColor(colorInput.value);
