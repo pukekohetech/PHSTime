@@ -114,7 +114,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     {
       "id": "scattergories",
       "name": "Scattergoties",
-      "type": "newtab",
+      "type": "iframe",
       "url": "https://pukekohetech.github.io/TeMahuri/scattergories.html",
       "tag": "game",
       "seconds": null,
