@@ -225,6 +225,7 @@ clipboard: null,
 
     snapCache: null,
     perspectivePointName: null,
+    perspectivePointCluster: null,
     lineAnchorRef: null,
     lineEndAnchorRef: null,
     lineResizeEnd: null,
@@ -1704,7 +1705,11 @@ state.selection = [];
   }
 
   function updateEndpointLinkedObject(obj) {
-    if (!obj || (obj.kind !== "line" && obj.kind !== "arrow") || obj.perspectiveLink || !obj.endpointLinks) return false;
+    if (!obj || (obj.kind !== "line" && obj.kind !== "arrow") || !obj.endpointLinks) return false;
+    if (obj.perspectiveLink && obj.endpointLinks.start && obj.endpointLinks.end) {
+      delete obj.perspectiveLink;
+    }
+    if (obj.perspectiveLink) return false;
 
     let changed = false;
     let start = resolveAnchorPoint(obj.endpointLinks.start);
@@ -2777,6 +2782,7 @@ function applyStyleToSelectionLive(patch = {}) {
     if (kind === "perspectivePoint") {
       gesture.mode = "perspectivePoint";
       gesture.perspectivePointName = detail || null;
+      gesture.perspectivePointCluster = collectSharedPerspectivePointStarts(idx, detail || null);
       gesture.startWorld = w;
       gesture.snapCache = buildSnapCache(state.objects[idx]?._id);
       return true;
@@ -2941,33 +2947,56 @@ function commitSmoothCurve() {
   /* =========================
      Numeric setters
   ========================= */
-  function setActiveLineLengthMm(mm) {
-    const selectedObj = state.selectionIndex >= 0 ? state.objects[state.selectionIndex] : null;
-    const obj = gesture.activeObj || selectedObj;
+  function setLineLengthMmForObject(obj, mm, fixedEnd = "start") {
     if (!(obj && (obj.kind === "line" || obj.kind === "arrow"))) return false;
 
     const ppm = pxPerMm();
-    const lenPx = mm * ppm;
+    const lenPx = Math.max(0.001, mm * ppm);
 
-    const x1 = obj.x1, y1 = obj.y1;
-    let dx = (obj.x2 ?? x1) - x1;
-    let dy = (obj.y2 ?? y1) - y1;
+    const anchorX = fixedEnd === "end" ? obj.x2 : obj.x1;
+    const anchorY = fixedEnd === "end" ? obj.y2 : obj.y1;
+    let dx = fixedEnd === "end" ? (obj.x1 ?? anchorX) - anchorX : (obj.x2 ?? anchorX) - anchorX;
+    let dy = fixedEnd === "end" ? (obj.y1 ?? anchorY) - anchorY : (obj.y2 ?? anchorY) - anchorY;
 
     let d = Math.hypot(dx, dy);
     if (!isFinite(d) || d < 1e-6) {
-      dx = 1; dy = 0; d = 1;
+      dx = fixedEnd === "end" ? -1 : 1;
+      dy = 0;
+      d = 1;
     }
 
     const ux = dx / d, uy = dy / d;
-    obj.x2 = x1 + ux * lenPx;
-    obj.y2 = y1 + uy * lenPx;
+    let next = { x: anchorX + ux * lenPx, y: anchorY + uy * lenPx };
+    next = snapToWholeMmLength({ x: anchorX, y: anchorY }, next);
 
-    const snapped = snapToWholeMmLength({ x: x1, y: y1 }, { x: obj.x2, y: obj.y2 });
-    obj.x2 = snapped.x;
-    obj.y2 = snapped.y;
+    if (fixedEnd === "end") {
+      obj.x1 = next.x;
+      obj.y1 = next.y;
+      if (obj.perspectiveLink) delete obj.perspectiveLink;
+    } else {
+      obj.x2 = next.x;
+      obj.y2 = next.y;
+      if (obj.perspectiveLink) {
+        const anchor = resolveAnchorPoint(obj.perspectiveLink.anchor);
+        const vp = resolveVanishingPoint(obj.perspectiveLink.vp);
+        if (anchor && vp) {
+          const lenToVp = Math.hypot(vp.x - anchor.x, vp.y - anchor.y) || 1;
+          obj.perspectiveLink.endMode = "length";
+          obj.perspectiveLink.lengthWorld = Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1);
+          obj.perspectiveLink.rayT = Math.max(0.001, obj.perspectiveLink.lengthWorld / lenToVp);
+          updatePerspectiveLinkedObject(obj);
+        }
+      }
+    }
 
     redrawAll();
     return true;
+  }
+
+  function setActiveLineLengthMm(mm, fixedEnd = (gesture.mode === "lineEndResize" ? (gesture.lineResizeEnd || "end") : "start")) {
+    const selectedObj = state.selectionIndex >= 0 ? state.objects[state.selectionIndex] : null;
+    const obj = gesture.activeObj || selectedObj;
+    return setLineLengthMmForObject(obj, mm, fixedEnd === "start" ? "end" : "start") ? true : false;
   }
 
   function setActiveArcRadiusMm(mm) {
@@ -3067,6 +3096,49 @@ function onCanvasContextMenu(e) {
 }
 
 
+
+  function perspectivePointWorldTolerance() {
+    try {
+      const a = screenToWorld(0, 0);
+      const b = screenToWorld(14, 0);
+      const d = Math.abs((b && b.x || 0) - (a && a.x || 0));
+      return Math.max(6, d || 6);
+    } catch {
+      return 10;
+    }
+  }
+
+  function collectSharedPerspectivePointStarts(mainIndex, pointName) {
+    const guide = state.objects[mainIndex];
+    if (!guide || guide.kind !== "perspectiveGuide" || !pointName || !guide[pointName]) return [];
+    const base = guide[pointName];
+    const tol = perspectivePointWorldTolerance();
+    const out = [];
+    for (let i = 0; i < state.objects.length; i++) {
+      const g = state.objects[i];
+      if (!g || g.kind !== "perspectiveGuide") continue;
+      for (const name of ["vp1", "vp2"]) {
+        if (!g[name]) continue;
+        if (Math.hypot(g[name].x - base.x, g[name].y - base.y) <= tol) {
+          out.push({ index: i, name, startObj: deepClone(g) });
+        }
+      }
+    }
+    return out;
+  }
+
+  function findExistingPerspectiveGuideForTarget(targetId, mode) {
+    if (!targetId) return -1;
+    let fallback = -1;
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+      const g = state.objects[i];
+      if (!g || g.kind !== "perspectiveGuide" || g.targetId !== targetId) continue;
+      if ((g.mode || 1) >= mode) return i;
+      if (fallback < 0) fallback = i;
+    }
+    return fallback;
+  }
+
   function createPerspectiveGuide(mode) {
     const idx = state.selectionIndex;
     const target = idx >= 0 ? state.objects[idx] : null;
@@ -3077,6 +3149,28 @@ function onCanvasContextMenu(e) {
     }
 
     const targetId = ensureObjId(target);
+
+    const existingIndex = findExistingPerspectiveGuideForTarget(targetId, mode);
+    if (existingIndex >= 0) {
+      const existing = state.objects[existingIndex];
+      if (existing && existing.kind === "perspectiveGuide") {
+        state.undo.push(JSON.stringify(snapshot()));
+        state.redo.length = 0;
+        if ((existing.mode || 1) < mode) existing.mode = mode;
+        if (mode >= 2 && !existing.vp2) {
+          const b0 = objectBounds(target);
+          const cy0 = (b0.minY + b0.maxY) / 2;
+          const viewA0 = screenToWorld ? screenToWorld(0, 0) : { x: b0.minX - 400, y: cy0 };
+          existing.vp2 = { x: Math.min(b0.minX - 400, Math.min(viewA0.x, b0.minX - 400)), y: existing.vp1 ? existing.vp1.y : cy0 };
+        }
+        state.selectionIndex = existingIndex;
+        state.selection = [existingIndex];
+        redrawAll();
+        showToast("Existing perspective guide selected — drag either red VP; shared stacked VPs move together.");
+        return true;
+      }
+    }
+
     const pts = perspectiveTargetPoints(target);
     if (!pts.length) {
       showToast("No usable shape ends");
@@ -3438,18 +3532,28 @@ if (state.tool === "select") {
     }
 
     if (gesture.mode === "perspectivePoint" && gesture.selIndex >= 0 && gesture.selStartObj) {
-      const obj = deepClone(gesture.selStartObj);
       const name = gesture.perspectivePointName;
-      if (obj && name && obj[name]) {
+      const startGuide = gesture.selStartObj;
+      if (startGuide && name && startGuide[name]) {
         const bypassSnap = isMac ? e.metaKey : e.ctrlKey;
         const p = stableEndpointSnapForPerspectivePoint(w, {
           bypassSnap,
           gridSnap: e.shiftKey,
-          skipObjId: obj._id
+          skipObjId: startGuide._id
         });
-        obj[name].x = p.x;
-        obj[name].y = p.y;
-        state.objects[gesture.selIndex] = obj;
+        const dx = p.x - startGuide[name].x;
+        const dy = p.y - startGuide[name].y;
+        const cluster = Array.isArray(gesture.perspectivePointCluster) && gesture.perspectivePointCluster.length
+          ? gesture.perspectivePointCluster
+          : [{ index: gesture.selIndex, name, startObj: startGuide }];
+        for (const item of cluster) {
+          const base = item.startObj;
+          if (!base || !base[item.name] || !state.objects[item.index]) continue;
+          const obj = deepClone(base);
+          obj[item.name].x = base[item.name].x + dx;
+          obj[item.name].y = base[item.name].y + dy;
+          state.objects[item.index] = obj;
+        }
       }
       redrawAll();
       return;
@@ -3925,6 +4029,59 @@ if (!typing && e.code === "Space") {
         showToast(obj.filled ? "Filled" : "Unfilled");
       }
       return;
+    }
+
+    if (!typing && gesture.active && gesture.mode === "lineEndResize" && state.selectionIndex >= 0) {
+      const selectedObj = state.objects[state.selectionIndex];
+      if (selectedObj && (selectedObj.kind === "line" || selectedObj.kind === "arrow")) {
+        const isDigit = /^[0-9]$/.test(e.key);
+        const isDot = e.key === "." || e.key === ",";
+        const isBack = e.key === "Backspace";
+        const isEnter = e.key === "Enter";
+        const isEsc = e.key === "Escape";
+        const isMinus = e.key === "-";
+        if (isDigit || isDot || isBack || isEnter || isEsc || isMinus) {
+          e.preventDefault();
+          const sx = gesture.lastScreen?.sx ?? gesture.startScreen?.sx ?? 0;
+          const sy = gesture.lastScreen?.sy ?? gesture.startScreen?.sy ?? 0;
+          if (!lenEntry.open && (isDigit || isDot || isBack || isMinus || isEnter)) {
+            const curMm = Math.max(1, Math.round(Math.hypot(selectedObj.x2 - selectedObj.x1, selectedObj.y2 - selectedObj.y1) / pxPerMm()) || 1);
+            lenEntry.open = true;
+            lenEntry.seedMm = parseMmInput(String(curMm)) ?? null;
+            openLenBoxAt(sx, sy, String(curMm));
+          }
+          if (isEsc) {
+            lenEntry.open = false;
+            closeLenBox();
+            return;
+          }
+          if (isEnter) {
+            const raw = (lenInput.value || "").trim() || lenInput.placeholder || "";
+            let mm = parseMmInput(raw);
+            if (mm == null && lenEntry.seedMm != null) mm = lenEntry.seedMm;
+            if (mm == null) {
+              showToast("Invalid mm");
+              return;
+            }
+            setActiveLineLengthMm(mm);
+            updatePerspectiveLinks();
+            lenEntry.open = false;
+            closeLenBox();
+            redrawAll();
+            showToast(`Line length set to ${Math.round(mm)} mm`);
+            return;
+          }
+          if (!lenEntry.open) return;
+          if (isBack) {
+            lenInput.value = lenInput.value.slice(0, -1);
+            return;
+          }
+          if (isDigit) lenInput.value += e.key;
+          else if (isDot) lenInput.value += ".";
+          else if (isMinus) lenInput.value += "-";
+          return;
+        }
+      }
     }
 
     if (!typing && gesture.active && gesture.mode === "drawArc" && gesture.activeObj?.kind === "arc") {
