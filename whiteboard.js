@@ -2947,11 +2947,41 @@ function commitSmoothCurve() {
   /* =========================
      Numeric setters
   ========================= */
+  function linkedBaseEndForLength(obj) {
+    if (!obj || (obj.kind !== "line" && obj.kind !== "arrow")) return null;
+    // Perspective lines are always measured outward from their source/anchor joint.
+    if (obj.perspectiveLink) return "start";
+    // A snapped joint is the base. Preserve it even if the cursor or resize handle is elsewhere.
+    if (obj.endpointLinks?.start) return "start";
+    if (obj.endpointLinks?.end) return "end";
+    // While drawing from a snapped joint the link may still only live on the gesture.
+    if (gesture.lineAnchorRef) return "start";
+    return null;
+  }
+
   function setLineLengthMmForObject(obj, mm, fixedEnd = "start") {
     if (!(obj && (obj.kind === "line" || obj.kind === "arrow"))) return false;
 
     const ppm = pxPerMm();
     const lenPx = Math.max(0.001, mm * ppm);
+
+    // For perspective-linked lines, do not use the current cursor direction.
+    // The line must stay on its VP ray and simply change its distance from the source joint.
+    if (obj.perspectiveLink && fixedEnd === "start") {
+      const anchor = resolveAnchorPoint(obj.perspectiveLink.anchor) || { x: obj.x1, y: obj.y1 };
+      const vp = resolveVanishingPoint(obj.perspectiveLink.vp);
+      if (anchor && vp) {
+        obj.x1 = anchor.x;
+        obj.y1 = anchor.y;
+        const lenToVp = Math.hypot(vp.x - anchor.x, vp.y - anchor.y) || 1;
+        obj.perspectiveLink.endMode = "length";
+        obj.perspectiveLink.lengthWorld = lenPx;
+        obj.perspectiveLink.rayT = Math.max(0.001, lenPx / lenToVp);
+        updatePerspectiveLinkedObject(obj);
+        redrawAll();
+        return true;
+      }
+    }
 
     const anchorX = fixedEnd === "end" ? obj.x2 : obj.x1;
     const anchorY = fixedEnd === "end" ? obj.y2 : obj.y1;
@@ -2976,27 +3006,31 @@ function commitSmoothCurve() {
     } else {
       obj.x2 = next.x;
       obj.y2 = next.y;
-      if (obj.perspectiveLink) {
-        const anchor = resolveAnchorPoint(obj.perspectiveLink.anchor);
-        const vp = resolveVanishingPoint(obj.perspectiveLink.vp);
-        if (anchor && vp) {
-          const lenToVp = Math.hypot(vp.x - anchor.x, vp.y - anchor.y) || 1;
-          obj.perspectiveLink.endMode = "length";
-          obj.perspectiveLink.lengthWorld = Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1);
-          obj.perspectiveLink.rayT = Math.max(0.001, obj.perspectiveLink.lengthWorld / lenToVp);
-          updatePerspectiveLinkedObject(obj);
-        }
-      }
     }
 
     redrawAll();
     return true;
   }
 
-  function setActiveLineLengthMm(mm, fixedEnd = (gesture.mode === "lineEndResize" ? (gesture.lineResizeEnd || "end") : "start")) {
+  function setActiveLineLengthMm(mm, fixedEnd = null) {
     const selectedObj = state.selectionIndex >= 0 ? state.objects[state.selectionIndex] : null;
-    const obj = gesture.activeObj || selectedObj;
-    return setLineLengthMmForObject(obj, mm, fixedEnd === "start" ? "end" : "start") ? true : false;
+    const selectedFromMulti = (state.selection && state.selection.length)
+      ? state.objects[state.selection[state.selection.length - 1]]
+      : null;
+    const obj = gesture.activeObj || selectedObj || selectedFromMulti;
+    if (!obj || (obj.kind !== "line" && obj.kind !== "arrow")) return false;
+
+    // fixedEnd means the end that stays put while the other endpoint moves.
+    // Linked joints win over cursor position and handle direction.
+    if (!fixedEnd) fixedEnd = linkedBaseEndForLength(obj);
+    if (!fixedEnd) {
+      if (gesture.mode === "lineEndResize") {
+        fixedEnd = (gesture.lineResizeEnd === "start") ? "end" : "start";
+      } else {
+        fixedEnd = "start";
+      }
+    }
+    return setLineLengthMmForObject(obj, mm, fixedEnd) ? true : false;
   }
 
   function setActiveArcRadiusMm(mm) {
@@ -3899,6 +3933,21 @@ if (!typing && e.code === "Space") {
   return;
 }
 
+
+    if (!typing && !mod && !gesture.active && state.selectionIndex >= 0) {
+      const selectedObj = state.objects[state.selectionIndex];
+      if (selectedObj && (selectedObj.kind === "line" || selectedObj.kind === "arrow") && (e.key === "m" || e.key === "M")) {
+        e.preventDefault();
+        const b = objectBounds(selectedObj);
+        const centerS = worldToScreen((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+        const curMm = Math.max(1, Math.round(Math.hypot(selectedObj.x2 - selectedObj.x1, selectedObj.y2 - selectedObj.y1) / pxPerMm()) || 1);
+        lenEntry.open = true;
+        lenEntry.seedMm = parseMmInput(String(curMm)) ?? null;
+        openLenBoxAt(centerS.sx, centerS.sy, String(curMm));
+        showToast("Type length in mm, then Enter");
+        return;
+      }
+    }
 
     if (!typing && !mod && !gesture.active && state.selectionIndex >= 0) {
       const selectedObj = state.objects[state.selectionIndex];
