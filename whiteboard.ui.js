@@ -178,7 +178,7 @@ window.WBUI = (() => {
 
     function updateCursorFromTool() {
       const t = state.tool;
-      if (["pen", "line", "rect", "circle", "arc", "arrow", "polyFill"].includes(t)) {
+      if (["pen", "line", "rect", "circle", "arc", "arrow", "polyFill", "curve"].includes(t)) {
         inkCanvas.style.cursor = "crosshair";
         return;
       }
@@ -210,21 +210,24 @@ window.WBUI = (() => {
     }
 
     const TOOL_HINTS = {
-      line: "Line: snap to endpoints/intersections. Start from a corner and draw toward a red VP to link perspective. For snip/join, select one line and hover near another, or Shift-click two lines, then press J.",
+      line: "Line: snap to endpoints/intersections. Start from a corner and draw toward or directly away from a red VP to link perspective. Select a finished line to drag its endpoint handles.",
       arrow: "Arrow: same snapping/linking as Line, with an arrow head.",
       polyFill: "PolyFill: click 3+ corners, then Enter, double-click, right-click, or click near the first point to fill.",
-      perspective1: "1P: select a shape/line first, then click 1P. Select the guide later and drag the orange SOURCE box to grab the starting object.",
-      perspective2: "2P: select a shape/line first, then click 2P. Select the guide later and drag the orange SOURCE box to grab the starting object; drag either VP to adjust perspective.",
+      curve: "Smooth curve: click points along the path, then Enter, double-click, or right-click to draw a smooth curve through them.",
+      perspective1: "1P: click 1P, then click the shape/line to use as the source. Select the guide later and drag the orange SOURCE box to grab the starting object.",
+      perspective2: "2P: click 2P, then click the shape/line to use as the source. Drag either VP to adjust perspective.",
       arc: "Arc: click centre, drag radius/angle. Right-click or Esc resets while drawing."
     };
 
     function setActiveTool(tool) {
       hideMeasureTip();
-      const changed = state.tool !== tool;
+      const previousTool = state.tool;
+      const changed = previousTool !== tool;
+      if (changed && (previousTool === "polyFill" || previousTool === "curve")) cancelPolyDraft?.();
       state.tool = tool;
       dockBtns.forEach(b => b.classList.toggle("is-active", b.dataset.tool === tool));
       updateCursorFromTool();
-      if (tool !== "polyFill") cancelPolyDraft?.();
+      if (tool !== "polyFill" && tool !== "curve") cancelPolyDraft?.();
       if (changed && TOOL_HINTS[tool]) showToast(TOOL_HINTS[tool]);
     }
 

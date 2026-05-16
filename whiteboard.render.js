@@ -41,6 +41,31 @@ window.WBRender = (() => {
       canvasCtx.scale(state.zoom, state.zoom);
     }
 
+
+    function drawSmoothCurvePath(ctx2, pts) {
+      if (!pts || !pts.length) return;
+      ctx2.moveTo(pts[0].x, pts[0].y);
+      if (pts.length === 1) return;
+      if (pts.length === 2) {
+        ctx2.lineTo(pts[1].x, pts[1].y);
+        return;
+      }
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        ctx2.bezierCurveTo(
+          p1.x + (p2.x - p0.x) / 6,
+          p1.y + (p2.y - p0.y) / 6,
+          p2.x - (p3.x - p1.x) / 6,
+          p2.y - (p3.y - p1.y) / 6,
+          p2.x,
+          p2.y
+        );
+      }
+    }
+
     function applyBgTransform() {
       bgLayer.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
 
@@ -191,14 +216,16 @@ window.WBRender = (() => {
         return;
       }
 
-      if (obj.kind === "stroke" || obj.kind === "erase") {
+      if (obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
         inkCtx.globalCompositeOperation = obj.kind === "erase" ? "destination-out" : "source-over";
         inkCtx.strokeStyle = obj.kind === "erase" ? "rgba(0,0,0,1)" : obj.color;
         inkCtx.lineWidth = obj.size;
+        inkCtx.setLineDash([].concat(getLineDash(obj.lineStyle || "solid", obj.size || 2)));
 
         inkCtx.beginPath();
-        const pts = obj.points || [];
-        if (pts.length) {
+        const pts = obj.points || obj.pts || [];
+        if (obj.kind === "curve") drawSmoothCurvePath(inkCtx, pts);
+        else if (pts.length) {
           inkCtx.moveTo(pts[0].x, pts[0].y);
           for (let i = 1; i < pts.length; i++) inkCtx.lineTo(pts[i].x, pts[i].y);
         }
@@ -475,6 +502,30 @@ window.WBRender = (() => {
         uiCtx.restore();
       }
 
+      if (state.tool === "curve" && polyDraft.active && polyDraft.pts.length) {
+        uiCtx.save();
+        uiCtx.setTransform(pr, 0, 0, pr, 0, 0);
+        const pts = polyDraft.pts.map(p => worldToScreen(p.x, p.y));
+        const hover = polyDraft.hover ? worldToScreen(polyDraft.hover.x, polyDraft.hover.y) : null;
+        const previewPts = hover ? pts.concat([hover]) : pts;
+        uiCtx.lineWidth = 2;
+        uiCtx.setLineDash([6, 4]);
+        uiCtx.strokeStyle = "rgba(0,0,0,0.65)";
+        uiCtx.beginPath();
+        drawSmoothCurvePath(uiCtx, previewPts);
+        uiCtx.stroke();
+        uiCtx.setLineDash([]);
+        for (const p of pts) {
+          uiCtx.fillStyle = "rgba(255,255,255,0.95)";
+          uiCtx.strokeStyle = "rgba(0,0,0,0.6)";
+          uiCtx.beginPath();
+          uiCtx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+          uiCtx.fill();
+          uiCtx.stroke();
+        }
+        uiCtx.restore();
+      }
+
       computeHandles();
       const uiHandles = ctx.uiHandles;
       if (!uiHandles.visible) return;
@@ -545,6 +596,27 @@ window.WBRender = (() => {
       }
 
       if (shouldDrawPolyHandlesUnderLinework()) {
+        uiCtx.restore();
+        return;
+      }
+
+      if (uiHandles.lineEndpoints && uiHandles.lineEndpoints.length) {
+        const b = uiHandles.box;
+        if (b) uiCtx.strokeRect(b.x, b.y, b.w, b.h);
+        uiCtx.setLineDash([]);
+        for (const p of uiHandles.lineEndpoints) {
+          uiCtx.fillStyle = "rgba(255,255,255,0.98)";
+          uiCtx.strokeStyle = "rgba(46, 204, 113, 0.98)";
+          uiCtx.lineWidth = 2;
+          uiCtx.beginPath();
+          uiCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          uiCtx.fill();
+          uiCtx.stroke();
+          uiCtx.fillStyle = "rgba(46, 204, 113, 0.95)";
+          uiCtx.beginPath();
+          uiCtx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          uiCtx.fill();
+        }
         uiCtx.restore();
         return;
       }

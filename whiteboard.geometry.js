@@ -259,6 +259,12 @@ window.WBGeometry = (() => {
         return { minX: b.minX - pad, minY: b.minY - pad, maxX: b.maxX + pad, maxY: b.maxY + pad };
       }
 
+      if (obj.kind === "curve") {
+        const b = polyBounds(obj.points || obj.pts || []);
+        const pad = Math.max(8, (obj.size || 4) * 1.5);
+        return { minX: b.minX - pad, minY: b.minY - pad, maxX: b.maxX + pad, maxY: b.maxY + pad };
+      }
+
       if (obj.kind === "text") {
         const m = textMetrics(obj);
         const w = m.w, h = m.h;
@@ -410,8 +416,8 @@ window.WBGeometry = (() => {
         return wx >= b.minX && wx <= b.maxX && wy >= b.minY && wy <= b.maxY;
       }
 
-      if (obj.kind === "stroke" || obj.kind === "erase") {
-        const pts = obj.points || [];
+      if (obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
+        const pts = obj.points || obj.pts || [];
         for (let i = 1; i < pts.length; i++) {
           if (distToSeg(wx, wy, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) <= tol) return true;
         }
@@ -496,8 +502,8 @@ window.WBGeometry = (() => {
         return;
       }
 
-      if (obj.kind === "stroke" || obj.kind === "erase") {
-        (obj.points || []).forEach(p => {
+      if (obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
+        (obj.points || obj.pts || []).forEach(p => {
           p.x += dx;
           p.y += dy;
         });
@@ -543,8 +549,8 @@ window.WBGeometry = (() => {
         return;
       }
 
-      if (obj.kind === "stroke" || obj.kind === "erase") {
-        (obj.points || []).forEach(p => {
+      if (obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
+        (obj.points || obj.pts || []).forEach(p => {
           const r = rotatePoint(p.x, p.y, cx, cy, angle);
           p.x = r.x;
           p.y = r.y;
@@ -588,8 +594,8 @@ window.WBGeometry = (() => {
         return;
       }
 
-      if (obj.kind === "stroke" || obj.kind === "erase") {
-        (obj.points || []).forEach(p => {
+      if (obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
+        (obj.points || obj.pts || []).forEach(p => {
           p.x = ax + (p.x - ax) * fx;
           p.y = ay + (p.y - ay) * fy;
         });
@@ -980,22 +986,24 @@ window.WBGeometry = (() => {
           if (!Number.isFinite(vLen) || vLen < 0.001) continue;
 
           const dot = rvx * vx + rvy * vy;
-          if (dot <= 0) continue;
+          const direction = dot < 0 ? -1 : 1;
+          const absDot = Math.abs(dot);
+          if (absDot <= 0) continue;
 
           const cross = rvx * vy - rvy * vx;
-          const distToRay = Math.abs(cross) / vLen;
-          const cosA = clamp(dot / (rawLen * vLen), -1, 1);
+          const distToLine = Math.abs(cross) / vLen;
+          const cosA = clamp(absDot / (rawLen * vLen), -1, 1);
           const angleDiff = Math.acos(cosA);
 
-          if (distToRay > radiusWorld * 1.5 && angleDiff > maxAngle) continue;
+          if (distToLine > radiusWorld * 1.5 && angleDiff > maxAngle) continue;
 
-          const t = dot / (vLen * vLen);
-          const projected = { x: start.x + vx * t, y: start.y + vy * t };
+          const t = absDot / (vLen * vLen);
+          const projected = { x: start.x + vx * t * direction, y: start.y + vy * t * direction };
           const rounded = snapToWholeMmLength(start, projected);
-          const score = distToRay + angleDiff * radiusWorld * 2;
+          const score = distToLine + angleDiff * radiusWorld * 2;
           if (score < bestScore) {
             bestScore = score;
-            best = { x: rounded.x, y: rounded.y, vp, perspectiveRef: { guideId: obj._id, vpName: vp === obj.vp2 ? "vp2" : "vp1" } };
+            best = { x: rounded.x, y: rounded.y, vp, direction, perspectiveRef: { guideId: obj._id, vpName: vp === obj.vp2 ? "vp2" : "vp1" } };
           }
         }
       }
@@ -1032,7 +1040,7 @@ window.WBGeometry = (() => {
 
       const perspectiveHit = perspectiveDirectionSnap(start, rawPt);
       if (perspectiveHit) {
-        return { x: perspectiveHit.x, y: perspectiveHit.y, perspectiveRef: perspectiveHit.perspectiveRef, perspectiveEndMode: "length" };
+        return { x: perspectiveHit.x, y: perspectiveHit.y, perspectiveRef: perspectiveHit.perspectiveRef, perspectiveEndMode: "length", perspectiveDirection: perspectiveHit.direction || 1 };
       }
 
       const hitSegment = snapToNearestOnSegments(rawPt, cache.segments || [], radiusWorld);

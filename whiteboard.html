@@ -51,14 +51,14 @@
           <div class="dockPop__section">
             <div class="dockPop__subhead">Presets</div>
             <div class="presetRow presetRow--triple">
-              <button type="button" class="panel__btn" id="presetConstruction">Construction</button>
-              <button type="button" class="panel__btn" id="presetOutline">Outline</button>
-              <button type="button" class="panel__btn" id="presetColour">Fill</button>
+              <button type="button" class="panel__btn" id="presetConstruction" title="Construction preset (1)">Construction</button>
+              <button type="button" class="panel__btn" id="presetOutline" title="Outline preset (2)">Outline</button>
+              <button type="button" class="panel__btn" id="presetColour" title="Fill preset (3)">Fill</button>
             </div>
             <div class="presetRow presetRow--triple">
-              <button type="button" class="panel__btn" id="presetReference">Reference</button>
-              <button type="button" class="panel__btn" id="presetHidden">Hidden</button>
-              <button type="button" class="panel__btn" id="presetCenter">Center</button>
+              <button type="button" class="panel__btn" id="presetReference" title="Reference preset (4)">Reference</button>
+              <button type="button" class="panel__btn" id="presetHidden" title="Hidden preset (5)">Hidden</button>
+              <button type="button" class="panel__btn" id="presetCenter" title="Center preset (6)">Center</button>
             </div>
             <div class="dockPop__note">Construction + Outline use black automatically.</div>
             <div class="dockPop__note">Reference, Hidden, and Center use the line options below.</div>
@@ -67,16 +67,16 @@
           <div class="dockPop__section">
             <div class="dockPop__subhead">Line style</div>
             <div class="presetRow lineStyleRow lineStyleRow--four">
-              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleSolid" title="Solid line" aria-label="Solid line">
+              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleSolid" title="Solid line (1)" aria-label="Solid line">
                 <span class="lineIcon lineIcon--solid" aria-hidden="true"></span>
               </button>
-              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleReference" title="Reference line" aria-label="Reference line">
+              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleReference" title="Reference line (2)" aria-label="Reference line">
                 <span class="lineIcon lineIcon--reference" aria-hidden="true"></span>
               </button>
-              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleHidden" title="Hidden line" aria-label="Hidden line">
+              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleHidden" title="Hidden line (3)" aria-label="Hidden line">
                 <span class="lineIcon lineIcon--hidden" aria-hidden="true"></span>
               </button>
-              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleCenter" title="Center line" aria-label="Center line">
+              <button type="button" class="panel__btn panel__btn--lineStyle" id="lineStyleCenter" title="Center line (4)" aria-label="Center line">
                 <span class="lineIcon lineIcon--center" aria-hidden="true"></span>
               </button>
             </div>
@@ -107,7 +107,7 @@
       <div class="dockSep"></div>
 
       <button class="dockBtn is-active" data-tool="pen" type="button" title="Freehand (P)">✏️</button>
-      <button class="dockBtn" data-tool="line" type="button" title="Line (L): snap/link endpoints. Start from shape corner/end and draw toward a red VP to make a live perspective line. Press L to repair/auto-link overlaps.">／</button>
+      <button class="dockBtn" data-tool="line" type="button" title="Line (L): snap/link endpoints. Start from shape corner/end and draw toward a red VP to make a live perspective line; a red dashed helper ray continues from the drawn end to the VP. Press L to repair/auto-link overlaps.">／</button>
       <button class="dockBtn" data-tool="rect" type="button" title="Rectangle (R): drag to draw. Hold Shift while drawing to fill with current colour.">▭</button>
       <button class="dockBtn" data-tool="circle" type="button" title="Circle (C): drag to draw. Hold Shift while drawing to fill. Perspective guides use tangent points.">◯</button>
       <button class="dockBtn" data-tool="arc" type="button" title="Arc (G): click/drag to set centre/radius/angle. Right-click or Esc resets while drawing. Perspective guides use tangent points.">⌒</button>
@@ -115,6 +115,7 @@
       <button class="dockBtn" data-tool="text" type="button" title="Text (T)">T</button>
       <button class="dockBtn" data-tool="eraser" type="button" title="Eraser (E)">🧽</button>
       <button class="dockBtn" data-tool="polyFill" type="button" title="Polygon Fill (K): click 3+ corners. Corners snap/link to joints, endpoints, intersections, and line bodies. Hold Ctrl/Cmd for a free corner. Finish with Enter, double-click, right-click, or click near the first point.">⬠</button>
+      <button class="dockBtn" data-tool="curve" type="button" title="Smooth curve (U): click a chain of points, then Enter/double-click/right-click to draw a smooth curve through them.">〰</button>
       <button class="dockBtn" data-tool="perspective1" type="button" title="1-point perspective: select a shape/line/circle/arc first. Adds red projection rays and a movable VP. Select the guide, then click/drag the highlighted SOURCE box to grab the starting shape/line easily.">1P</button>
       <button class="dockBtn" data-tool="perspective2" type="button" title="2-point perspective: select a shape/line/circle/arc first. Adds red projection rays and two movable VPs. Select the guide, then click/drag the highlighted SOURCE box to grab the starting shape/line easily.">2P</button>
       <button class="dockBtn" id="snipJoinBtn" type="button" title="Snip + Join (J): uses selected line, or the last drawn line if none is selected. Hover near the crossing line/intersection, then trim/link at the true intersection.">✂</button>
@@ -134,7 +135,7 @@
 
       <div class="dockSep"></div>
 
-      <button class="dockBtn" id="hideSelectedBtn" type="button" title="Hide selected object(s) (H)">🙈</button>
+      <button class="dockBtn" id="hideSelectedBtn" type="button" title="Hide selected, or hide all if nothing is selected (H)">🙈</button>
       <button class="dockBtn" id="unhideAllBtn" type="button" title="Unhide all hidden objects (Shift+H)">👁</button>
       <button class="dockBtn" id="visibilityPrevBtn" type="button" title="Hide previous / step back through hidden objects (,)">◀</button>
       <button class="dockBtn" id="visibilityNextBtn" type="button" title="Reveal next hidden object (.)">▶</button>
@@ -200,7 +201,7 @@
             <div class="panel__group panel__group--wide">
               <label class="panel__label">Visibility</label>
               <div class="panel__row panel__row--wrap">
-                <button id="hideSelectedPanelBtn" class="panel__btn" type="button" title="Hide selected object(s) (H)">Hide selected</button>
+                <button id="hideSelectedPanelBtn" class="panel__btn" type="button" title="Hide selected, or hide all if nothing is selected (H)">Hide selected / all</button>
                 <button id="unhideAllPanelBtn" class="panel__btn" type="button" title="Unhide all hidden objects (Shift+H)">Unhide all</button>
               </div>
               <div class="panel__row panel__row--wrap">
@@ -209,7 +210,7 @@
                 <button id="visibilityPlayPanelBtn" class="panel__btn" type="button" title="Timed reveal / pause (Shift+>)">Timed show</button>
                 <button id="visibilityTimingPanelBtn" class="panel__btn" type="button" title="Set reveal timing (Shift+<)">Timing</button>
               </div>
-              <div class="panel__note">Hidden objects stay saved but are ignored by select, snap, export, and print until unhidden. Cycle hidden objects with . and , or use Timed show.</div>
+              <div class="panel__note">Hidden objects stay saved but are ignored by select, snap, export, and print until unhidden. If nothing is selected, Hide hides everything visible. Cycle hidden objects with . and , or use Timed show.</div>
             </div>
 
             <div class="panel__group panel__group--wide">
@@ -297,7 +298,7 @@
       </div>
 
       <div class="hint">
-        Wheel zooms • Space + drag pans • H hides selected • Shift+H unhides all • . / , cycle hidden objects • Shift+> timed show • Ctrl/Cmd bypasses snapping/free page points • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
+        Wheel zooms • Space + drag pans • H hides selected • Shift+H unhides all • . / , cycle hidden objects • Shift+> timed show • Ctrl/Cmd bypasses snapping/free page points • Presets: 1 Construction, 2 Outline, 3 Fill, 4 Reference, 5 Hidden, 6 Center • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays with vanishing points starting near the page/view extents • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally; a red dashed helper ray is added from the line end to the VP • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
       </div>
     </section>
   </main>

@@ -9,7 +9,7 @@
    - whiteboard.ui.js
 
    Keeps:
-   - pen / eraser / line / rect / circle / arc / arrow / text / polyFill
+   - pen / eraser / line / rect / circle / arc / arrow / text / polyFill / curve
    - selection move / scale / rotate
    - background move / scale / rotate
    - SVG reveal + playback
@@ -197,7 +197,7 @@ clipboard: null,
   const linkDebugOverlay = { visible: false, items: [], lastCheckAt: 0, targetId: null };
 
   // Selection handles cache
-  const uiHandles = { visible: false, box: null, rotate: null, corners: null, poly: null, center: null, perspective: null, perspectiveSource: null };
+  const uiHandles = { visible: false, box: null, rotate: null, corners: null, poly: null, center: null, perspective: null, perspectiveSource: null, lineEndpoints: null };
 
   // Gesture state
   const gesture = {
@@ -227,6 +227,7 @@ clipboard: null,
     perspectivePointName: null,
     lineAnchorRef: null,
     lineEndAnchorRef: null,
+    lineResizeEnd: null,
     forceLinkActive: false
   };
 
@@ -327,6 +328,64 @@ state.selection = [];
     if (patch.color != null) preset.color = String(patch.color);
     if (patch.size != null) preset.size = clamp(Number(patch.size || preset.size), 1, 60);
     syncLinePresetInputs();
+  }
+
+  function applyLineStylePreset(style, show = true) {
+    const picked = style || "solid";
+    const patch = { lineStyle: picked };
+    if (picked === "reference" || picked === "hidden" || picked === "center") {
+      const preset = state.linePresetMap?.[picked] || {};
+      patch.color = preset.color || (picked === "reference" ? "#1b5e20" : picked === "hidden" ? "#1976d2" : "#d32f2f");
+      patch.size = clamp(Number(preset.size || 10), 1, 60);
+      patch.opacity = 1;
+      state.color = patch.color;
+      state.size = patch.size;
+      state.opacity = patch.opacity;
+    }
+    state.lineStyle = picked;
+    updateBrushUI();
+    if (state.selectionIndex >= 0) applyStyleToSelection(patch);
+    if (show) showToast(picked === "solid" ? "Line style: solid" : `Line style: ${picked} (${patch.color}, ${patch.size}px)`);
+  }
+
+  function applyDrawingPreset(name, show = true) {
+    const picked = name || "construction";
+    const patch = {};
+    if (picked === "construction") {
+      patch.color = "#111111";
+      patch.size = 5;
+      patch.opacity = 0.85;
+      patch.lineStyle = "solid";
+    } else if (picked === "outline") {
+      patch.color = "#111111";
+      patch.size = 15;
+      patch.opacity = 1;
+      patch.lineStyle = "solid";
+    } else if (picked === "fill") {
+      patch.size = 40;
+      patch.opacity = 0.25;
+      patch.lineStyle = "solid";
+    } else if (picked === "reference" || picked === "hidden" || picked === "center") {
+      const preset = state.linePresetMap?.[picked] || {};
+      patch.color = preset.color || (picked === "reference" ? "#1b5e20" : picked === "hidden" ? "#1976d2" : "#d32f2f");
+      patch.size = clamp(Number(preset.size || 10), 1, 60);
+      patch.opacity = 1;
+      patch.lineStyle = picked;
+    } else {
+      return false;
+    }
+
+    if (patch.color != null) state.color = patch.color;
+    if (patch.size != null) state.size = patch.size;
+    if (patch.opacity != null) state.opacity = patch.opacity;
+    state.lineStyle = patch.lineStyle || "solid";
+    updateBrushUI();
+    if (state.selectionIndex >= 0) applyStyleToSelection(patch);
+    if (show) {
+      const label = picked === "fill" ? "Fill" : picked[0].toUpperCase() + picked.slice(1);
+      showToast(`Preset: ${label}`);
+    }
+    return true;
   }
 
   function pxPerMm() {
@@ -536,6 +595,7 @@ state.selection = [];
     uiHandles.center = null;
     uiHandles.perspective = null;
     uiHandles.perspectiveSource = null;
+    uiHandles.lineEndpoints = null;
 
     if (state.tool !== "select") return;
     if (state.selectionIndex < 0) return;
@@ -601,6 +661,26 @@ state.selection = [];
 
     const b = objectBounds(obj);
     const hasOwnRot = (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "text") && (obj.rot || 0);
+    if (obj.kind === "line" || obj.kind === "arrow") {
+      const a = worldToScreen(obj.x1, obj.y1);
+      const bpt = worldToScreen(obj.x2, obj.y2);
+      const pad = 8;
+      uiHandles.visible = true;
+      uiHandles.box = {
+        x: Math.min(a.x, bpt.x) - pad,
+        y: Math.min(a.y, bpt.y) - pad,
+        w: Math.abs(bpt.x - a.x) + pad * 2,
+        h: Math.abs(bpt.y - a.y) + pad * 2
+      };
+      uiHandles.lineEndpoints = [
+        { name: "start", x: a.x, y: a.y, r: 8 },
+        { name: "end", x: bpt.x, y: bpt.y, r: 8 }
+      ];
+      uiHandles.corners = [];
+      uiHandles.rotate = null;
+      return;
+    }
+
 
     if (hasOwnRot) {
       let w = b.maxX - b.minX;
@@ -689,6 +769,12 @@ state.selection = [];
       }
     }
 
+    if (uiHandles.lineEndpoints) {
+      for (const p of uiHandles.lineEndpoints) {
+        if (Math.hypot(sx - p.x, sy - p.y) <= p.r + 8) return { kind: "lineEnd", endName: p.name };
+      }
+    }
+
     if (uiHandles.rotate) {
       const dx = sx - uiHandles.rotate.x;
       const dy = sy - uiHandles.rotate.y;
@@ -721,6 +807,24 @@ state.selection = [];
       if (inside) return { kind: "move" };
     }
 
+    return null;
+  }
+
+  function hitPerspectivePointAnywhere(sx, sy) {
+    const tol = 18;
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+      const obj = state.objects[i];
+      if (!obj || obj.hidden || obj.kind !== "perspectiveGuide") continue;
+      const points = [];
+      if (obj.vp1) points.push({ name: "vp1", p: obj.vp1 });
+      if ((obj.mode || 1) >= 2 && obj.vp2) points.push({ name: "vp2", p: obj.vp2 });
+      for (const item of points) {
+        const sp = worldToScreen(item.p.x, item.p.y);
+        if (Math.hypot(sx - sp.x, sy - sp.y) <= tol) {
+          return { index: i, name: item.name };
+        }
+      }
+    }
     return null;
   }
 
@@ -1472,9 +1576,10 @@ state.selection = [];
     obj.x1 = anchor.x;
     obj.y1 = anchor.y;
 
-    const dx = vp.x - anchor.x;
-    const dy = vp.y - anchor.y;
-    const lenToVp = Math.hypot(dx, dy);
+    const sign = obj.perspectiveLink.direction === -1 ? -1 : 1;
+    const dx = (vp.x - anchor.x) * sign;
+    const dy = (vp.y - anchor.y) * sign;
+    const lenToVp = Math.hypot(vp.x - anchor.x, vp.y - anchor.y);
     if (!Number.isFinite(lenToVp) || lenToVp < 0.001) return false;
 
     if (obj.perspectiveLink.endMode === "point") {
@@ -1499,6 +1604,57 @@ state.selection = [];
     obj.perspectiveLink.lengthWorld = lengthWorld;
     obj.x2 = anchor.x + (dx / lenToVp) * lengthWorld;
     obj.y2 = anchor.y + (dy / lenToVp) * lengthWorld;
+    return true;
+  }
+
+  function ensurePerspectiveExtensionHelper(sourceLine) {
+    if (!sourceLine || (sourceLine.kind !== "line" && sourceLine.kind !== "arrow") || !sourceLine.perspectiveLink || sourceLine.autoPerspectiveHelper) return false;
+    const sourceId = ensureObjId(sourceLine);
+    const vpRef = cloneRef(sourceLine.perspectiveLink.vp);
+    const vp = resolveVanishingPoint(vpRef);
+    if (!vp) return false;
+
+    const existing = state.objects.find(o => o && o.autoPerspectiveHelper && o.helperFor === sourceId);
+    if (existing) {
+      existing.color = "#d32f2f";
+      existing.size = Math.max(3.5, Number(existing.size) || 0);
+      existing.opacity = 0.78;
+      existing.lineStyle = "reference";
+      existing.perspectiveLink = {
+        anchor: { type: "anchor", objId: sourceId, kind: "lineEnd", index: 1 },
+        vp: vpRef,
+        endMode: "point",
+        rayT: 1,
+        direction: 1
+      };
+      updatePerspectiveLinkedObject(existing);
+      return true;
+    }
+
+    const helper = {
+      kind: "line",
+      color: "#d32f2f",
+      size: 3.5,
+      opacity: 0.78,
+      lineStyle: "reference",
+      x1: sourceLine.x2,
+      y1: sourceLine.y2,
+      x2: vp.x,
+      y2: vp.y,
+      rot: 0,
+      autoPerspectiveHelper: true,
+      helperFor: sourceId,
+      perspectiveLink: {
+        anchor: { type: "anchor", objId: sourceId, kind: "lineEnd", index: 1 },
+        vp: vpRef,
+        endMode: "point",
+        rayT: 1,
+        direction: 1
+      }
+    };
+    ensureObjId(helper);
+    state.objects.push(helper);
+    updatePerspectiveLinkedObject(helper);
     return true;
   }
 
@@ -2144,6 +2300,7 @@ state.selection = [];
     gesture.perspectivePointName = null;
     gesture.lineAnchorRef = null;
     gesture.lineEndAnchorRef = null;
+    gesture.lineResizeEnd = null;
     gesture.forceLinkActive = false;
     gesture.lastScreenPrev = null;
 
@@ -2265,7 +2422,8 @@ function applyStyleToSelectionLive(patch = {}) {
       obj.kind === "arrow" ||
       obj.kind === "arc" ||
       obj.kind === "rect" ||
-      obj.kind === "circle"
+      obj.kind === "circle" ||
+      obj.kind === "curve"
     ) {
       obj.lineStyle = patch.lineStyle;
     }
@@ -2341,8 +2499,13 @@ function applyStyleToSelectionLive(patch = {}) {
       .filter(i => state.objects[i] && !state.objects[i].hidden);
 
     if (!indices.length) {
-      showToast("Select something to hide");
-      return false;
+      for (let i = 0; i < state.objects.length; i += 1) {
+        if (state.objects[i] && !state.objects[i].hidden) indices.push(i);
+      }
+      if (!indices.length) {
+        showToast("Nothing visible to hide");
+        return false;
+      }
     }
 
     state.undo.push(JSON.stringify(snapshot()));
@@ -2619,6 +2782,17 @@ function applyStyleToSelectionLive(patch = {}) {
       return true;
     }
 
+    if (kind === "lineEnd") {
+      const obj = state.objects[idx];
+      if (!obj || (obj.kind !== "line" && obj.kind !== "arrow")) return false;
+      gesture.mode = "lineEndResize";
+      gesture.lineResizeEnd = detail && detail.endName ? detail.endName : "end";
+      gesture.startWorld = w;
+      gesture.snapCache = buildSnapCache(obj._id);
+      showToast(gesture.lineResizeEnd === "start" ? "Drag line start" : "Drag line end");
+      return true;
+    }
+
     if (kind === "move") {
       gesture.mode = "selMove";
       gesture.startWorld = w;
@@ -2736,13 +2910,41 @@ state.objects.push(obj);
   const opacityNote = (obj.opacity ?? 1) < 0.12 ? " Opacity is very low." : "";
   showToast(hiddenInReveal ? "PolyFill added to the next SVG reveal step, so it is hidden for now." : `Poly filled.${colourNote}${opacityNote}`);
   return true;
-}  /* =========================
+}
+
+function commitSmoothCurve() {
+  const pts = polyDraft.pts || [];
+  if (pts.length < 2) {
+    showToast(`Smooth curve needs 2+ points. You have ${pts.length}; click more points, then Enter/double-click/right-click.`);
+    return false;
+  }
+
+  state.undo.push(JSON.stringify(snapshot()));
+  state.redo.length = 0;
+
+  const obj = {
+    kind: "curve",
+    color: state.color,
+    size: state.size,
+    opacity: state.opacity,
+    lineStyle: state.lineStyle || "solid",
+    points: pts.map(pt => ({ x: pt.x, y: pt.y }))
+  };
+  ensureObjId(obj);
+  state.objects.push(obj);
+  cancelPolyDraft();
+  redrawAll();
+  showToast("Smooth curve added");
+  return true;
+}
+
+  /* =========================
      Numeric setters
   ========================= */
   function setActiveLineLengthMm(mm) {
-    if (!gesture.activeObj) return false;
-    const obj = gesture.activeObj;
-    if (!(obj.kind === "line" || obj.kind === "arrow")) return false;
+    const selectedObj = state.selectionIndex >= 0 ? state.objects[state.selectionIndex] : null;
+    const obj = gesture.activeObj || selectedObj;
+    if (!(obj && (obj.kind === "line" || obj.kind === "arrow"))) return false;
 
     const ppm = pxPerMm();
     const lenPx = mm * ppm;
@@ -2804,14 +3006,29 @@ state.objects.push(obj);
       inkCanvas.style.cursor = "move";
       return;
     }
+    if (h.kind === "lineEnd") {
+      inkCanvas.style.cursor = "crosshair";
+      return;
+    }
     inkCanvas.style.cursor = h.corner === "nw" || h.corner === "se" ? "nwse-resize" : "nesw-resize";
   }
 
 function onCanvasContextMenu(e) {
   if (!inkCanvas.contains(e.target)) return;
 
-  if (state.tool === "polyFill" && polyDraft.active) {
+  if ((state.tool === "polyFill" || state.tool === "curve") && polyDraft.active) {
     e.preventDefault();
+
+    if (state.tool === "curve") {
+      if (polyDraft.pts.length >= 2) commitSmoothCurve();
+      else {
+        const count = polyDraft.pts.length;
+        cancelPolyDraft();
+        redrawAll();
+        showToast(count ? `Smooth curve cancelled — needs 2+ points, had ${count}.` : "Smooth curve cancelled");
+      }
+      return;
+    }
 
     if (polyDraft.pts.length >= 3) {
       commitPolyFill();                   // same result as Enter
@@ -2855,7 +3072,7 @@ function onCanvasContextMenu(e) {
     const target = idx >= 0 ? state.objects[idx] : null;
 
     if (!target || target.kind === "perspectiveGuide" || target.kind === "erase") {
-      showToast("Select a shape, line, circle, or arc first, then click 1P or 2P.");
+      showToast("Click the shape/line you want to use as the perspective source.");
       return false;
     }
 
@@ -2870,6 +3087,12 @@ function onCanvasContextMenu(e) {
     const w = Math.max(80, b.maxX - b.minX);
     const h = Math.max(60, b.maxY - b.minY);
     const cy = (b.minY + b.maxY) / 2;
+    const viewA = screenToWorld ? screenToWorld(0, 0) : { x: b.minX - w * 4, y: cy };
+    const viewB = screenToWorld ? screenToWorld(state.viewW || 1200, state.viewH || 800) : { x: b.maxX + w * 4, y: cy };
+    const leftEdge = Math.min(viewA.x, viewB.x);
+    const rightEdge = Math.max(viewA.x, viewB.x);
+    const xPad = Math.max(w * 1.2, (rightEdge - leftEdge) * 0.08, 120);
+    const vpY = cy - Math.max(h * 0.35, 40);
 
     const guide = {
       kind: "perspectiveGuide",
@@ -2879,8 +3102,8 @@ function onCanvasContextMenu(e) {
       size: 3.5,
       opacity: 0.78,
       lineStyle: "reference",
-      vp1: { x: b.maxX + w * 1.8, y: cy - h * 0.35 },
-      vp2: { x: b.minX - w * 1.8, y: cy - h * 0.35 }
+      vp1: { x: Math.max(b.maxX + w * 2.2, rightEdge + xPad), y: vpY },
+      vp2: { x: Math.min(b.minX - w * 2.2, leftEdge - xPad), y: vpY }
     };
 
     state.undo.push(JSON.stringify(snapshot()));
@@ -2890,7 +3113,7 @@ function onCanvasContextMenu(e) {
     state.selectionIndex = state.objects.length - 1;
     state.selection = [state.selectionIndex];
     redrawAll();
-    showToast((mode >= 2 ? "2-point" : "1-point") + " perspective guide added — click the highlighted SOURCE box to grab the starting shape/line.");
+    showToast((mode >= 2 ? "2-point" : "1-point") + " perspective guide added — drag the red VP points, or click the orange SOURCE box to grab the starting object.");
     return true;
   }
 
@@ -2924,7 +3147,20 @@ function onPointerDown(e) {
   return;
 }
 
-    if (state.tool === "polyFill") {
+    const vpHit = hitPerspectivePointAnywhere(sx, sy);
+    if (vpHit && !e.shiftKey) {
+      state.selectionIndex = vpHit.index;
+      state.selection = [vpHit.index];
+      setActiveTool("select");
+      syncStyleControlsFromSelection();
+      if (beginSelectionTransform("perspectivePoint", w, vpHit.name)) {
+        showToast("Drag vanishing point");
+        redrawAll();
+        return;
+      }
+    }
+
+    if (state.tool === "polyFill" || state.tool === "curve") {
       const bypassSnap = isMac ? e.metaKey : e.ctrlKey;
 
       if (!polyDraft.active) {
@@ -2932,13 +3168,13 @@ function onPointerDown(e) {
         polyDraft.pts = [];
         polyDraft.links = [];
         polyDraft.hover = null;
-        showToast("PolyFill: click points, Enter/dblclick to finish");
+        showToast(state.tool === "curve" ? "Smooth curve: click points, Enter/dblclick/right-click to finish" : "PolyFill: click points, Enter/dblclick to finish");
       }
 
       const p = snapPolyPoint(w, bypassSnap);
       const first = polyDraft.pts[0];
       const closeTol = 14 / (state.zoom || 1);
-      if (first && polyDraft.pts.length >= 3 && Math.hypot(first.x - p.x, first.y - p.y) <= closeTol) {
+      if (state.tool === "polyFill" && first && polyDraft.pts.length >= 3 && Math.hypot(first.x - p.x, first.y - p.y) <= closeTol) {
         try { inkCanvas.releasePointerCapture(e.pointerId); } catch {}
         gesture.active = false;
         gesture.mode = "none";
@@ -2951,7 +3187,8 @@ function onPointerDown(e) {
         polyDraft.pts.push({ x: p.x, y: p.y });
         polyDraft.links.push(snapRefForPolyPoint(p));
         const linkedNote = polyDraft.links[polyDraft.links.length - 1] ? " Linked corner." : "";
-        showToast((polyDraft.pts.length < 3 ? `PolyFill: ${polyDraft.pts.length}/3 corners. Add ${3 - polyDraft.pts.length} more.` : "PolyFill: Enter, double-click, right-click, or click near the first point to fill.") + linkedNote);
+        if (state.tool === "curve") showToast(polyDraft.pts.length < 2 ? "Smooth curve: add one more point." : "Smooth curve: Enter, double-click, or right-click to finish.");
+        else showToast((polyDraft.pts.length < 3 ? `PolyFill: ${polyDraft.pts.length}/3 corners. Add ${3 - polyDraft.pts.length} more.` : "PolyFill: Enter, double-click, right-click, or click near the first point to fill.") + linkedNote);
       } else {
         showToast("PolyFill point already there — click a new corner or press Enter to finish.");
       }
@@ -3080,7 +3317,14 @@ if (state.tool === "select") {
     }
 
     if (state.tool === "perspective1" || state.tool === "perspective2") {
-      createPerspectiveGuide(state.tool === "perspective2" ? 2 : 1);
+      const hit = findHit(w.x, w.y);
+      if (hit >= 0) {
+        state.selectionIndex = hit;
+        state.selection = [hit];
+        syncStyleControlsFromSelection();
+      }
+      const made = createPerspectiveGuide(state.tool === "perspective2" ? 2 : 1);
+      if (!made) showToast("Click the line/shape you want to use as the perspective source.");
       return;
     }
 
@@ -3167,7 +3411,7 @@ if (state.tool === "select") {
     gesture.lastScreen = { sx, sy };
     gesture.lastWorld = w;
 
-    if (state.tool === "polyFill" && polyDraft.active) {
+    if ((state.tool === "polyFill" || state.tool === "curve") && polyDraft.active) {
       const bypassSnap = isMac ? e.metaKey : e.ctrlKey;
       polyDraft.hover = snapPolyPoint(w, bypassSnap);
       redrawAll();
@@ -3209,6 +3453,53 @@ if (state.tool === "select") {
       }
       redrawAll();
       return;
+    }
+
+    if (gesture.mode === "lineEndResize" && gesture.selIndex >= 0 && gesture.selStartObj) {
+      const obj = deepClone(gesture.selStartObj);
+      if (obj && (obj.kind === "line" || obj.kind === "arrow")) {
+        const bypassSnap = isMac ? e.metaKey : e.ctrlKey;
+        const endName = gesture.lineResizeEnd || "end";
+        const fixed = endName === "end" ? { x: obj.x1, y: obj.y1 } : { x: obj.x2, y: obj.y2 };
+        let p = snapLinePoint(fixed, w, bypassSnap);
+
+        if (obj.perspectiveLink && endName === "end") {
+          state.objects[gesture.selIndex] = obj;
+          const anchor = resolveAnchorPoint(obj.perspectiveLink.anchor);
+          const vp = resolveVanishingPoint(obj.perspectiveLink.vp);
+          if (anchor && vp) {
+            const vx = vp.x - anchor.x;
+            const vy = vp.y - anchor.y;
+            const vLen = Math.hypot(vx, vy) || 1;
+            const sign = obj.perspectiveLink.direction === -1 ? -1 : 1;
+            const t = ((w.x - anchor.x) * vx + (w.y - anchor.y) * vy) / (vLen * vLen);
+            const amount = Math.max(0.001, Math.abs(t));
+            obj.perspectiveLink.direction = t < 0 ? -1 : sign;
+            obj.perspectiveLink.rayT = amount;
+            obj.perspectiveLink.lengthWorld = amount * vLen;
+            updatePerspectiveLinkedObject(obj);
+          }
+        } else {
+          if (obj.perspectiveLink) delete obj.perspectiveLink;
+          if (endName === "end") {
+            obj.x2 = p.x;
+            obj.y2 = p.y;
+            if (p.ref && isLinkRef(p.ref)) obj.endpointLinks = { ...(obj.endpointLinks || {}), end: cloneRef(p.ref) };
+            else if (obj.endpointLinks) delete obj.endpointLinks.end;
+          } else {
+            obj.x1 = p.x;
+            obj.y1 = p.y;
+            if (p.ref && isLinkRef(p.ref)) obj.endpointLinks = { ...(obj.endpointLinks || {}), start: cloneRef(p.ref) };
+            else if (obj.endpointLinks) delete obj.endpointLinks.start;
+          }
+          state.objects[gesture.selIndex] = obj;
+        }
+        updatePerspectiveLinks();
+        const lenMm = Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) / pxPerMm();
+        showMeasureTip(sx, sy, formatMm(lenMm));
+        redrawAll();
+        return;
+      }
     }
 
     if (gesture.mode === "selMove" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.startWorld) {
@@ -3377,6 +3668,7 @@ if (state.tool === "select") {
             anchor: cloneRef(perspectiveAnchorRef || gesture.lineAnchorRef),
             vp: cloneRef(p2.perspectiveRef),
             endMode: p2.perspectiveEndMode || "length",
+            direction: p2.perspectiveDirection === -1 ? -1 : 1,
             lengthWorld,
             ...(rayT ? { rayT } : {})
           };
@@ -3436,14 +3728,18 @@ if (state.tool === "select") {
   function onPointerUp() {
     if (!gesture.active) return;
     const finishedObj = gesture.activeObj;
+    let addedPerspectiveHelper = false;
     if (finishedObj && (finishedObj.kind === "line" || finishedObj.kind === "arrow")) {
       const seg = lineSegmentFromObject(finishedObj);
       if (seg) lastDrawnLineId = ensureObjId(finishedObj);
+      addedPerspectiveHelper = ensurePerspectiveExtensionHelper(finishedObj);
     }
     try { inkCanvas.releasePointerCapture(gesture.pointerId); } catch {}
     hardResetGesture();
     updateCursorFromTool();
+    updatePerspectiveLinks();
     redrawAll();
+    if (addedPerspectiveHelper) showToast("Perspective helper ray added");
   }
 
   /* =========================
@@ -3455,7 +3751,7 @@ if (state.tool === "select") {
     const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") && activeEl !== lenInput;
     const mod = isMac ? e.metaKey : e.ctrlKey;
 
-    if (!typing && state.tool === "polyFill" && polyDraft.active) {
+    if (!typing && (state.tool === "polyFill" || state.tool === "curve") && polyDraft.active) {
       if (e.key === "Escape") {
         e.preventDefault();
         cancelPolyDraft();
@@ -3473,7 +3769,8 @@ if (state.tool === "select") {
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        commitPolyFill();
+        if (state.tool === "curve") commitSmoothCurve();
+        else commitPolyFill();
         return;
       }
     }
@@ -3497,6 +3794,72 @@ if (!typing && e.code === "Space") {
   e.preventDefault();
   return;
 }
+
+
+    if (!typing && !mod && !gesture.active && state.selectionIndex >= 0) {
+      const selectedObj = state.objects[state.selectionIndex];
+      if (selectedObj && (selectedObj.kind === "line" || selectedObj.kind === "arrow")) {
+        const isDigit = /^[0-9]$/.test(e.key);
+        const isDot = e.key === "." || e.key === ",";
+        const isBack = e.key === "Backspace";
+        const isEnter = e.key === "Enter";
+        const isEsc = e.key === "Escape";
+        const isMinus = e.key === "-";
+        if (isDigit || isDot || isBack || isEnter || isEsc || isMinus) {
+          e.preventDefault();
+          const b = objectBounds(selectedObj);
+          const centerS = worldToScreen((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+          if (!lenEntry.open && (isDigit || isDot || isBack || isMinus || isEnter)) {
+            const curMm = Math.max(1, Math.round(Math.hypot(selectedObj.x2 - selectedObj.x1, selectedObj.y2 - selectedObj.y1) / pxPerMm()) || 1);
+            lenEntry.open = true;
+            lenEntry.seedMm = parseMmInput(String(curMm)) ?? null;
+            openLenBoxAt(centerS.sx, centerS.sy, String(curMm));
+          }
+          if (isEsc) {
+            lenEntry.open = false;
+            closeLenBox();
+            return;
+          }
+          if (isEnter) {
+            const raw = (lenInput.value || "").trim() || lenInput.placeholder || "";
+            let mm = parseMmInput(raw);
+            if (mm == null && lenEntry.seedMm != null) mm = lenEntry.seedMm;
+            if (mm == null) {
+              showToast("Invalid mm");
+              return;
+            }
+            state.undo.push(JSON.stringify(snapshot()));
+            state.redo.length = 0;
+            setActiveLineLengthMm(mm);
+            updatePerspectiveLinks();
+            lenEntry.open = false;
+            closeLenBox();
+            redrawAll();
+            showToast(`Line length set to ${Math.round(mm)} mm`);
+            return;
+          }
+          if (!lenEntry.open) return;
+          if (isBack) {
+            lenInput.value = lenInput.value.slice(0, -1);
+            return;
+          }
+          if (isDigit) lenInput.value += e.key;
+          else if (isDot) lenInput.value += ".";
+          else if (isMinus) lenInput.value += "-";
+          return;
+        }
+      }
+    }
+
+    if (!typing && !mod && !gesture.active) {
+      const presetByKey = { "1": "construction", "2": "outline", "3": "fill", "4": "reference", "5": "hidden", "6": "center" };
+      const pickedPreset = presetByKey[e.key];
+      if (pickedPreset) {
+        e.preventDefault();
+        applyDrawingPreset(pickedPreset);
+        return;
+      }
+    }
 
     if (!typing && (e.key === "i" || e.key === "I") && !mod) {
       e.preventDefault();
@@ -3746,6 +4109,7 @@ state.selection = [];
       if (k === "t") setActiveTool("text");
       if (k === "e") setActiveTool("eraser");
       if (k === "k") setActiveTool("polyFill");
+      if (k === "u") setActiveTool("curve");
     }
 
     if (mod) {
@@ -3986,37 +4350,10 @@ opacityRange?.addEventListener("change", () => {
   }
 });
 
-lineStyleSolid?.addEventListener("click", () => {
-  state.lineStyle = "solid";
-  updateBrushUI();
-  if (state.selectionIndex >= 0) {
-    applyStyleToSelection({ lineStyle: "solid" });
-  }
-});
-
-lineStyleReference?.addEventListener("click", () => {
-  state.lineStyle = "reference";
-  updateBrushUI();
-  if (state.selectionIndex >= 0) {
-    applyStyleToSelection({ lineStyle: "reference" });
-  }
-});
-
-lineStyleHidden?.addEventListener("click", () => {
-  state.lineStyle = "hidden";
-  updateBrushUI();
-  if (state.selectionIndex >= 0) {
-    applyStyleToSelection({ lineStyle: "hidden" });
-  }
-});
-
-lineStyleCenter?.addEventListener("click", () => {
-  state.lineStyle = "center";
-  updateBrushUI();
-  if (state.selectionIndex >= 0) {
-    applyStyleToSelection({ lineStyle: "center" });
-  }
-});
+lineStyleSolid?.addEventListener("click", () => applyLineStylePreset("solid"));
+lineStyleReference?.addEventListener("click", () => applyLineStylePreset("reference"));
+lineStyleHidden?.addEventListener("click", () => applyLineStylePreset("hidden"));
+lineStyleCenter?.addEventListener("click", () => applyLineStylePreset("center"));
 
 
    
