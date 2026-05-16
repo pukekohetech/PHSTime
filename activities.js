@@ -112,10 +112,10 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "enabled": true
     },
     {
-      "id": "scatogories",
-      "name": "Scatogories",
+      "id": "scattergories",
+      "name": "Scattergoties",
       "type": "newtab",
-      "url": "https://swellgarfo.com/scattergories/",
+      "url": "https://pukekohetech.github.io/TeMahuri/scattergories/",
       "tag": "game",
       "seconds": null,
       "steps": [
