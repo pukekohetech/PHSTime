@@ -32,7 +32,19 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
-    
+      {
+     "id": "SimonSays",
+      "name": "Simon Says",
+      "type": "iframe",
+      "url": "https://pukekohetech.github.io/TeMahuri/simon.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "Find the value of each emoji."
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
     {
       "id": "a_5514767d7d1c7819ce4083d40",
       "name": "Emoji Puzzle",
