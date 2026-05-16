@@ -19,6 +19,20 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
+    
+      {
+      "id": "PeriodicTable",
+      "name": "Periodic Table Guesser",
+      "type": "iframe",
+      "url": "https://pukekohetech.github.io/TeMahuri/PeriodicTable.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "lots of group quizzes"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
          {
       "id": "emojimatch",
       "name": "emoji match",
