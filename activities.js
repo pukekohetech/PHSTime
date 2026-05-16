@@ -19,6 +19,19 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
+         {
+      "id": "emojimatch",
+      "name": "emoji match",
+      "type": "iframe",
+      "url": "https://pukekohetech.github.io/TeMahuri/emojimatch.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "lots of group quizzes"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
     {
      "id": "codecrack",
       "name": "Code Cracker",
