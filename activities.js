@@ -23,7 +23,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       {
       "id": "PeriodicTable",
       "name": "Periodic Table Guesser",
-      "type": "iframe",
+      "type": "newtab",
       "url": "https://pukekohetech.github.io/TeMahuri/PeriodicTable.html",
       "tag": "",
       "seconds": null,
