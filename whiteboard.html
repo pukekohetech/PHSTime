@@ -156,6 +156,56 @@
         <canvas id="inkCanvas"></canvas>
         <canvas id="uiCanvas"></canvas>
 
+
+        <button
+          class="pagesBtn"
+          id="pagesBtn"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          title="Other PHS tools"
+        >🧭</button>
+
+        <nav class="pagesPop is-hidden" id="pagesPop" aria-label="Site pages">
+          <div class="pagesPop__head">
+            <div>
+              <div class="pagesPop__title">PHS Tools</div>
+              <div class="pagesPop__sub">Quick links</div>
+            </div>
+            <span class="pagesPop__badge">Menu</span>
+          </div>
+
+          <div class="pagesPop__group">
+            <div class="pagesPop__label">Main</div>
+            <a href="index.html">Whiteboard</a>
+            <a href="GridGenerate.html">Grid Generator</a>
+          </div>
+
+          <div class="pagesPop__group">
+            <div class="pagesPop__label">Isometric sheets</div>
+            <a href="OtrhotoIsoSheets.html">Orthographic → Isometric Sheets</a>
+            <a href="simple_isometric.html">Simple Isometric</a>
+            <a href="isometric_worksheet_generator_hard.html">Isometric Worksheet Generator Hard</a>
+          </div>
+
+          <div class="pagesPop__group">
+            <div class="pagesPop__label">Challenges</div>
+            <a href="orthographic-to-isometric-challenge.html">Ortho → Iso Challenge</a>
+            <a href="MatchOrthotoIsoHardChallenge.html">Ortho → Iso Challenge Hard</a>
+            <a href="isometric-orthographic-Match-Challenge.html">Iso ↔ Ortho Match</a>
+            <a href="isometric-orthographic-match-Challenge-Hard.html">Iso ↔ Ortho Match Hard</a>
+          </div>
+
+          <div class="pagesPop__group">
+            <div class="pagesPop__label">Reliever / build modes</div>
+            <a href="iso-reliever-pack-generator.html">Iso Reliever Pack</a>
+            <a href="iso-reliever-pack-generator-Hard.html">Iso Reliever Pack Hard</a>
+            <a href="buildit-mode-2.html">Build It Mode 2</a>
+            <a href="reverse-mode.html">Reverse Mode</a>
+            <a href="rotation-challenge-4.html">Rotation Challenge 4</a>
+          </div>
+        </nav>
+
         <button
           class="gearBtn"
           id="settingsBtn"
@@ -233,7 +283,9 @@
                 <button id="exportBtn" class="panel__btn panel__btn--primary" type="button">PNG</button>
                 <button id="exportSvgBtn" class="panel__btn panel__btn--primary" type="button">SVG</button>
                 <button id="printBtn" class="panel__btn panel__btn--primary" type="button">Print</button>
+                <button id="printScaleBtn" class="panel__btn panel__btn--primary" type="button" title="Print using the board scale: 100 mm on the drawing prints as 100 mm on paper">Print 1:1</button>
               </div>
+              <div class="panel__note">PNG exports an image. SVG preserves editable whiteboard data. Print 1:1 uses the board scale; in the browser print dialog choose 100% / actual size, not fit-to-page.</div>
             </div>
 
             <div class="panel__group panel__group--wide">
@@ -298,7 +350,7 @@
       </div>
 
       <div class="hint">
-        Wheel zooms • Space + drag pans • H hides selected • Shift+H unhides all • . / , cycle hidden objects • Shift+> timed show • Ctrl/Cmd bypasses snapping/free page points • Presets: 1 Construction, 2 Outline, 3 Fill, 4 Reference, 5 Hidden, 6 Center • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays with vanishing points starting near the page/view extents • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally; a red dashed helper ray is added from the line end to the VP • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
+        Wheel zooms • Space + drag pans • H hides selected • Shift+H unhides all • . / , cycle hidden objects • Shift+> timed show • Ctrl/Cmd bypasses snapping/free page points • Presets: 1 Construction, 2 Outline, 3 Fill, 4 Reference, 5 Hidden, 6 Center • Select line then M/type length in mm • Line endpoints link when snapped to endpoints, intersections, or line bodies • Perspective guides are thicker red rays with vanishing points starting near the page/view extents • Vanishing points snap only to stable endpoints/corners while dragging; hold Shift for grid, Ctrl/Cmd for free • Perspective-linked construction lines move as a synced group instead of leaving one end pinned to the page • Press L while drawing/in line mode to auto-link overlaps/intersections • Snip + Join uses the selected line, or the last drawn line if none is selected; hover near the crossing line/intersection, then press J or ✂ to snip/link them. PolyFill corners snap/link to those joints • Start a line from a shape corner/end and draw toward a red vanishing point to make it follow that source + point proportionally; a red dashed helper ray is added from the line end to the VP • PolyFill: click 3+ corners, then Enter/double-click/right-click/click near the first point; if SVG reveal is active it may be hidden until its reveal step • Circles and arcs use tangent projection points for perspective guides • Right-click: finish PolyFill / reset Arc • Ctrl/Cmd + Z undo • Ctrl/Cmd + Y redo • Delete removes selected • Link Inspector: select an object, then Check or Repair to see green/orange/red link markers
       </div>
     </section>
   </main>
@@ -309,5 +361,35 @@
   <script src="whiteboard.io.js"></script>
   <script src="whiteboard.ui.js"></script>
   <script src="whiteboard.js"></script>
+
+  <script>
+    const pagesBtn = document.getElementById('pagesBtn');
+    const pagesPop = document.getElementById('pagesPop');
+
+    function closePages(){
+      if (!pagesBtn || !pagesPop) return;
+      pagesPop.classList.add('is-hidden');
+      pagesBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    if (pagesBtn && pagesPop) {
+      pagesBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const isHidden = pagesPop.classList.contains('is-hidden');
+        if (isHidden) {
+          pagesPop.classList.remove('is-hidden');
+          pagesBtn.setAttribute('aria-expanded', 'true');
+        } else {
+          closePages();
+        }
+      });
+
+      pagesPop.addEventListener('click', e => e.stopPropagation());
+      document.addEventListener('click', closePages);
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closePages();
+      });
+    }
+  </script>
 </body>
 </html>

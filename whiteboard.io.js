@@ -71,7 +71,7 @@ window.WBIO = (() => {
       };
     }
 
-    function applySnapshot(snap) {
+    function applySnapshot(snap, opts = {}) {
       state.tool = snap.tool || "pen";
       setActiveTool(state.tool);
 
@@ -101,17 +101,23 @@ window.WBIO = (() => {
       state.objects = Array.isArray(snap.objects) ? deepClone(snap.objects) : [];
       state.selectionIndex = -1;
 
-      // Restore presentation/reveal metadata. For saved presentations, start
-      // at 0 revealed so the user can press ▶ / . and step through the build.
+      // Restore presentation/reveal metadata.
+      // Undo/redo must preserve the exact hidden/revealed state from the snapshot.
+      // Board/presentation loads can opt into starting at 0 revealed.
       const rev = snap.svgReveal || null;
       if (rev && Array.isArray(rev.partIds) && rev.partIds.length) {
         svgReveal.active = true;
         svgReveal.groupId = rev.groupId || "__manual_hidden_objects__";
         svgReveal.partIds = rev.partIds.filter(Boolean);
-        svgReveal.revealed = 0;
-        const revealIds = new Set(svgReveal.partIds);
-        for (const obj of state.objects) {
-          if (obj && obj._id && revealIds.has(obj._id)) obj.hidden = true;
+        const maxReveal = svgReveal.partIds.length;
+        const savedReveal = Number.isFinite(Number(rev.revealed)) ? Number(rev.revealed) : 0;
+        svgReveal.revealed = Math.max(0, Math.min(maxReveal, opts.startRevealAtZero ? 0 : savedReveal));
+
+        if (opts.startRevealAtZero) {
+          const revealIds = new Set(svgReveal.partIds);
+          for (const obj of state.objects) {
+            if (obj && obj._id && revealIds.has(obj._id)) obj.hidden = true;
+          }
         }
       } else {
         const hiddenIds = state.objects.filter(o => o && o.hidden && o._id).map(o => o._id);
@@ -204,7 +210,7 @@ function performRedo() {
       cancelPolyDraft();
       state.undo = [];
       state.redo = [];
-      applySnapshot(data);
+      applySnapshot(data, { startRevealAtZero: true });
     }
 
     function freshBoardSnapshot() {
@@ -522,6 +528,63 @@ const exportObjects = [
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    const EXPORT_MAX_RASTER_DIM = 8192;
+    const EXPORT_MAX_RASTER_PIXELS = 32000000;
+
+    function safeExportScale(doc, requestedScale) {
+      const w = Math.max(1, Number(doc?.W) || 1);
+      const h = Math.max(1, Number(doc?.H) || 1);
+      let scale = Math.max(0.05, Number(requestedScale) || 1);
+
+      scale = Math.min(scale, EXPORT_MAX_RASTER_DIM / w, EXPORT_MAX_RASTER_DIM / h);
+      scale = Math.min(scale, Math.sqrt(EXPORT_MAX_RASTER_PIXELS / Math.max(1, w * h)));
+
+      return Math.max(0.05, scale);
+    }
+
+    function canvasToPngBlob(canvas) {
+      return new Promise(resolve => {
+        if (!canvas || typeof canvas.toBlob !== "function") {
+          resolve(null);
+          return;
+        }
+        canvas.toBlob(blob => resolve(blob), "image/png");
+      });
+    }
+
+    async function rasterizeExportSvg(doc) {
+      const scale = safeExportScale(doc, dpr());
+      const out = document.createElement("canvas");
+      out.width = Math.max(1, Math.ceil(doc.W * scale));
+      out.height = Math.max(1, Math.ceil(doc.H * scale));
+
+      const octx = out.getContext("2d");
+      if (!octx) return null;
+
+      octx.setTransform(scale, 0, 0, scale, 0, 0);
+      octx.fillStyle = "#ffffff";
+      octx.fillRect(0, 0, doc.W, doc.H);
+
+      const blob = new Blob([doc.svg], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+
+      try {
+        const img = new Image();
+        const ok = await new Promise(resolve => {
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = url;
+        });
+
+        if (!ok) return null;
+
+        octx.drawImage(img, 0, 0, doc.W, doc.H);
+        return { canvas: out, scale };
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
     async function exportPNG() {
       const doc = buildExportSvgDocument();
       if (!doc) {
@@ -529,76 +592,112 @@ const exportObjects = [
         return;
       }
 
-      const scale = dpr();
-      const out = document.createElement("canvas");
-      out.width = Math.max(1, Math.ceil(doc.W * scale));
-      out.height = Math.max(1, Math.ceil(doc.H * scale));
-
-      const octx = out.getContext("2d");
-      octx.setTransform(scale, 0, 0, scale, 0, 0);
-
-      const blob = new Blob([doc.svg], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-
-      const img = new Image();
-      const ok = await new Promise(resolve => {
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = url;
-      });
-
-      if (!ok) {
-        URL.revokeObjectURL(url);
+      const raster = await rasterizeExportSvg(doc);
+      if (!raster || !raster.canvas) {
         showToast("PNG export failed");
         return;
       }
 
-      octx.drawImage(img, 0, 0, doc.W, doc.H);
-      URL.revokeObjectURL(url);
+      const blob = await canvasToPngBlob(raster.canvas);
+      if (!blob) {
+        showToast("PNG export failed");
+        return;
+      }
 
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.download = `whiteboard-${new Date().toISOString().slice(0, 10)}.png`;
-      a.href = out.toDataURL("image/png");
+      a.href = url;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+      if (raster.scale < dpr() * 0.95) {
+        showToast("PNG exported safely at reduced size");
+      }
     }
 
-    async function printCurrentBoard() {
+    async function printCurrentBoard(options = {}) {
       const doc = buildExportSvgDocument();
       if (!doc) {
         showToast("Nothing to print");
         return;
       }
 
-      const scale = dpr();
-      const out = document.createElement("canvas");
-      out.width = Math.ceil(doc.W * scale);
-      out.height = Math.ceil(doc.H * scale);
-
-      const canvasCtx = out.getContext("2d");
-      canvasCtx.setTransform(scale, 0, 0, scale, 0, 0);
-
-      const blob = new Blob([doc.svg], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-
-      const img = new Image();
-      const ok = await new Promise(resolve => {
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = url;
-      });
-
-      if (!ok) {
-        URL.revokeObjectURL(url);
+      const trueScale = !!(options && options.trueScale);
+      const raster = await rasterizeExportSvg(doc);
+      if (!raster || !raster.canvas) {
         showToast("Print failed");
         return;
       }
 
-      canvasCtx.drawImage(img, 0, 0, doc.W, doc.H);
-      URL.revokeObjectURL(url);
+      const blob = await canvasToPngBlob(raster.canvas);
+      if (!blob) {
+        showToast("Print failed");
+        return;
+      }
 
-      const dataUrl = out.toDataURL("image/png");
+      const ppm = Math.max(0.001, Number(pxPerMm()) || 3.7795275591);
+      const imgWidthMm = Math.max(1, doc.W / ppm);
+      const imgHeightMm = Math.max(1, doc.H / ppm);
+      const fitCss = `
+        body{
+          display:flex;
+          align-items:center;
+          justify-content:center;
+        }
+        img{
+          display:block;
+          max-width:100vw;
+          max-height:100vh;
+          object-fit:contain;
+        }
+        @page{ margin:8mm; }
+        @media print{
+          html,body{ width:100%; height:100%; }
+          img{ max-width:100%; max-height:100%; page-break-inside:avoid; }
+        }
+      `;
+      const scaleCss = `
+        body{
+          display:block;
+        }
+        .printNote{
+          font:12px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;
+          color:#222;
+          margin:6mm 6mm 3mm;
+          padding:3mm 4mm;
+          border:1px solid #ddd;
+          border-radius:3mm;
+          background:#fffbe6;
+          max-width:180mm;
+        }
+        img{
+          display:block;
+          width:${imgWidthMm.toFixed(3)}mm;
+          height:${imgHeightMm.toFixed(3)}mm;
+          max-width:none;
+          max-height:none;
+          object-fit:fill;
+          image-rendering:auto;
+        }
+        @page{ margin:0; }
+        @media print{
+          .printNote{ display:none; }
+          html,body{ width:auto; height:auto; }
+          img{
+            width:${imgWidthMm.toFixed(3)}mm;
+            height:${imgHeightMm.toFixed(3)}mm;
+            max-width:none;
+            max-height:none;
+            page-break-inside:avoid;
+          }
+        }
+      `;
+
+      const printUrl = URL.createObjectURL(blob);
       const win = window.open("", "_blank");
       if (!win) {
+        URL.revokeObjectURL(printUrl);
         showToast("Popup blocked");
         return;
       }
@@ -606,32 +705,31 @@ const exportObjects = [
       win.document.write(`
     <html>
     <head>
-      <title>Print</title>
+      <title>${trueScale ? "Print 1:1 scale" : "Print"}</title>
       <style>
         html,body{
           margin:0;
+          padding:0;
           background:white;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          height:100%;
+          min-height:100%;
         }
-        img{
-          max-width:100%;
-          max-height:100%;
-        }
-        @page{ margin:0; }
+        ${trueScale ? scaleCss : fitCss}
       </style>
     </head>
     <body>
-      <img src="${dataUrl}">
+      ${trueScale ? `<div class="printNote"><strong>1:1 scale print:</strong> this image is ${imgWidthMm.toFixed(1)} mm × ${imgHeightMm.toFixed(1)} mm based on the board scale (${ppm.toFixed(3)} px/mm). In the browser print dialog choose <strong>Actual size / 100%</strong> and turn off <strong>Fit to page</strong>.</div>` : ""}
+      <img id="printImg" src="${printUrl}" alt="Whiteboard print">
       <script>
-        window.onload = () => setTimeout(()=>window.print(),150);
+        const img = document.getElementById("printImg");
+        img.onload = () => setTimeout(() => window.print(), 250);
       <\/script>
     </body>
     </html>
   `);
       win.document.close();
+
+      setTimeout(() => URL.revokeObjectURL(printUrl), 60000);
+      if (trueScale) showToast("Print 1:1: use Actual size / 100% in the print dialog");
     }
 
     function ensureHiddenSvgHost() {
@@ -1203,10 +1301,12 @@ redoBtn?.addEventListener("click", performRedo);
       clearSvgInkBtn?.addEventListener("click", clearImportedSvgInk);
     }
 
-    function bindExport(exportBtn, exportSvgBtn, printBtn) {
+    function bindExport(exportBtn, exportSvgBtn, printBtn, printScaleBtn) {
       exportBtn?.addEventListener("click", exportPNG);
       exportSvgBtn?.addEventListener("click", exportSVG);
-      printBtn?.addEventListener("click", printCurrentBoard);
+      printBtn?.addEventListener("click", () => printCurrentBoard({ trueScale: false }));
+      const scaleBtn = printScaleBtn || document.getElementById("printScaleBtn");
+      scaleBtn?.addEventListener("click", () => printCurrentBoard({ trueScale: true }));
     }
 
     return {

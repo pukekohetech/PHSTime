@@ -285,6 +285,7 @@ function pasteClipboard() {
     }
 
     ensureObjId(obj);
+    addObjectToActiveReveal(obj);
 
     state.objects.push(obj);
     newSelection.push(state.objects.length - 1);
@@ -2441,6 +2442,51 @@ function applyStyleToSelectionLive(patch = {}) {
   /* =========================
      Hide / unhide visibility
   ========================= */
+  function isRevealableDrawnObject(obj) {
+    return !!(obj && obj._id && obj.kind);
+  }
+
+  function addObjectToActiveReveal(obj, opts = {}) {
+    if (!isRevealableDrawnObject(obj)) return false;
+
+    // If there are already hidden objects but the reveal list was not active,
+    // rebuild the manual list first so newly drawn objects join the same show/hide sequence.
+    if ((!svgReveal.active || !Array.isArray(svgReveal.partIds)) && hiddenObjectIds().length) {
+      rebuildManualHiddenRevealList();
+    }
+
+    if (!svgReveal.active || !svgReveal.groupId || !Array.isArray(svgReveal.partIds)) return false;
+
+    obj.svgGroupId = svgReveal.groupId;
+
+    if (!svgReveal.partIds.includes(obj._id)) {
+      const defaultInsertAt = svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP
+        ? svgReveal.partIds.length
+        : svgReveal.revealed + 1;
+      const insertAt = clamp(
+        Number.isFinite(opts.insertAt) ? opts.insertAt : defaultInsertAt,
+        0,
+        svgReveal.partIds.length
+      );
+      svgReveal.partIds.splice(insertAt, 0, obj._id);
+    }
+
+    // Register new objects in the reveal sequence without hiding them by default.
+    // Use opts.hide === true only for actions that deliberately create hidden reveal steps.
+    if (opts.hide === true) obj.hidden = true;
+    syncSvgRevealCountFromVisibility();
+    return true;
+  }
+
+  function addRecentlyDrawnObjectsToActiveReveal(objects, opts = {}) {
+    if (!Array.isArray(objects)) objects = [objects];
+    let changed = false;
+    for (const obj of objects) {
+      if (addObjectToActiveReveal(obj, opts)) changed = true;
+    }
+    return changed;
+  }
+
   function revealLabel() {
     return svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP ? "Hidden" : "SVG";
   }
@@ -2455,14 +2501,29 @@ function applyStyleToSelectionLive(patch = {}) {
 
   function rebuildManualHiddenRevealList(extraIds = []) {
     const existing = svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP && Array.isArray(svgReveal.partIds)
-      ? new Set(svgReveal.partIds)
-      : new Set();
-    for (const id of extraIds || []) if (id) existing.add(id);
+      ? svgReveal.partIds.filter(Boolean)
+      : [];
+    const wanted = new Set(existing);
+    for (const id of extraIds || []) if (id) wanted.add(id);
 
     const ids = [];
+    const seen = new Set();
+
+    // Preserve the existing reveal order first.
+    for (const id of existing) {
+      const obj = findObjById(id);
+      if (!obj || !obj._id || seen.has(obj._id)) continue;
+      ids.push(obj._id);
+      seen.add(obj._id);
+    }
+
+    // Then add any hidden/new objects in drawing order.
     for (const obj of state.objects) {
-      if (!obj || !obj._id) continue;
-      if (obj.hidden || existing.has(obj._id)) ids.push(obj._id);
+      if (!obj || !obj._id || seen.has(obj._id)) continue;
+      if (obj.hidden || wanted.has(obj._id)) {
+        ids.push(obj._id);
+        seen.add(obj._id);
+      }
     }
 
     svgReveal.active = ids.length > 0;
@@ -2473,7 +2534,10 @@ function applyStyleToSelectionLive(patch = {}) {
   }
 
   function ensureVisibilityRevealFromHidden(showMessage = false) {
-    if (svgReveal.active && Array.isArray(svgReveal.partIds) && svgReveal.partIds.length) return true;
+    if (svgReveal.active && Array.isArray(svgReveal.partIds) && svgReveal.partIds.length) {
+      normalizeRevealList();
+      return true;
+    }
 
     const hiddenIds = hiddenObjectIds();
     if (!hiddenIds.length) {
@@ -2485,18 +2549,60 @@ function applyStyleToSelectionLive(patch = {}) {
     svgReveal.groupId = MANUAL_HIDDEN_REVEAL_GROUP;
     svgReveal.partIds = hiddenIds;
     svgReveal.revealed = 0;
-    if (showMessage) showToast(`Hidden: 0/${hiddenIds.length}`);
+    syncSvgRevealCountFromVisibility();
+    if (showMessage) showToast(`Hidden: ${svgReveal.revealed}/${hiddenIds.length}`);
     return true;
   }
 
-  function syncSvgRevealCountFromVisibility() {
-    if (!svgReveal.active || !Array.isArray(svgReveal.partIds) || !svgReveal.partIds.length) return;
-    let shown = 0;
+  function normalizeRevealList() {
+    if (!svgReveal.active || !Array.isArray(svgReveal.partIds)) return false;
+
+    const ids = [];
+    const seen = new Set();
+
     for (const id of svgReveal.partIds) {
       const obj = findObjById(id);
-      if (obj && !obj.hidden) shown += 1;
+      if (!obj || !obj._id || seen.has(obj._id)) continue;
+      ids.push(obj._id);
+      seen.add(obj._id);
     }
-    svgReveal.revealed = clamp(shown, 0, svgReveal.partIds.length);
+
+    // Manual hide/reveal should include every currently hidden drawn object,
+    // even if it was drawn after the list was first created.
+    if (svgReveal.groupId === MANUAL_HIDDEN_REVEAL_GROUP) {
+      for (const obj of state.objects) {
+        if (!obj || !obj._id || seen.has(obj._id)) continue;
+        if (obj.hidden) {
+          ids.push(obj._id);
+          seen.add(obj._id);
+          obj.svgGroupId = MANUAL_HIDDEN_REVEAL_GROUP;
+        }
+      }
+    }
+
+    svgReveal.partIds = ids;
+    svgReveal.active = ids.length > 0;
+    if (!ids.length) svgReveal.groupId = null;
+    syncSvgRevealCountFromVisibility();
+    return ids.length > 0;
+  }
+
+  function syncSvgRevealCountFromVisibility() {
+    if (!svgReveal.active || !Array.isArray(svgReveal.partIds) || !svgReveal.partIds.length) {
+      svgReveal.revealed = 0;
+      return;
+    }
+
+    // `revealed` is an index into the ordered reveal list, not just a count.
+    // Counting all visible objects can skip hidden items when the list contains
+    // mixed visible/hidden objects, so use the first hidden object as the frontier.
+    let index = 0;
+    while (index < svgReveal.partIds.length) {
+      const obj = findObjById(svgReveal.partIds[index]);
+      if (obj && obj.hidden) break;
+      index += 1;
+    }
+    svgReveal.revealed = clamp(index, 0, svgReveal.partIds.length);
   }
 
   function hideSelectedObjects() {
@@ -2555,6 +2661,7 @@ function applyStyleToSelectionLive(patch = {}) {
 
   function revealNextStep() {
     if (!ensureVisibilityRevealFromHidden(true)) return false;
+    normalizeRevealList();
     if (svgPlayback.running) stopSvgPlayback(true);
     const total = svgReveal.partIds.length;
     if (!total) return false;
@@ -2565,6 +2672,7 @@ function applyStyleToSelectionLive(patch = {}) {
 
   function revealPrevStep() {
     if (!ensureVisibilityRevealFromHidden(true)) return false;
+    normalizeRevealList();
     if (svgPlayback.running) stopSvgPlayback(true);
     const total = svgReveal.partIds.length;
     if (!total) return false;
@@ -2584,6 +2692,7 @@ function applyStyleToSelectionLive(patch = {}) {
   }
 
   function revealNextSvgPart() {
+    normalizeRevealList();
     const total = svgReveal.partIds.length;
     while (svgReveal.revealed < total) {
       const id = svgReveal.partIds[svgReveal.revealed++];
@@ -2599,6 +2708,7 @@ function applyStyleToSelectionLive(patch = {}) {
   }
 
   function hidePrevSvgPart() {
+    normalizeRevealList();
     while (svgReveal.revealed > 0) {
       const id = svgReveal.partIds[--svgReveal.revealed];
       const obj = findObjById(id);
@@ -2891,19 +3001,7 @@ function commitPolyFill() {
   };
   ensureObjId(obj);
 
-  let hiddenInReveal = false;
-  if (svgReveal.active && svgReveal.groupId) {
-    obj.svgGroupId = svgReveal.groupId;
-
-    // put it AFTER the next reveal step, not at the current one
-    const insertAt = clamp(svgReveal.revealed + 1, 0, svgReveal.partIds.length);
-    svgReveal.partIds.splice(insertAt, 0, obj._id);
-
-    // do NOT advance revealed count
-    // do NOT force it immediately into the already-revealed set
-    obj.hidden = true;
-    hiddenInReveal = true;
-  }
+  const addedToReveal = addObjectToActiveReveal(obj, { hide: false });
 
   // keep fills visually underneath outlines
   //state.objects.unshift(obj);
@@ -2914,7 +3012,7 @@ state.objects.push(obj);
   redrawAll();
   const colourNote = (String(obj.fill || "").toLowerCase() === "#ffffff" || String(obj.fill || "").toLowerCase() === "white") ? " It is white, so it may be hard to see." : "";
   const opacityNote = (obj.opacity ?? 1) < 0.12 ? " Opacity is very low." : "";
-  showToast(hiddenInReveal ? "PolyFill added to the next SVG reveal step, so it is hidden for now." : `Poly filled.${colourNote}${opacityNote}`);
+  showToast(addedToReveal ? `Poly filled and added to reveal steps.${colourNote}${opacityNote}` : `Poly filled.${colourNote}${opacityNote}`);
   return true;
 }
 
@@ -2937,10 +3035,11 @@ function commitSmoothCurve() {
     points: pts.map(pt => ({ x: pt.x, y: pt.y }))
   };
   ensureObjId(obj);
+  const addedToReveal = addObjectToActiveReveal(obj, { hide: false });
   state.objects.push(obj);
   cancelPolyDraft();
   redrawAll();
-  showToast("Smooth curve added");
+  showToast(addedToReveal ? "Smooth curve added to reveal steps" : "Smooth curve added");
   return true;
 }
 
@@ -3237,6 +3336,7 @@ function onCanvasContextMenu(e) {
     state.undo.push(JSON.stringify(snapshot()));
     state.redo.length = 0;
     ensureObjId(guide);
+    addObjectToActiveReveal(guide);
     state.objects.push(guide);
     state.selectionIndex = state.objects.length - 1;
     state.selection = [state.selectionIndex];
@@ -3347,6 +3447,7 @@ function onPointerDown(e) {
         rot: 0
       };
       ensureObjId(obj);
+      addObjectToActiveReveal(obj);
       state.objects.push(obj);
       state.selectionIndex = state.objects.length - 1;
       setActiveTool("select");
@@ -3866,18 +3967,28 @@ if (state.tool === "select") {
   function onPointerUp() {
     if (!gesture.active) return;
     const finishedObj = gesture.activeObj;
+    const beforeIds = new Set(state.objects.map(o => o && o._id).filter(Boolean));
     let addedPerspectiveHelper = false;
     if (finishedObj && (finishedObj.kind === "line" || finishedObj.kind === "arrow")) {
       const seg = lineSegmentFromObject(finishedObj);
       if (seg) lastDrawnLineId = ensureObjId(finishedObj);
       addedPerspectiveHelper = ensurePerspectiveExtensionHelper(finishedObj);
     }
+
+    const revealTargets = [];
+    if (finishedObj) revealTargets.push(finishedObj);
+    for (const obj of state.objects) {
+      if (obj && obj._id && !beforeIds.has(obj._id)) revealTargets.push(obj);
+    }
+    const addedToReveal = addRecentlyDrawnObjectsToActiveReveal(revealTargets, { hide: false });
+
     try { inkCanvas.releasePointerCapture(gesture.pointerId); } catch {}
     hardResetGesture();
     updateCursorFromTool();
     updatePerspectiveLinks();
     redrawAll();
-    if (addedPerspectiveHelper) showToast("Perspective helper ray added");
+    if (addedToReveal) showToast("Added to reveal steps");
+    else if (addedPerspectiveHelper) showToast("Perspective helper ray added");
   }
 
   /* =========================
@@ -3888,6 +3999,44 @@ if (state.tool === "select") {
     const tag = (activeEl && activeEl.tagName) || "";
     const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") && activeEl !== lenInput;
     const mod = isMac ? e.metaKey : e.ctrlKey;
+
+    // Highest-priority keyboard handling: undo/redo must never be intercepted
+    // by hide/reveal, tool shortcuts, selected-line typing, or presentation controls.
+    if (mod) {
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        hardResetGesture();
+        cancelPolyDraft();
+        closeLenBox();
+        if (state.undo.length) {
+          state.redo.push(JSON.stringify(snapshot()));
+          applySnapshot(JSON.parse(state.undo.pop()));
+          syncStyleControlsFromSelection();
+          redrawAll();
+          showToast("Undone");
+        } else {
+          showToast("Nothing to undo");
+        }
+        return;
+      }
+      if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        hardResetGesture();
+        cancelPolyDraft();
+        closeLenBox();
+        if (state.redo.length) {
+          state.undo.push(JSON.stringify(snapshot()));
+          applySnapshot(JSON.parse(state.redo.pop()));
+          syncStyleControlsFromSelection();
+          redrawAll();
+          showToast("Redone");
+        } else {
+          showToast("Nothing to redo");
+        }
+        return;
+      }
+    }
 
     if (!typing && (state.tool === "polyFill" || state.tool === "curve") && polyDraft.active) {
       if (e.key === "Escape") {
@@ -3958,11 +4107,12 @@ if (!typing && e.code === "Space") {
         const isEnter = e.key === "Enter";
         const isEsc = e.key === "Escape";
         const isMinus = e.key === "-";
-        if (isDigit || isDot || isBack || isEnter || isEsc || isMinus) {
+        const wantsLengthInput = isDigit || isBack || isEnter || isEsc || isMinus || (lenEntry.open && isDot);
+        if (wantsLengthInput) {
           e.preventDefault();
           const b = objectBounds(selectedObj);
           const centerS = worldToScreen((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
-          if (!lenEntry.open && (isDigit || isDot || isBack || isMinus || isEnter)) {
+          if (!lenEntry.open && (isDigit || isBack || isMinus || isEnter)) {
             const curMm = Math.max(1, Math.round(Math.hypot(selectedObj.x2 - selectedObj.x1, selectedObj.y2 - selectedObj.y1) / pxPerMm()) || 1);
             lenEntry.open = true;
             lenEntry.seedMm = parseMmInput(String(curMm)) ?? null;
@@ -4445,7 +4595,7 @@ state.selection = [];
       const dir = Math.sign(e.deltaY);
       const step = dir > 0 ? 0.9 : 1.1;
 
-      const z = clamp(state.zoom * step, 0.05, 6);
+      const z = clamp(state.zoom * step, 0.005, 12);
       const old = state.zoom;
       const worldX = (sx - state.panX) / old;
       const worldY = (sy - state.panY) / old;

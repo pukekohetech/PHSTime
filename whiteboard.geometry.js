@@ -1194,10 +1194,13 @@ function snapPolyPoint(rawPt, bypassSnap) {
 
       if (!bounds) return null;
 
-      const minX = Math.floor(bounds.minX);
-      const minY = Math.floor(bounds.minY);
-      const maxX = Math.ceil(bounds.maxX);
-      const maxY = Math.ceil(bounds.maxY);
+      // Give export/print a small safe margin so thick strokes, dashed
+      // construction lines, and round line caps are not clipped at the edge.
+      const pad = 80;
+      const minX = Math.floor(bounds.minX - pad);
+      const minY = Math.floor(bounds.minY - pad);
+      const maxX = Math.ceil(bounds.maxX + pad);
+      const maxY = Math.ceil(bounds.maxY + pad);
 
       return {
         minX,
