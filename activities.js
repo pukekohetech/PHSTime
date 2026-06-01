@@ -19,7 +19,45 @@ window.PHS_ACTIVITIES_DEFAULTS = {
       "autoOpen": false,
       "enabled": true
     },
-    
+          {
+      "id": "CountDownLetters",
+      "name": "Countdown Letters",
+      "type": "newtab",
+      "url": "https://pukekohetech.github.io/TeMahuri/countdown_letters_classroom_game.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "lots of group quizzes"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+         {
+      "id": "CountDownNumbers",
+      "name": "Countdown Numbers",
+      "type": "newtab",
+      "url": "https://pukekohetech.github.io/TeMahuri/countdown_numbers_classroom_game.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "lots of group quizzes"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+       {
+      "id": "CountDownAnagram",
+      "name": "Countdown Anagram",
+      "type": "newtab",
+      "url": "https://pukekohetech.github.io/TeMahuri/countdown_conundrum_game.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "lots of group quizzes"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
       {
       "id": "PeriodicTable",
       "name": "Periodic Table Guesser",
