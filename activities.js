@@ -22,7 +22,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
           {
       "id": "CountDownLetters",
       "name": "Countdown Letters",
-      "type": "newtab",
+      "type": "iframe",
       "url": "https://pukekohetech.github.io/TeMahuri/countdown_letters_classroom_game.html",
       "tag": "",
       "seconds": null,
@@ -35,7 +35,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
          {
       "id": "CountDownNumbers",
       "name": "Countdown Numbers",
-      "type": "newtab",
+      "type": "iframe",
       "url": "https://pukekohetech.github.io/TeMahuri/countdown_numbers_classroom_game.html",
       "tag": "",
       "seconds": null,
@@ -48,7 +48,7 @@ window.PHS_ACTIVITIES_DEFAULTS = {
        {
       "id": "CountDownAnagram",
       "name": "Countdown Anagram",
-      "type": "newtab",
+      "type": "iframe",
       "url": "https://pukekohetech.github.io/TeMahuri/countdown_conundrum_game.html",
       "tag": "",
       "seconds": null,
