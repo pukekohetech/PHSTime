@@ -1625,3 +1625,186 @@ PAGE: NOISE (noise.html)
 .page-timer #presetHint{
   opacity: 0.8;
 }
+/* =========================================================
+   Brain Breaks — Improved picker / chooser
+   ========================================================= */
+.page-brain .activityPickerCard{
+  width: min(760px, calc(100vw - 28px));
+  height: auto;
+  max-height: min(88vh, 780px);
+}
+
+.page-brain .activityPickerBody{
+  gap: 12px;
+}
+
+.page-brain .pickerIntro,
+.page-brain .pickerCountLine{
+  font-size: 13px;
+  font-weight: 850;
+  opacity: .75;
+  text-align: center;
+}
+
+.page-brain .activitySearch{
+  width: 100%;
+  min-height: 46px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.page-brain .activityFilterRow,
+.page-brain .pickerActions{
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.page-brain .activityFilterBtn{
+  border-radius: 999px;
+  box-shadow: none;
+  background: rgba(0,0,0,0.06);
+}
+
+.page-brain .activityFilterBtn.active{
+  background: rgba(0,0,0,0.14);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08);
+}
+
+.page-brain .activityChoiceList{
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.page-brain .activityChoiceCard{
+  width: 100%;
+  display: grid;
+  grid-template-columns: 46px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  white-space: normal;
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255,255,255,0.84);
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.10);
+}
+
+.page-brain .activityChoiceCard:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.14);
+}
+
+.page-brain .activityChoiceIcon{
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.07);
+  font-size: 22px;
+}
+
+.page-brain .activityChoiceMain{
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.page-brain .activityChoiceName{
+  font-size: 16px;
+  font-weight: 980;
+  letter-spacing: -0.2px;
+}
+
+.page-brain .activityChoiceMeta{
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .68;
+}
+
+.page-brain .activityChoicePreview{
+  font-size: 13px;
+  font-weight: 750;
+  opacity: .78;
+  line-height: 1.25;
+}
+
+.page-brain .activityChoiceAction{
+  font-size: 12px;
+  font-weight: 950;
+  opacity: .75;
+}
+
+.page-brain .emptyPickerState{
+  text-align: center;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.05);
+  font-weight: 900;
+  opacity: .75;
+}
+
+.page-brain .randomResultCard{
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+  border-radius: 22px;
+  padding: 22px 18px;
+  background: rgba(255,255,255,0.86);
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.page-brain .randomResultCard.isPicked{
+  transform: scale(1.025);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.18);
+}
+
+.page-brain .randomResultIcon{
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  background: rgba(0,0,0,0.07);
+  font-size: 38px;
+}
+
+.page-brain .randomResultName{
+  font-size: clamp(28px, 5vw, 48px);
+  font-weight: 980;
+  letter-spacing: -0.8px;
+  line-height: 1.05;
+}
+
+.page-brain .randomResultMeta{
+  font-size: 13px;
+  font-weight: 950;
+  opacity: .7;
+}
+
+.page-brain .randomResultSteps{
+  max-width: 620px;
+  font-size: 15px;
+  font-weight: 800;
+  opacity: .8;
+  line-height: 1.3;
+}
+
+@media (max-width: 560px){
+  .page-brain .activityChoiceCard{
+    grid-template-columns: 42px 1fr;
+  }
+
+  .page-brain .activityChoiceAction{
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+}
