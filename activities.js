@@ -7,6 +7,19 @@ window.PHS_ACTIVITIES_DEFAULTS = {
     /* ================= ONLINE / INTERACTIVE ================= */
 
      {
+      "id": "Pongit",
+      "name": "Power Pong",
+      "type": "iframe",
+      "url": "https://pukekohetech.github.io/TeMahuri/pong.html",
+      "tag": "",
+      "seconds": null,
+      "steps": [
+        "lots of group quizzes"
+      ],
+      "autoOpen": false,
+      "enabled": true
+    },
+     {
       "id": "a_1191f7a179fe819ce40b5e74",
       "name": "JeopardyLabs",
       "type": "iframe",
