@@ -39,7 +39,12 @@ window.WBIO = (() => {
       rectEdges,
       exportWorldBounds,
       ensureObjId,
+      ensureRevealId,
       findObjById,
+      findObjByRevealId,
+      repairRevealIds,
+      migrateRevealPartIds,
+      syncNextObjIdCounter,
       perspectiveTargetPoints,
       stopSvgPlayback,
       resetSvgRevealState
@@ -48,6 +53,10 @@ window.WBIO = (() => {
     const LS_KEY = "PHS_WHITEBOARD_BOARDS_v8";
 
     function snapshot() {
+      repairRevealIds(state.objects);
+      const migrated = migrateRevealPartIds(svgReveal.partIds, svgReveal.groupId);
+      if (svgReveal.active) svgReveal.partIds = migrated.partIds;
+
       return {
         tool: state.tool,
         color: state.color,
@@ -100,30 +109,34 @@ window.WBIO = (() => {
 
       state.objects = Array.isArray(snap.objects) ? deepClone(snap.objects) : [];
       state.selectionIndex = -1;
+      state.selection = [];
+      syncNextObjIdCounter(state.objects);
 
-      // Restore presentation/reveal metadata.
-      // Undo/redo must preserve the exact hidden/revealed state from the snapshot.
-      // Board/presentation loads can opt into starting at 0 revealed.
+      // Older files stored geometry IDs in partIds. Those IDs may be duplicated,
+      // so migrate to separate unique reveal IDs without changing geometry links.
       const rev = snap.svgReveal || null;
-      if (rev && Array.isArray(rev.partIds) && rev.partIds.length) {
+      const hasHidden = state.objects.some(o => o && o.hidden);
+      const groupId = rev?.groupId || (hasHidden ? "__manual_hidden_objects__" : null);
+      const migrated = migrateRevealPartIds(rev?.partIds || [], groupId);
+
+      if (migrated.partIds.length) {
         svgReveal.active = true;
-        svgReveal.groupId = rev.groupId || "__manual_hidden_objects__";
-        svgReveal.partIds = rev.partIds.filter(Boolean);
+        svgReveal.groupId = groupId || "__manual_hidden_objects__";
+        svgReveal.partIds = migrated.partIds;
         const maxReveal = svgReveal.partIds.length;
-        const savedReveal = Number.isFinite(Number(rev.revealed)) ? Number(rev.revealed) : 0;
+        const savedReveal = Number.isFinite(Number(rev?.revealed)) ? Number(rev.revealed) : 0;
         svgReveal.revealed = Math.max(0, Math.min(maxReveal, opts.startRevealAtZero ? 0 : savedReveal));
 
         if (opts.startRevealAtZero) {
           const revealIds = new Set(svgReveal.partIds);
           for (const obj of state.objects) {
-            if (obj && obj._id && revealIds.has(obj._id)) obj.hidden = true;
+            if (obj && revealIds.has(ensureRevealId(obj))) obj.hidden = true;
           }
         }
       } else {
-        const hiddenIds = state.objects.filter(o => o && o.hidden && o._id).map(o => o._id);
-        svgReveal.active = hiddenIds.length > 0;
-        svgReveal.groupId = hiddenIds.length ? "__manual_hidden_objects__" : null;
-        svgReveal.partIds = hiddenIds;
+        svgReveal.active = false;
+        svgReveal.groupId = null;
+        svgReveal.partIds = [];
         svgReveal.revealed = 0;
       }
 
@@ -131,6 +144,7 @@ window.WBIO = (() => {
       else bgImg.removeAttribute("src");
 
       redrawAll();
+      return { repairedRevealIds: migrated.repairedRevealIds || 0 };
     }
 
      function performUndo() {
@@ -199,7 +213,7 @@ function performRedo() {
 
     function snapshotBoard() {
       return {
-        v: 8,
+        v: 9,
         savedAt: new Date().toISOString(),
         ...snapshot()
       };
@@ -210,12 +224,12 @@ function performRedo() {
       cancelPolyDraft();
       state.undo = [];
       state.redo = [];
-      applySnapshot(data, { startRevealAtZero: true });
+      return applySnapshot(data, { startRevealAtZero: true });
     }
 
     function freshBoardSnapshot() {
       return {
-        v: 8,
+        v: 9,
         savedAt: new Date().toISOString(),
         tool: "pen",
         color: state.color || "#111111",
@@ -771,7 +785,7 @@ const exportObjects = [
       };
     }
 
-    function importSvgInkFromText(svgText) {
+    async function importSvgInkFromText(svgText) {
       stopSvgPlayback(true);
 
       const doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
@@ -785,8 +799,11 @@ const exportObjects = [
       if (editableMeta && editableMeta.textContent) {
         try {
           const editableData = JSON.parse(editableMeta.textContent);
-          applyBoard(editableData);
-          showToast("Editable whiteboard loaded — perspective links preserved");
+          const result = await applyBoard(editableData);
+          const repaired = Number(result?.repairedRevealIds || 0);
+          showToast(repaired
+            ? `Editable whiteboard loaded — prepared ${repaired} reveal step${repaired === 1 ? "" : "s"}`
+            : "Editable whiteboard loaded — perspective links preserved");
           return;
         } catch (err) {
           console.warn("Editable whiteboard metadata could not be loaded", err);
@@ -1136,6 +1153,7 @@ const exportObjects = [
       for (const o of parts) {
         const obj = deepClone(o);
         ensureObjId(obj);
+        ensureRevealId(obj);
         obj.svgGroupId = groupId;
         obj.hidden = true;
         state.objects.push(obj);
@@ -1146,7 +1164,7 @@ const exportObjects = [
       svgReveal.partIds = [];
       svgReveal.revealed = 0;
       for (let i = startIndex; i < state.objects.length; i++) {
-        svgReveal.partIds.push(state.objects[i]._id);
+        svgReveal.partIds.push(ensureRevealId(state.objects[i]));
       }
 
       state.selectionIndex = -1;
@@ -1250,8 +1268,11 @@ redoBtn?.addEventListener("click", performRedo);
         if (!name) return;
         const index = loadBoardsIndex();
         if (!index[name]) return;
-        await applyBoard(index[name]);
-        showToast("Board loaded");
+        const result = await applyBoard(index[name]);
+        const repaired = Number(result?.repairedRevealIds || 0);
+        showToast(repaired
+          ? `Board loaded — prepared ${repaired} reveal step${repaired === 1 ? "" : "s"}`
+          : "Board loaded");
       });
 
       deleteBoardBtn?.addEventListener("click", () => {
@@ -1293,7 +1314,13 @@ redoBtn?.addEventListener("click", performRedo);
         const file = svgInkFile.files && svgInkFile.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => importSvgInkFromText(String(reader.result || ""));
+        reader.onload = () => {
+          Promise.resolve(importSvgInkFromText(String(reader.result || "")))
+            .catch(err => {
+              console.error("SVG import failed", err);
+              showToast("SVG import failed");
+            });
+        };
         reader.readAsText(file);
         svgInkFile.value = "";
       });
