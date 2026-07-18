@@ -47,6 +47,17 @@
   const visibilityNextPanelBtn = document.getElementById("visibilityNextPanelBtn");
   const visibilityPlayPanelBtn = document.getElementById("visibilityPlayPanelBtn");
   const visibilityTimingPanelBtn = document.getElementById("visibilityTimingPanelBtn");
+  const presentationBtn = document.getElementById("presentationBtn");
+  const presentationPanelBtn = document.getElementById("presentationPanelBtn");
+  const presentationControls = document.getElementById("presentationControls");
+  const presentationPrevBtn = document.getElementById("presentationPrevBtn");
+  const presentationNextBtn = document.getElementById("presentationNextBtn");
+  const presentationPlayBtn = document.getElementById("presentationPlayBtn");
+  const presentationBlankBtn = document.getElementById("presentationBlankBtn");
+  const presentationExitBtn = document.getElementById("presentationExitBtn");
+  const presentationBlank = document.getElementById("presentationBlank");
+  const presentationProgressText = document.getElementById("presentationProgressText");
+  const presentationProgressBar = document.getElementById("presentationProgressBar");
   const snipJoinBtn = document.getElementById("snipJoinBtn");
   const linkInspector = document.getElementById("linkInspector");
   const linkInspectorBody = document.getElementById("linkInspectorBody");
@@ -65,6 +76,19 @@ const redoBtn = document.getElementById("redoBtn");
   const opacityRange = document.getElementById("opacityRange");
   const opacityOut = document.getElementById("opacityOut");
 
+  const shapeSizeBtn = document.getElementById("shapeSizeBtn");
+  const shapeSizePanel = document.getElementById("shapeSizePanel");
+  const shapeSizeCloseBtn = document.getElementById("shapeSizeCloseBtn");
+  const shapeTypeSelect = document.getElementById("shapeTypeSelect");
+  const shapeWidthInput = document.getElementById("shapeWidthInput");
+  const shapeHeightInput = document.getElementById("shapeHeightInput");
+  const shapeWidthLabel = document.getElementById("shapeWidthLabel");
+  const shapeHeightLabel = document.getElementById("shapeHeightLabel");
+  const shapeHeightRow = document.getElementById("shapeHeightRow");
+  const shapeSizeSelectionNote = document.getElementById("shapeSizeSelectionNote");
+  const shapeSizeApplyBtn = document.getElementById("shapeSizeApplyBtn");
+  const shapeSizeCreateBtn = document.getElementById("shapeSizeCreateBtn");
+
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsPanel = document.getElementById("settingsPanel");
   const settingsCloseBtn = document.getElementById("settingsCloseBtn");
@@ -76,6 +100,7 @@ const redoBtn = document.getElementById("redoBtn");
   const clearBgBtn = document.getElementById("clearBgBtn");
 
   const svgInkFile = document.getElementById("svgInkFile");
+  const quickSvgInkFile = document.getElementById("quickSvgInkFile");
   const clearSvgInkBtn = document.getElementById("clearSvgInkBtn");
 
   const boardSelect = document.getElementById("boardSelect");
@@ -86,6 +111,7 @@ const redoBtn = document.getElementById("redoBtn");
   const exportBtn = document.getElementById("exportBtn");
   const exportSvgBtn = document.getElementById("exportSvgBtn");
   const printBtn = document.getElementById("printBtn");
+  const printFitBtn = document.getElementById("printFitBtn");
 
   const scaleOut = document.getElementById("scaleOut");
   const setScaleBtn = document.getElementById("setScaleBtn");
@@ -301,6 +327,12 @@ clipboard: null,
     endPauseMs: 5000
   };
 
+  const presentationState = {
+    active: false,
+    blank: false,
+    savedView: null
+  };
+
   // Arc draft
   const arcDraft = { hasCenter: false, cx: 0, cy: 0 };
 
@@ -329,6 +361,7 @@ clipboard: null,
 
     selIndex: -1,
     selStartObj: null,
+    selStartItems: null,
     selAnchor: null,
     selStartAngle: 0,
 
@@ -346,7 +379,10 @@ clipboard: null,
     lineAnchorRef: null,
     lineEndAnchorRef: null,
     lineResizeEnd: null,
-    forceLinkActive: false
+    forceLinkActive: false,
+    marqueeStart: null,
+    marqueeCurrent: null,
+    marqueeBaseSelection: null
   };
 
   let spacePanning = false;
@@ -373,65 +409,76 @@ function copySelection() {
   showToast(`Copied ${state.clipboard.length}`);
 }
 
+function remapCopiedObjectRefs(value, idMap) {
+  if (Array.isArray(value)) {
+    value.forEach(item => remapCopiedObjectRefs(item, idMap));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+
+  for (const [key, child] of Object.entries(value)) {
+    if ((key === "objId" || key === "targetId" || key === "guideId") && typeof child === "string" && idMap.has(child)) {
+      value[key] = idMap.get(child);
+    } else {
+      remapCopiedObjectRefs(child, idMap);
+    }
+  }
+}
+
 function pasteClipboard() {
-  if (!state.clipboard) return;
+  if (!state.clipboard || !state.clipboard.length) return;
 
   state.undo.push(JSON.stringify(snapshot()));
   state.redo.length = 0;
 
-  const newSelection = [];
-
-  for (const src of state.clipboard) {
+  const idMap = new Map();
+  const clones = state.clipboard.map(src => {
     const obj = deepClone(src);
-    // Pasted objects must have fresh geometry and reveal identities.
+    const oldId = obj._id || null;
     delete obj._id;
     delete obj._revealId;
-
-    if ("x1" in obj) {
-      obj.x1 += 20;
-      obj.y1 += 20;
-    }
-    if ("x2" in obj) {
-      obj.x2 += 20;
-      obj.y2 += 20;
-    }
-    if ("x" in obj) {
-      obj.x += 20;
-      obj.y += 20;
-    }
-    if ("cx" in obj) {
-      obj.cx += 20;
-      obj.cy += 20;
-    }
-
+    delete obj.svgGroupId;
+    obj.hidden = false;
     ensureObjId(obj);
     ensureRevealId(obj);
+    if (oldId) idMap.set(oldId, obj._id);
+    return obj;
+  });
+
+  const newSelection = [];
+  for (const obj of clones) {
+    remapCopiedObjectRefs(obj, idMap);
+    moveObject(obj, 20, 20);
     state.objects.push(obj);
     addObjectToActiveReveal(obj);
     newSelection.push(state.objects.length - 1);
   }
 
   state.selection = newSelection;
-  state.selectionIndex = newSelection[newSelection.length - 1];
+  state.selectionIndex = newSelection[newSelection.length - 1] ?? -1;
 
   redrawAll();
-  showToast("Pasted");
+  showToast(`Pasted ${newSelection.length}`);
 }
 
 function cutSelection() {
-  if (state.selectionIndex < 0) return;
+  const indices = [...new Set((state.selection?.length ? state.selection : [state.selectionIndex])
+    .filter(i => Number.isInteger(i) && i >= 0 && state.objects[i]))];
+  if (!indices.length) return;
 
+  state.selection = indices;
+  state.selectionIndex = indices[indices.length - 1];
   copySelection();
 
   state.undo.push(JSON.stringify(snapshot()));
   state.redo.length = 0;
 
-  state.objects.splice(state.selectionIndex, 1);
- state.selectionIndex = -1;
-state.selection = [];
-   
+  indices.sort((a, b) => b - a).forEach(i => state.objects.splice(i, 1));
+  state.selectionIndex = -1;
+  state.selection = [];
+
   redrawAll();
-  showToast("Cut");
+  showToast(`Cut ${indices.length}`);
 }
 
 
@@ -705,6 +752,299 @@ state.selection = [];
     return { w, h, fontSize };
   }
 
+  function selectedObjectIndices() {
+    const raw = state.selection?.length ? state.selection : [state.selectionIndex];
+    return [...new Set(raw)]
+      .filter(i => Number.isInteger(i) && i >= 0 && state.objects[i] && !state.objects[i].hidden);
+  }
+
+  function selectedSingleShape() {
+    const indices = selectedObjectIndices();
+    if (indices.length !== 1) return null;
+    const index = indices[0];
+    const obj = state.objects[index];
+    if (!obj || (obj.kind !== "rect" && obj.kind !== "circle")) return null;
+    return { index, obj };
+  }
+
+  function shapeDimensionsMm(obj) {
+    if (!obj) return { width: 0, height: 0 };
+    const scale = Math.max(0.000001, pxPerMm());
+    return {
+      width: Math.abs(Number(obj.x2 || 0) - Number(obj.x1 || 0)) / scale,
+      height: Math.abs(Number(obj.y2 || 0) - Number(obj.y1 || 0)) / scale
+    };
+  }
+
+  function shapeFormKind() {
+    return shapeTypeSelect?.value === "oval" || shapeTypeSelect?.value === "circle" ? "circle" : "rect";
+  }
+
+  function shapeFormDimensions() {
+    const type = shapeTypeSelect?.value || "rect";
+    const width = Number.parseFloat(shapeWidthInput?.value || "");
+    const rawHeight = Number.parseFloat(shapeHeightInput?.value || "");
+    const height = type === "square" || type === "circle" ? width : rawHeight;
+    if (!Number.isFinite(width) || width <= 0 || width > 10000) return null;
+    if (!Number.isFinite(height) || height <= 0 || height > 10000) return null;
+    return { width, height, type, kind: shapeFormKind() };
+  }
+
+  function describeShapeType(type) {
+    return ({ rect: "rectangle", square: "square", oval: "oval", circle: "circle" })[type] || "shape";
+  }
+
+  function updateShapeSizeForm({ prefillSelected = false } = {}) {
+    if (!shapeTypeSelect || !shapeWidthInput || !shapeHeightInput) return;
+    const selected = selectedSingleShape();
+
+    if (prefillSelected && selected) {
+      const dims = shapeDimensionsMm(selected.obj);
+      const equal = Math.abs(dims.width - dims.height) <= 0.5;
+      shapeTypeSelect.value = selected.obj.kind === "rect"
+        ? (equal ? "square" : "rect")
+        : (equal ? "circle" : "oval");
+      shapeWidthInput.value = String(Math.max(1, Math.round(dims.width * 10) / 10));
+      shapeHeightInput.value = String(Math.max(1, Math.round(dims.height * 10) / 10));
+    } else if (!selected) {
+      if (state.tool === "circle" && !["oval", "circle"].includes(shapeTypeSelect.value)) shapeTypeSelect.value = "circle";
+      if (state.tool === "rect" && !["rect", "square"].includes(shapeTypeSelect.value)) shapeTypeSelect.value = "rect";
+    }
+
+    const type = shapeTypeSelect.value;
+    const oneDimension = type === "square" || type === "circle";
+    shapeHeightRow?.classList.toggle("is-hidden", oneDimension);
+    if (shapeWidthLabel) shapeWidthLabel.textContent = type === "square" ? "Side" : type === "circle" ? "Diameter" : "Width";
+    if (shapeHeightLabel) shapeHeightLabel.textContent = "Height";
+    if (oneDimension && shapeHeightInput) shapeHeightInput.value = shapeWidthInput.value;
+
+    const desiredKind = shapeFormKind();
+    const canApply = !!selected && selected.obj.kind === desiredKind;
+    if (shapeSizeApplyBtn) shapeSizeApplyBtn.disabled = !canApply;
+    if (shapeSizeCreateBtn) shapeSizeCreateBtn.textContent = `Create ${describeShapeType(type)}`;
+
+    if (!shapeSizeSelectionNote) return;
+    if (!selected) {
+      shapeSizeSelectionNote.textContent = "No single rectangle or oval is selected. Create places the new shape in the centre of the board.";
+    } else {
+      const dims = shapeDimensionsMm(selected.obj);
+      const name = selected.obj.kind === "rect" ? "rectangle" : "oval";
+      const sizeText = `${Math.round(dims.width * 10) / 10} × ${Math.round(dims.height * 10) / 10} mm`;
+      shapeSizeSelectionNote.textContent = canApply
+        ? `Selected ${name}: ${sizeText}. Apply keeps its centre and rotation.`
+        : `Selected ${name}: ${sizeText}. Choose a matching rectangle/square or oval/circle option to apply; otherwise create a new shape.`;
+    }
+  }
+
+  function positionShapeSizePanel() {
+    if (!shapeSizePanel || !shapeSizeBtn || shapeSizePanel.classList.contains("is-hidden")) return;
+    const r = shapeSizeBtn.getBoundingClientRect();
+    const gap = 10;
+    const panelW = shapeSizePanel.offsetWidth || 330;
+    const panelH = shapeSizePanel.offsetHeight || 300;
+    let left = r.right + gap;
+    if (left + panelW > window.innerWidth - 8) left = Math.max(8, r.left - panelW - gap);
+    const top = Math.max(8, Math.min(r.top - 24, window.innerHeight - panelH - 8));
+    shapeSizePanel.style.left = `${Math.round(left)}px`;
+    shapeSizePanel.style.top = `${Math.round(top)}px`;
+  }
+
+  function openShapeSizePanel(open = true) {
+    if (!shapeSizePanel) return;
+    shapeSizePanel.classList.toggle("is-hidden", !open);
+    shapeSizeBtn?.setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    updateShapeSizeForm({ prefillSelected: true });
+    requestAnimationFrame(() => {
+      positionShapeSizePanel();
+      shapeWidthInput?.focus({ preventScroll: true });
+      shapeWidthInput?.select();
+    });
+  }
+
+  function applyExactShapeSize() {
+    const selected = selectedSingleShape();
+    const dims = shapeFormDimensions();
+    if (!selected || !dims) {
+      showToast(dims ? "Select one matching rectangle, square, circle, or oval first" : "Enter valid dimensions from 1 to 10,000 mm");
+      return false;
+    }
+    if (selected.obj.kind !== dims.kind) {
+      showToast("Choose a matching shape type, or create a new shape");
+      updateShapeSizeForm();
+      return false;
+    }
+
+    state.undo.push(JSON.stringify(snapshot()));
+    state.redo.length = 0;
+    const obj = selected.obj;
+    const cx = (obj.x1 + obj.x2) / 2;
+    const cy = (obj.y1 + obj.y2) / 2;
+    const w = dims.width * pxPerMm();
+    const h = dims.height * pxPerMm();
+    obj.x1 = cx - w / 2;
+    obj.y1 = cy - h / 2;
+    obj.x2 = cx + w / 2;
+    obj.y2 = cy + h / 2;
+    updatePerspectiveLinks();
+    redrawAll();
+    openShapeSizePanel(false);
+    showToast(`${describeShapeType(dims.type)} set to ${dims.width} × ${dims.height} mm`);
+    return true;
+  }
+
+  function createExactShape() {
+    const dims = shapeFormDimensions();
+    if (!dims) {
+      showToast("Enter valid dimensions from 1 to 10,000 mm");
+      return false;
+    }
+
+    state.undo.push(JSON.stringify(snapshot()));
+    state.redo.length = 0;
+    const centre = screenToWorld(state.viewW / 2, state.viewH / 2);
+    const w = dims.width * pxPerMm();
+    const h = dims.height * pxPerMm();
+    const obj = {
+      kind: dims.kind,
+      color: state.color,
+      size: state.size,
+      opacity: state.opacity,
+      lineStyle: state.lineStyle || "solid",
+      filled: false,
+      fillColor: state.color,
+      x1: centre.x - w / 2,
+      y1: centre.y - h / 2,
+      x2: centre.x + w / 2,
+      y2: centre.y + h / 2,
+      rot: 0
+    };
+    ensureObjId(obj);
+    state.objects.push(obj);
+    const index = state.objects.length - 1;
+    state.selectionIndex = index;
+    state.selection = [index];
+    setActiveTool("select");
+    redrawAll();
+    openShapeSizePanel(false);
+    showToast(`${describeShapeType(dims.type)} created at ${dims.width} × ${dims.height} mm`);
+    return true;
+  }
+
+  function selectionWorldBounds(indices = selectedObjectIndices()) {
+    let out = null;
+    for (const i of indices) {
+      const b = objectBounds(state.objects[i]);
+      if (!b) continue;
+      out = out ? {
+        minX: Math.min(out.minX, b.minX),
+        minY: Math.min(out.minY, b.minY),
+        maxX: Math.max(out.maxX, b.maxX),
+        maxY: Math.max(out.maxY, b.maxY)
+      } : { ...b };
+    }
+    return out;
+  }
+
+  function tightObjectBounds(obj) {
+    if (obj && (obj.kind === "rect" || obj.kind === "circle") && Math.abs(obj.rot || 0) < 1e-9) {
+      return {
+        minX: Math.min(obj.x1, obj.x2),
+        minY: Math.min(obj.y1, obj.y2),
+        maxX: Math.max(obj.x1, obj.x2),
+        maxY: Math.max(obj.y1, obj.y2)
+      };
+    }
+    return objectBounds(obj);
+  }
+
+  function oppositeCornerAnchor(bounds, corner) {
+    if (!bounds) return null;
+    const map = {
+      nw: { x: bounds.maxX, y: bounds.maxY },
+      ne: { x: bounds.minX, y: bounds.maxY },
+      se: { x: bounds.minX, y: bounds.minY },
+      sw: { x: bounds.maxX, y: bounds.minY }
+    };
+    return map[corner] || null;
+  }
+
+  function rotateObjectAroundAnchor(obj, angle, ax, ay) {
+    if (!obj || !Number.isFinite(angle)) return;
+    const rotatePt = p => rotatePoint(p.x, p.y, ax, ay, angle);
+
+    if (obj.kind === "perspectiveGuide") {
+      for (const key of ["vp1", "vp2"]) {
+        if (!obj[key]) continue;
+        const p = rotatePt(obj[key]);
+        obj[key].x = p.x;
+        obj[key].y = p.y;
+      }
+      return;
+    }
+
+    if (obj.kind === "polyFill" || obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
+      for (const p0 of (obj.pts || obj.points || [])) {
+        const p = rotatePt(p0);
+        p0.x = p.x;
+        p0.y = p.y;
+      }
+      return;
+    }
+
+    if (obj.kind === "text") {
+      const m = textMetrics(obj);
+      const centre = rotatePt({ x: obj.x + m.w / 2, y: obj.y + m.h / 2 });
+      obj.x = centre.x - m.w / 2;
+      obj.y = centre.y - m.h / 2;
+      obj.rot = (obj.rot || 0) + angle;
+      return;
+    }
+
+    if (obj.kind === "rect" || obj.kind === "circle") {
+      const cx = (obj.x1 + obj.x2) / 2;
+      const cy = (obj.y1 + obj.y2) / 2;
+      const centre = rotatePt({ x: cx, y: cy });
+      const dx = centre.x - cx;
+      const dy = centre.y - cy;
+      obj.x1 += dx;
+      obj.y1 += dy;
+      obj.x2 += dx;
+      obj.y2 += dy;
+      obj.rot = (obj.rot || 0) + angle;
+      return;
+    }
+
+    if (obj.kind === "arc") {
+      const centre = rotatePt({ x: obj.cx, y: obj.cy });
+      obj.cx = centre.x;
+      obj.cy = centre.y;
+      obj.a1 = (obj.a1 || 0) + angle;
+      obj.a2 = (obj.a2 || 0) + angle;
+      return;
+    }
+
+    if (obj.kind === "fillBitmap") {
+      const ppw = obj.ppw || 1;
+      const w = (obj.w || 1) / ppw;
+      const h = (obj.h || 1) / ppw;
+      const centre = rotatePt({ x: obj.x + w / 2, y: obj.y + h / 2 });
+      obj.x = centre.x - w / 2;
+      obj.y = centre.y - h / 2;
+      obj.rot = (obj.rot || 0) + angle;
+      return;
+    }
+
+    if (Number.isFinite(obj.x1) && Number.isFinite(obj.y1)) {
+      const p1 = rotatePt({ x: obj.x1, y: obj.y1 });
+      const p2 = rotatePt({ x: obj.x2, y: obj.y2 });
+      obj.x1 = p1.x;
+      obj.y1 = p1.y;
+      obj.x2 = p2.x;
+      obj.y2 = p2.y;
+    }
+  }
+
   /* =========================
      Selection handles
   ========================= */
@@ -723,6 +1063,30 @@ state.selection = [];
     if (state.selectionIndex < 0) return;
     const obj = state.objects[state.selectionIndex];
     if (!obj) return;
+
+    const multi = selectedObjectIndices();
+    if (multi.length > 1) {
+      const b = selectionWorldBounds(multi);
+      if (!b) return;
+      const p1 = worldToScreen(b.minX, b.minY);
+      const p2 = worldToScreen(b.maxX, b.maxY);
+      const x = Math.min(p1.x, p2.x);
+      const y = Math.min(p1.y, p2.y);
+      const w = Math.max(1, Math.abs(p2.x - p1.x));
+      const h = Math.max(1, Math.abs(p2.y - p1.y));
+      const size = 10;
+      uiHandles.visible = true;
+      uiHandles.box = { x, y, w, h };
+      uiHandles.corners = [
+        { name: "nw", x, y, s: size },
+        { name: "ne", x: x + w, y, s: size },
+        { name: "se", x: x + w, y: y + h, s: size },
+        { name: "sw", x, y: y + h, s: size }
+      ];
+      uiHandles.rotate = { x: x + w / 2, y: y - 28, r: 8 };
+      uiHandles.center = { x: x + w / 2, y: y + h / 2 };
+      return;
+    }
 
     if (obj.kind === "perspectiveGuide") {
       const vps = [];
@@ -781,7 +1145,7 @@ state.selection = [];
       return;
     }
 
-    const b = objectBounds(obj);
+    const b = tightObjectBounds(obj);
     const hasOwnRot = (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "text") && (obj.rot || 0);
     if (obj.kind === "line" || obj.kind === "arrow") {
       const a = worldToScreen(obj.x1, obj.y1);
@@ -2240,6 +2604,7 @@ state.selection = [];
 
   const render = window.WBRender.createRenderApi({
     state,
+    gesture,
     stage,
     bgLayer,
     bgImg,
@@ -2273,6 +2638,7 @@ state.selection = [];
     redrawAllRaw();
     renderLinkInspector();
     if (linkDebugOverlay.visible) drawLinkDebugOverlay();
+    updatePresentationUI();
   }
 
   function resizeAll() {
@@ -2343,7 +2709,10 @@ state.selection = [];
     fillBitmapCache,
     boardSelect,
     titleInput,
+    undoBtn,
+    redoBtn,
     showToast,
+    updateBrushUI,
     setActiveTool,
     hardResetGesture,
     cancelPolyDraft,
@@ -2385,7 +2754,11 @@ state.selection = [];
     bindBackgroundInput,
     bindBoards,
     bindSvgInput,
-    bindExport
+    bindExport,
+    bindProjectFiles,
+    bindBoardManager,
+    bindAutosave,
+    startAutosave
   } = io;
 
   /* =========================
@@ -2417,6 +2790,7 @@ state.selection = [];
 
     gesture.selIndex = -1;
     gesture.selStartObj = null;
+    gesture.selStartItems = null;
     gesture.selAnchor = null;
     gesture.selStartAngle = 0;
 
@@ -2435,6 +2809,9 @@ state.selection = [];
     gesture.lineResizeEnd = null;
     gesture.forceLinkActive = false;
     gesture.lastScreenPrev = null;
+    gesture.marqueeStart = null;
+    gesture.marqueeCurrent = null;
+    gesture.marqueeBaseSelection = null;
 
     lenEntry.open = false;
     lenEntry.seedMm = null;
@@ -2498,24 +2875,7 @@ state.selection = [];
   updateBrushUI();
 }
    
-function applyStyleToSelection(patch = {}) {
-  const idx = state.selectionIndex;
-  if (idx < 0) return false;
-
-  const obj = state.objects[idx];
-  if (!obj) return false;
-
-  state.undo.push(JSON.stringify(snapshot()));
-  state.redo.length = 0;
-
-  return applyStyleToSelectionLive(patch);
-}
-
-function applyStyleToSelectionLive(patch = {}) {
-  const idx = state.selectionIndex;
-  if (idx < 0) return false;
-
-  const obj = state.objects[idx];
+function applyStylePatchToObject(obj, patch = {}) {
   if (!obj) return false;
 
   if (patch.color != null) {
@@ -2523,46 +2883,47 @@ function applyStyleToSelectionLive(patch = {}) {
       case "polyFill":
         obj.fill = patch.color;
         break;
-
       case "rect":
       case "circle":
         obj.color = patch.color;
         if (obj.filled) obj.fillColor = patch.color;
         break;
-
       default:
-        obj.color = patch.color;
+        if ("color" in obj || obj.kind !== "erase") obj.color = patch.color;
         break;
     }
   }
 
-  if (patch.opacity != null) {
+  if (patch.opacity != null && obj.kind !== "erase") {
     obj.opacity = clamp(patch.opacity, 0.05, 1);
   }
 
   if (patch.size != null) {
-    if ("size" in obj) {
-      obj.size = clamp(Number(patch.size), 1, 60);
-    } else if (obj.kind === "text") {
-      obj.fontSize = Math.max(14, Math.round(Number(patch.size) * 4));
-    }
+    if ("size" in obj) obj.size = clamp(Number(patch.size), 1, 60);
+    else if (obj.kind === "text") obj.fontSize = Math.max(14, Math.round(Number(patch.size) * 4));
   }
 
-  if (patch.lineStyle != null) {
-    if (
-      obj.kind === "line" ||
-      obj.kind === "arrow" ||
-      obj.kind === "arc" ||
-      obj.kind === "rect" ||
-      obj.kind === "circle" ||
-      obj.kind === "curve"
-    ) {
-      obj.lineStyle = patch.lineStyle;
-    }
+  if (patch.lineStyle != null && ["line", "arrow", "arc", "rect", "circle", "curve"].includes(obj.kind)) {
+    obj.lineStyle = patch.lineStyle;
   }
-
-  redrawAll();
   return true;
+}
+
+function applyStyleToSelection(patch = {}) {
+  const indices = selectedObjectIndices();
+  if (!indices.length) return false;
+  state.undo.push(JSON.stringify(snapshot()));
+  state.redo.length = 0;
+  return applyStyleToSelectionLive(patch);
+}
+
+function applyStyleToSelectionLive(patch = {}) {
+  const indices = selectedObjectIndices();
+  if (!indices.length) return false;
+  let changed = false;
+  for (const idx of indices) changed = applyStylePatchToObject(state.objects[idx], patch) || changed;
+  redrawAll();
+  return changed;
 }
 
   /* =========================
@@ -3003,6 +3364,129 @@ function applyStyleToSelectionLive(patch = {}) {
     showToast(`Step ${stepSec}s • End ${endSec}s`);
   }
 
+  function updatePresentationUI() {
+    if (!presentationState.active) return;
+    const total = svgReveal.active && Array.isArray(svgReveal.partIds) ? svgReveal.partIds.length : 0;
+    const current = total ? clamp(Number(svgReveal.revealed || 0), 0, total) : 0;
+    if (presentationProgressText) {
+      presentationProgressText.textContent = total ? `Reveal ${current} of ${total}` : "No reveal sequence — hide objects to create one";
+    }
+    if (presentationProgressBar) {
+      presentationProgressBar.style.width = total ? `${(current / total) * 100}%` : "0%";
+    }
+    if (presentationPlayBtn) presentationPlayBtn.textContent = svgPlayback.running ? "⏸ Pause" : "▶ Timed";
+    if (presentationBlankBtn) presentationBlankBtn.textContent = presentationState.blank ? "Restore" : "Blank";
+  }
+
+  function fitPresentationToContent() {
+    const bounds = exportWorldBounds();
+    if (!bounds || !Number.isFinite(bounds.w) || !Number.isFinite(bounds.h)) return;
+    const padX = Math.min(120, Math.max(36, state.viewW * 0.06));
+    const padTop = 36;
+    const padBottom = 110;
+    const availableW = Math.max(100, state.viewW - padX * 2);
+    const availableH = Math.max(100, state.viewH - padTop - padBottom);
+    const zoom = clamp(Math.min(availableW / Math.max(1, bounds.w), availableH / Math.max(1, bounds.h)), 0.005, 12);
+    const cx = bounds.minX + bounds.w / 2;
+    const cy = bounds.minY + bounds.h / 2;
+    state.zoom = zoom;
+    state.panX = state.viewW / 2 - cx * zoom;
+    state.panY = padTop + availableH / 2 - cy * zoom;
+  }
+
+  async function enterPresentationMode() {
+    if (presentationState.active) return;
+    presentationState.active = true;
+    presentationState.blank = false;
+    presentationState.savedView = {
+      zoom: state.zoom,
+      panX: state.panX,
+      panY: state.panY,
+      tool: state.tool,
+      selection: [...(state.selection || [])],
+      selectionIndex: state.selectionIndex
+    };
+    hardResetGesture();
+    cancelPolyDraft();
+    state.selection = [];
+    state.selectionIndex = -1;
+    openSettings(false);
+    toggleColorPop(false);
+    document.body.classList.add("is-presenting");
+    presentationControls?.classList.remove("is-hidden");
+    presentationBlank?.classList.add("is-hidden");
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {}
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      resizeAll();
+      fitPresentationToContent();
+      redrawAll();
+    }));
+  }
+
+  function togglePresentationBlank() {
+    if (!presentationState.active) return;
+    presentationState.blank = !presentationState.blank;
+    presentationBlank?.classList.toggle("is-hidden", !presentationState.blank);
+    presentationBlank?.setAttribute("aria-hidden", presentationState.blank ? "false" : "true");
+    updatePresentationUI();
+  }
+
+  function exitPresentationMode() {
+    if (!presentationState.active) return;
+    presentationState.active = false;
+    presentationState.blank = false;
+    stopSvgPlayback(true);
+    document.body.classList.remove("is-presenting");
+    presentationControls?.classList.add("is-hidden");
+    presentationBlank?.classList.add("is-hidden");
+    const saved = presentationState.savedView;
+    presentationState.savedView = null;
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      resizeAll();
+      if (saved) {
+        state.zoom = saved.zoom;
+        state.panX = saved.panX;
+        state.panY = saved.panY;
+        state.selection = saved.selection || [];
+        state.selectionIndex = Number.isInteger(saved.selectionIndex) ? saved.selectionIndex : -1;
+        setActiveTool(saved.tool || "select");
+      }
+      redrawAll();
+    }));
+  }
+
+  function handlePresentationKey(e) {
+    if (!presentationState.active) {
+      if (e.key === "F5") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        enterPresentationMode();
+      }
+      return;
+    }
+    const key = e.key;
+    const next = key === "ArrowRight" || key === "PageDown" || key === "Enter" || key === " " || key === ".";
+    const prev = key === "ArrowLeft" || key === "PageUp" || key === ",";
+    const blank = key.toLowerCase() === "b";
+    const play = key.toLowerCase() === "t";
+    const exit = key === "Escape" || key === "F5";
+    if (!(next || prev || blank || play || exit)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (next) revealNextStep();
+    else if (prev) revealPrevStep();
+    else if (blank) togglePresentationBlank();
+    else if (play) toggleSvgPlayback();
+    else if (exit) exitPresentationMode();
+  }
+
   /* =========================
      Selection transforms
   ========================= */
@@ -3043,17 +3527,42 @@ function applyStyleToSelectionLive(patch = {}) {
     state.undo.push(JSON.stringify(snapshot()));
     state.redo.length = 0;
 
+    const groupIndices = selectedObjectIndices();
+    if (groupIndices.length > 1 && (kind === "move" || kind === "scale" || kind === "rotate")) {
+      const bounds = selectionWorldBounds(groupIndices);
+      if (!bounds) return false;
+      const cx = (bounds.minX + bounds.maxX) / 2;
+      const cy = (bounds.minY + bounds.maxY) / 2;
+      gesture.selIndex = idx;
+      gesture.selStartObj = null;
+      gesture.selStartItems = groupIndices.map(index => ({ index, obj: deepClone(state.objects[index]) }));
+      gesture.selAnchor = kind === "scale"
+        ? (oppositeCornerAnchor(bounds, detail?.corner) || { x: cx, y: cy })
+        : { x: cx, y: cy };
+      gesture.startWorld = w;
+      gesture.mode = kind === "move" ? "selMove" : kind === "scale" ? "selScale" : "selRotate";
+      if (kind === "rotate") gesture.selStartAngle = Math.atan2(w.y - cy, w.x - cx);
+      showToast(`${groupIndices.length} objects selected as one group`);
+      return true;
+    }
+
     gesture.selIndex = idx;
     gesture.selStartObj = deepClone(state.objects[idx]);
+    gesture.selStartItems = null;
 
-    const b = objectBounds(state.objects[idx]);
+    const b = tightObjectBounds(state.objects[idx]);
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
-    gesture.selAnchor = { x: cx, y: cy };
+    const shapeUsesOppositeCorner = kind === "scale"
+      && (state.objects[idx]?.kind === "rect" || state.objects[idx]?.kind === "circle")
+      && Math.abs(state.objects[idx]?.rot || 0) < 1e-9;
+    gesture.selAnchor = shapeUsesOppositeCorner
+      ? (oppositeCornerAnchor(b, detail?.corner) || { x: cx, y: cy })
+      : { x: cx, y: cy };
 
     if (kind === "perspectivePoint") {
       gesture.mode = "perspectivePoint";
-      gesture.perspectivePointName = detail || null;
+      gesture.perspectivePointName = detail?.point || detail || null;
       gesture.perspectivePointCluster = collectSharedPerspectivePointStarts(idx, detail || null);
       gesture.startWorld = w;
       gesture.snapCache = buildSnapCache(state.objects[idx]?._id);
@@ -3064,7 +3573,7 @@ function applyStyleToSelectionLive(patch = {}) {
       const obj = state.objects[idx];
       if (!obj || (obj.kind !== "line" && obj.kind !== "arrow")) return false;
       gesture.mode = "lineEndResize";
-      gesture.lineResizeEnd = detail && detail.endName ? detail.endName : "end";
+      gesture.lineResizeEnd = detail?.endName || "end";
       gesture.startWorld = w;
       gesture.snapCache = buildSnapCache(obj._id);
       showToast(gesture.lineResizeEnd === "start" ? "Drag line start" : "Drag line end");
@@ -3102,24 +3611,8 @@ function applyStyleToSelectionLive(patch = {}) {
 
   function beginToolTransformForSelectionOrBg(tool, w) {
     if (state.selectionIndex >= 0) {
-      state.undo.push(JSON.stringify(snapshot()));
-      state.redo.length = 0;
-      gesture.selIndex = state.selectionIndex;
-      gesture.selStartObj = deepClone(state.objects[state.selectionIndex]);
-
-      const b = objectBounds(state.objects[state.selectionIndex]);
-      const cx = (b.minX + b.maxX) / 2;
-      const cy = (b.minY + b.maxY) / 2;
-      gesture.selAnchor = { x: cx, y: cy };
-      gesture.startWorld = w;
-
-      if (tool === "bgMove") gesture.mode = "selMove";
-      if (tool === "bgScale") gesture.mode = "selScale";
-      if (tool === "bgRotate") {
-        gesture.mode = "selRotate";
-        gesture.selStartAngle = Math.atan2(w.y - cy, w.x - cx);
-      }
-      return true;
+      const kind = tool === "bgMove" ? "move" : tool === "bgScale" ? "scale" : "rotate";
+      return beginSelectionTransform(kind, w);
     }
     return beginBgTransform(tool, w);
   }
@@ -3619,8 +4112,7 @@ function onPointerDown(e) {
 if (state.tool === "select") {
   const handle = hitHandle(sx, sy);
   if (handle && !e.shiftKey) {
-    const detail = handle.kind === "perspectiveSource" ? handle : handle.point;
-    if (beginSelectionTransform(handle.kind, w, detail)) {
+    if (beginSelectionTransform(handle.kind, w, handle)) {
       redrawAll();
       return;
     }
@@ -3628,29 +4120,37 @@ if (state.tool === "select") {
 
   const hit = findHit(w.x, w.y);
 
-  if (e.shiftKey) {
-    if (hit >= 0) {
-      const i = state.selection.indexOf(hit);
-      if (i >= 0) state.selection.splice(i, 1);
-      else state.selection.push(hit);
-    }
-  } else {
-    state.selection = hit >= 0 ? [hit] : [];
+  if (e.shiftKey && hit >= 0) {
+    const i = state.selection.indexOf(hit);
+    if (i >= 0) state.selection.splice(i, 1);
+    else state.selection.push(hit);
+    state.selectionIndex = state.selection.length ? state.selection[state.selection.length - 1] : -1;
+    syncStyleControlsFromSelection();
+    redrawAll();
+    gesture.mode = "select";
+    return;
   }
 
-  state.selectionIndex = state.selection.length
-    ? state.selection[state.selection.length - 1]
-    : -1;
+  if (hit >= 0) {
+    const keepExistingGroup = state.selection.length > 1 && state.selection.includes(hit);
+    if (!keepExistingGroup) state.selection = [hit];
+    state.selectionIndex = keepExistingGroup ? hit : state.selection[state.selection.length - 1];
+    syncStyleControlsFromSelection();
+    redrawAll();
+    beginSelectionTransform("move", w);
+    return;
+  }
 
+  gesture.mode = "marqueeSelect";
+  gesture.marqueeStart = { ...w };
+  gesture.marqueeCurrent = { ...w };
+  gesture.marqueeBaseSelection = e.shiftKey ? [...state.selection] : [];
+  if (!e.shiftKey) {
+    state.selection = [];
+    state.selectionIndex = -1;
+  }
   syncStyleControlsFromSelection();
   redrawAll();
-
-  if (!e.shiftKey && hit >= 0) {
-    beginSelectionTransform("move", w);
-  } else {
-    gesture.mode = "select";
-  }
-
   return;
 }
 
@@ -3760,7 +4260,7 @@ if (state.tool === "select") {
         }
       }
 
-      const fillHeld = e.shiftKey;
+      const fillHeld = e.altKey;
 
       const obj = {
         kind: state.tool,
@@ -3816,6 +4316,12 @@ if (state.tool === "select") {
     }
 
     if (!gesture.active) return;
+
+    if (gesture.mode === "marqueeSelect") {
+      gesture.marqueeCurrent = { ...w };
+      redrawAll();
+      return;
+    }
 
     if (gesture.mode === "pan" && gesture.lastScreen) {
       const ddx = sx - (gesture.lastScreenPrev?.sx ?? gesture.startScreen.sx);
@@ -3900,6 +4406,60 @@ if (state.tool === "select") {
         redrawAll();
         return;
       }
+    }
+
+    if (gesture.mode === "selMove" && Array.isArray(gesture.selStartItems) && gesture.selStartItems.length && gesture.startWorld) {
+      const dx = w.x - gesture.startWorld.x;
+      const dy = w.y - gesture.startWorld.y;
+      for (const item of gesture.selStartItems) {
+        if (!state.objects[item.index]) continue;
+        const obj = deepClone(item.obj);
+        moveObject(obj, dx, dy);
+        state.objects[item.index] = obj;
+      }
+      updatePerspectiveLinks();
+      redrawAll();
+      return;
+    }
+
+    if (gesture.mode === "selScale" && Array.isArray(gesture.selStartItems) && gesture.selStartItems.length && gesture.selAnchor && gesture.startWorld) {
+      const ax = gesture.selAnchor.x, ay = gesture.selAnchor.y;
+      const v0 = { x: gesture.startWorld.x - ax, y: gesture.startWorld.y - ay };
+      const v1 = { x: w.x - ax, y: w.y - ay };
+      let fx = Math.abs(v0.x) < 0.001 ? 1 : v1.x / v0.x;
+      let fy = Math.abs(v0.y) < 0.001 ? 1 : v1.y / v0.y;
+      if (e.shiftKey) {
+        const f = (Math.hypot(v1.x, v1.y) || 1) / (Math.hypot(v0.x, v0.y) || 1);
+        fx = f;
+        fy = f;
+      }
+      for (const item of gesture.selStartItems) {
+        if (!state.objects[item.index]) continue;
+        const obj = deepClone(item.obj);
+        scaleObjectXY(obj, fx, fy, ax, ay);
+        state.objects[item.index] = obj;
+      }
+      updatePerspectiveLinks();
+      redrawAll();
+      return;
+    }
+
+    if (gesture.mode === "selRotate" && Array.isArray(gesture.selStartItems) && gesture.selStartItems.length && gesture.selAnchor) {
+      const ax = gesture.selAnchor.x, ay = gesture.selAnchor.y;
+      let delta = Math.atan2(w.y - ay, w.x - ax) - gesture.selStartAngle;
+      if (e.shiftKey) {
+        const step = (15 * Math.PI) / 180;
+        delta = Math.round(delta / step) * step;
+      }
+      for (const item of gesture.selStartItems) {
+        if (!state.objects[item.index]) continue;
+        const obj = deepClone(item.obj);
+        rotateObjectAroundAnchor(obj, delta, ax, ay);
+        state.objects[item.index] = obj;
+      }
+      updatePerspectiveLinks();
+      redrawAll();
+      return;
     }
 
     if (gesture.mode === "selMove" && gesture.selIndex >= 0 && gesture.selStartObj && gesture.startWorld) {
@@ -4092,7 +4652,7 @@ if (state.tool === "select") {
       }
       else if (k === "rect" || k === "circle") p2 = snapShapePoint(startPt, p2, bypassSnap);
 
-      if (k === "circle" && e.altKey) {
+      if ((k === "rect" || k === "circle") && e.shiftKey) {
         const dx = p2.x - startPt.x;
         const dy = p2.y - startPt.y;
         const sgnX = dx >= 0 ? 1 : -1;
@@ -4125,9 +4685,65 @@ if (state.tool === "select") {
     }
   }
 
+  function isDegenerateFinishedObject(obj) {
+    if (!obj) return false;
+    const zoom = Math.max(0.0001, Number(state.zoom) || 1);
+    const minPx = 3;
+
+    if (obj.kind === "line" || obj.kind === "arrow") {
+      return Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * zoom < minPx;
+    }
+    if (obj.kind === "rect" || obj.kind === "circle") {
+      return Math.abs(obj.x2 - obj.x1) * zoom < minPx || Math.abs(obj.y2 - obj.y1) * zoom < minPx;
+    }
+    if (obj.kind === "arc") {
+      const span = Math.abs((obj.a2 || 0) - (obj.a1 || 0));
+      return span * Math.max(0, Number(obj.r) || 0) * zoom < minPx;
+    }
+    return false;
+  }
+
   function onPointerUp() {
     if (!gesture.active) return;
+
+    if (gesture.mode === "marqueeSelect" && gesture.marqueeStart && gesture.marqueeCurrent) {
+      const a = gesture.marqueeStart;
+      const b = gesture.marqueeCurrent;
+      const box = { minX: Math.min(a.x, b.x), minY: Math.min(a.y, b.y), maxX: Math.max(a.x, b.x), maxY: Math.max(a.y, b.y) };
+      const picked = [];
+      for (let i = 0; i < state.objects.length; i++) {
+        const obj = state.objects[i];
+        if (!obj || obj.hidden) continue;
+        const ob = objectBounds(obj);
+        if (ob && ob.maxX >= box.minX && ob.minX <= box.maxX && ob.maxY >= box.minY && ob.minY <= box.maxY) picked.push(i);
+      }
+      const base = Array.isArray(gesture.marqueeBaseSelection) ? gesture.marqueeBaseSelection : [];
+      state.selection = [...new Set([...base, ...picked])];
+      state.selectionIndex = state.selection.length ? state.selection[state.selection.length - 1] : -1;
+      try { inkCanvas.releasePointerCapture(gesture.pointerId); } catch {}
+      const count = state.selection.length;
+      hardResetGesture();
+      syncStyleControlsFromSelection();
+      redrawAll();
+      if (count > 1) showToast(`${count} objects selected as one group`);
+      else if (count === 1) showToast("1 object selected");
+      return;
+    }
+
     const finishedObj = gesture.activeObj;
+
+    if (isDegenerateFinishedObject(finishedObj)) {
+      const idx = state.objects.indexOf(finishedObj);
+      if (idx >= 0) state.objects.splice(idx, 1);
+      if (state.undo.length) state.undo.pop();
+      try { inkCanvas.releasePointerCapture(gesture.pointerId); } catch {}
+      hardResetGesture();
+      updateCursorFromTool();
+      redrawAll();
+      showToast("Drag to draw a visible shape");
+      return;
+    }
+
     const beforeIds = new Set(state.objects.map(o => o && o._id).filter(Boolean));
     let addedPerspectiveHelper = false;
     if (finishedObj && (finishedObj.kind === "line" || finishedObj.kind === "arrow")) {
@@ -4776,7 +5392,51 @@ state.selection = [];
   bindBackgroundInput(bgFile, clearBgBtn);
   bindBoards(newBoardBtn, saveBoardBtn, loadBoardBtn, deleteBoardBtn, deleteAllBoardsBtn);
   bindSvgInput(svgInkFile, clearSvgInkBtn);
-  bindExport(exportBtn, exportSvgBtn, printBtn);
+  bindSvgInput(quickSvgInkFile, null, () => {
+    setTimeout(() => enterPresentationMode(), 0);
+  });
+  bindExport(exportBtn, exportSvgBtn, printBtn, printFitBtn);
+  bindProjectFiles();
+  bindBoardManager();
+  bindAutosave();
+
+  shapeSizeBtn?.setAttribute("aria-expanded", "false");
+  shapeSizeBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    openShapeSizePanel(shapeSizePanel?.classList.contains("is-hidden"));
+  });
+  shapeSizeCloseBtn?.addEventListener("click", () => openShapeSizePanel(false));
+  shapeTypeSelect?.addEventListener("change", () => updateShapeSizeForm());
+  shapeWidthInput?.addEventListener("input", () => {
+    if (shapeTypeSelect?.value === "square" || shapeTypeSelect?.value === "circle") {
+      if (shapeHeightInput) shapeHeightInput.value = shapeWidthInput.value;
+    }
+  });
+  shapeSizeApplyBtn?.addEventListener("click", applyExactShapeSize);
+  shapeSizeCreateBtn?.addEventListener("click", createExactShape);
+  shapeSizePanel?.addEventListener("pointerdown", e => e.stopPropagation());
+  document.addEventListener("pointerdown", e => {
+    if (!shapeSizePanel || shapeSizePanel.classList.contains("is-hidden")) return;
+    if (!shapeSizePanel.contains(e.target) && !shapeSizeBtn?.contains(e.target)) openShapeSizePanel(false);
+  });
+  window.addEventListener("resize", positionShapeSizePanel);
+  document.addEventListener("keydown", e => {
+    const active = document.activeElement;
+    const typing = active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
+    if (e.key === "Escape" && !shapeSizePanel?.classList.contains("is-hidden")) {
+      e.preventDefault();
+      openShapeSizePanel(false);
+      return;
+    }
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "d" || e.key === "D")) {
+      e.preventDefault();
+      openShapeSizePanel(true);
+    }
+  });
+
+  document.querySelectorAll("#advancedTools .dockBtn").forEach(btn => {
+    btn.addEventListener("click", () => openSettings(false));
+  });
 
   hideSelectedBtn?.addEventListener("click", hideSelectedObjects);
   unhideAllBtn?.addEventListener("click", unhideAllObjects);
@@ -4790,6 +5450,17 @@ state.selection = [];
   visibilityNextPanelBtn?.addEventListener("click", revealNextStep);
   visibilityPlayPanelBtn?.addEventListener("click", toggleSvgPlayback);
   visibilityTimingPanelBtn?.addEventListener("click", configureSvgPlayback);
+  presentationBtn?.addEventListener("click", enterPresentationMode);
+  presentationPanelBtn?.addEventListener("click", enterPresentationMode);
+  presentationPrevBtn?.addEventListener("click", revealPrevStep);
+  presentationNextBtn?.addEventListener("click", revealNextStep);
+  presentationPlayBtn?.addEventListener("click", toggleSvgPlayback);
+  presentationBlankBtn?.addEventListener("click", togglePresentationBlank);
+  presentationExitBtn?.addEventListener("click", exitPresentationMode);
+  document.addEventListener("keydown", handlePresentationKey, true);
+  document.addEventListener("fullscreenchange", () => {
+    if (presentationState.active && !document.fullscreenElement) exitPresentationMode();
+  });
 
   clearBtn?.addEventListener("click", () => {
     state.undo.push(JSON.stringify(snapshot()));
@@ -4863,8 +5534,17 @@ opacityRange?.addEventListener("change", () => {
   setBrushSize(value);
 
   if (state.selectionIndex >= 0) {
+    if (!styleEditSnapshotTaken) {
+      state.undo.push(JSON.stringify(snapshot()));
+      state.redo.length = 0;
+      styleEditSnapshotTaken = true;
+    }
     applyStyleToSelectionLive({ size: value });
   }
+});
+
+brushSize?.addEventListener("change", () => {
+  styleEditSnapshotTaken = false;
 });
 
 lineStyleSolid?.addEventListener("click", () => applyLineStylePreset("solid"));
@@ -4946,6 +5626,14 @@ lineStyleCenter?.addEventListener("click", () => applyLineStylePreset("center"))
     showToast("Scale reset");
   });
 
+  window.PHSWhiteboard = Object.freeze({
+    version: "11.1-exact-shape-size",
+    getSnapshot: () => deepClone(snapshot()),
+    getSelection: () => [...(state.selection || [])],
+    getPresentationState: () => ({ active: presentationState.active, blank: presentationState.blank }),
+    loadSnapshot: data => applySnapshot(deepClone(data || {}), { startRevealAtZero: false })
+  });
+
   /* =========================
      Init
   ========================= */
@@ -4957,7 +5645,7 @@ lineStyleCenter?.addEventListener("click", () => applyLineStylePreset("center"))
     syncLinePresetInputs();
     setActiveTool("pen");
     updateScaleOut();
-    refreshBoardSelect();
+    void refreshBoardSelect();
     resizeAll();
 
     requestAnimationFrame(() => {
@@ -4966,6 +5654,7 @@ lineStyleCenter?.addEventListener("click", () => applyLineStylePreset("center"))
       state.panX = state.viewW / 2;
       state.panY = state.viewH / 2;
       redrawAll();
+      startAutosave();
     });
   }
 

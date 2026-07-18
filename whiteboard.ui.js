@@ -167,6 +167,7 @@ window.WBUI = (() => {
       if (!colorPop) return;
       const shouldOpen = open ?? colorPop.classList.contains("is-hidden");
       colorPop.classList.toggle("is-hidden", !shouldOpen);
+      colorBtn?.setAttribute("aria-expanded", String(shouldOpen));
       if (shouldOpen) requestAnimationFrame(positionColorPop);
     }
 
@@ -210,6 +211,9 @@ window.WBUI = (() => {
     }
 
     const TOOL_HINTS = {
+      select: "Select: drag around several items to make one group. Drag inside the green box to move the group; use its corner handles to resize it.",
+      rect: "Rectangle: drag to size. Hold Shift for a square; select it and drag any corner to change width and height.",
+      circle: "Circle or ellipse: drag to size. Hold Shift for a perfect circle; select it and drag any corner to change width and height.",
       line: "Line: snap to endpoints/intersections. Start from a corner and draw toward or directly away from a red VP to link perspective. Select a finished line to drag its endpoint handles.",
       arrow: "Arrow: same snapping/linking as Line, with an arrow head.",
       polyFill: "PolyFill: click 3+ corners, then Enter, double-click, right-click, or click near the first point to fill.",
@@ -292,6 +296,10 @@ window.WBUI = (() => {
     }
 
     function bindUI() {
+      document.querySelectorAll("button[title]").forEach(btn => {
+        if (!btn.hasAttribute("aria-label")) btn.setAttribute("aria-label", btn.getAttribute("title") || "Button");
+      });
+
       colorBtn?.addEventListener("click", e => {
         e.stopPropagation();
         toggleColorPop();

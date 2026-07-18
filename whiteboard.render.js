@@ -8,6 +8,7 @@ window.WBRender = (() => {
   function createRenderApi(ctx) {
     const {
       state,
+      gesture,
       stage,
       bgLayer,
       bgImg,
@@ -224,12 +225,18 @@ window.WBRender = (() => {
 
         inkCtx.beginPath();
         const pts = obj.points || obj.pts || [];
-        if (obj.kind === "curve") drawSmoothCurvePath(inkCtx, pts);
-        else if (pts.length) {
-          inkCtx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) inkCtx.lineTo(pts[i].x, pts[i].y);
+        if ((obj.kind === "stroke" || obj.kind === "erase") && pts.length === 1) {
+          inkCtx.fillStyle = obj.kind === "erase" ? "rgba(0,0,0,1)" : obj.color;
+          inkCtx.arc(pts[0].x, pts[0].y, Math.max(0.5, Number(obj.size || 1) / 2), 0, Math.PI * 2);
+          inkCtx.fill();
+        } else {
+          if (obj.kind === "curve") drawSmoothCurvePath(inkCtx, pts);
+          else if (pts.length) {
+            inkCtx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) inkCtx.lineTo(pts[i].x, pts[i].y);
+          }
+          inkCtx.stroke();
         }
-        inkCtx.stroke();
         inkCtx.restore();
         return;
       }
@@ -446,31 +453,23 @@ window.WBRender = (() => {
         uiCtx.restore();
       }
 
-       if (state.tool === "select" && state.selection && state.selection.length) {
-  uiCtx.save();
-  uiCtx.setLineDash([8, 6]);
-  uiCtx.lineWidth = 2;
-  uiCtx.strokeStyle = "rgba(0, 120, 255, 0.9)";
-
-  for (const idx of state.selection) {
-    if (idx === state.selectionIndex) continue; // main one already has handles
-    const obj = state.objects[idx];
-    if (!obj) continue;
-
-    const b = objectBounds(obj);
-    const p1 = worldToScreen(b.minX, b.minY);
-    const p2 = worldToScreen(b.maxX, b.maxY);
-
-    const x = Math.min(p1.x, p2.x);
-    const y = Math.min(p1.y, p2.y);
-    const w = Math.abs(p2.x - p1.x);
-    const h = Math.abs(p2.y - p1.y);
-
-    uiCtx.strokeRect(x, y, w, h);
-  }
-
-  uiCtx.restore();
-}
+      if (state.tool === "select" && gesture?.mode === "marqueeSelect" && gesture.marqueeStart && gesture.marqueeCurrent) {
+        const a = worldToScreen(gesture.marqueeStart.x, gesture.marqueeStart.y);
+        const b = worldToScreen(gesture.marqueeCurrent.x, gesture.marqueeCurrent.y);
+        const x = Math.min(a.x, b.x);
+        const y = Math.min(a.y, b.y);
+        const w = Math.abs(b.x - a.x);
+        const h = Math.abs(b.y - a.y);
+        uiCtx.save();
+        uiCtx.setTransform(pr, 0, 0, pr, 0, 0);
+        uiCtx.setLineDash([7, 5]);
+        uiCtx.lineWidth = 2;
+        uiCtx.strokeStyle = "rgba(0, 120, 255, 0.9)";
+        uiCtx.fillStyle = "rgba(0, 120, 255, 0.08)";
+        uiCtx.fillRect(x, y, w, h);
+        uiCtx.strokeRect(x, y, w, h);
+        uiCtx.restore();
+      }
 
       if (state.tool === "polyFill" && polyDraft.active && polyDraft.pts.length) {
         uiCtx.save();

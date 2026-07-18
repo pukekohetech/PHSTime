@@ -418,6 +418,7 @@ window.WBGeometry = (() => {
 
       if (obj.kind === "stroke" || obj.kind === "erase" || obj.kind === "curve") {
         const pts = obj.points || obj.pts || [];
+        if (pts.length === 1) return Math.hypot(wx - pts[0].x, wy - pts[0].y) <= tol;
         for (let i = 1; i < pts.length; i++) {
           if (distToSeg(wx, wy, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) <= tol) return true;
         }
