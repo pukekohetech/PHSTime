@@ -214,6 +214,7 @@ window.WBUI = (() => {
       select: "Select: drag around several items to make one group. Drag inside the green box to move the group; use its corner handles to resize it.",
       rect: "Rectangle: drag to size. Hold Shift for a square; select it and drag any corner to change width and height.",
       circle: "Circle or ellipse: drag to size. Hold Shift for a perfect circle; select it and drag any corner to change width and height.",
+      regularShape: "Polygon or star: choose sides or points in the mm panel, then drag to size. Hold Shift for equal width and height; Alt draws it filled.",
       line: "Line: snap to endpoints/intersections. Start from a corner and draw toward or directly away from a red VP to link perspective. Select a finished line to drag its endpoint handles.",
       arrow: "Arrow: same snapping/linking as Line, with an arrow head.",
       polyFill: "PolyFill: click 3+ corners, then Enter, double-click, right-click, or click near the first point to fill.",

@@ -40,6 +40,7 @@ window.WBIO = (() => {
       screenToWorld,
       pointOnArc,
       rectEdges,
+      regularShapePoints,
       exportWorldBounds,
       ensureObjId,
       ensureRevealId,
@@ -80,6 +81,7 @@ window.WBIO = (() => {
         opacity: state.opacity,
         lineStyle: state.lineStyle || "solid",
         linePresetMap: JSON.parse(JSON.stringify(state.linePresetMap || {})),
+        regularShapeSettings: JSON.parse(JSON.stringify(state.regularShapeSettings || { shapeType: "polygon", sides: 6, innerRatio: 0.45, filled: false })),
         zoom: state.zoom,
         panX: state.panX,
         panY: state.panY,
@@ -109,6 +111,14 @@ window.WBIO = (() => {
         hidden: { color: "#1976d2", size: 10 },
         center: { color: "#d32f2f", size: 10 },
         ...(snap.linePresetMap || {})
+      };
+
+      const savedRegularShapeType = snap.regularShapeSettings?.shapeType === "star" ? "star" : "polygon";
+      state.regularShapeSettings = {
+        shapeType: savedRegularShapeType,
+        sides: Math.max(savedRegularShapeType === "star" ? 4 : 3, Math.min(20, Math.round(Number(snap.regularShapeSettings?.sides) || (savedRegularShapeType === "star" ? 5 : 6)))),
+        innerRatio: Math.max(0.15, Math.min(0.85, Number(snap.regularShapeSettings?.innerRatio) || 0.45)),
+        filled: !!snap.regularShapeSettings?.filled
       };
 
       state.zoom = Number(snap.zoom || 1);
@@ -310,9 +320,9 @@ function performRedo() {
       storageBackend = "memory";
       if (!storageWarningShown) {
         storageWarningShown = true;
-        showToast("Browser storage is unavailable — use Download editable project to keep this board");
+        showToast("Persistent browser storage is unavailable — this board is saved for this session; download an editable project for a permanent copy");
       }
-      return false;
+      return true;
     }
 
     async function deleteStorageRecord(recordKey, legacyKey) {
@@ -456,8 +466,9 @@ function performRedo() {
       return true;
     }
 
-    function buildExportSvgDocument() {
-      const bounds = exportWorldBounds();
+    function buildExportSvgDocument(options = {}) {
+      const includeHidden = !!options.includeHidden;
+      const bounds = exportWorldBounds({ includeHidden });
       if (!bounds) return null;
 
       const W = bounds.w;
@@ -520,7 +531,7 @@ const exportObjects = [
 
 
       for (const obj of exportObjects) {
-        if (!obj || obj.hidden) continue;
+        if (!obj || (!includeHidden && obj.hidden)) continue;
         const op = obj.opacity ?? 1;
 
         if (obj.kind === "erase") {
@@ -570,6 +581,17 @@ const exportObjects = [
             .map(p => `${(p.x + offsetX).toFixed(2)},${(p.y + offsetY).toFixed(2)}`)
             .join(" ");
           currentLayer += `<polygon points="${pts}" fill="${obj.fill || obj.color}" fill-opacity="${op}" stroke="none" />`;
+          continue;
+        }
+
+        if (obj.kind === "regularShape") {
+          const pts = regularShapePoints(obj)
+            .map(p => `${(p.x + offsetX).toFixed(4)},${(p.y + offsetY).toFixed(4)}`)
+            .join(" ");
+          const fillAttr = obj.filled ? (obj.fillColor || obj.color || "#111111") : "none";
+          const strokeAttr = obj.strokeVisible === false ? "none" : (obj.color || "#111111");
+          const dashAttr = svgDashArray(obj.lineStyle || "solid", obj.size || 2);
+          currentLayer += `<polygon points="${pts}" fill="${fillAttr}" fill-opacity="${op}" stroke="${strokeAttr}" stroke-opacity="${op}" stroke-width="${obj.size || 2}" stroke-linejoin="round"${dashAttr ? ` stroke-dasharray="${dashAttr}"` : ""} data-phs-kind="regularShape" data-phs-shape-type="${obj.shapeType === "star" ? "star" : "polygon"}" data-phs-sides="${Math.round(Number(obj.sides) || 6)}" data-phs-inner-ratio="${Number(obj.innerRatio || 0.45)}" data-phs-x1="${(obj.x1 + offsetX).toFixed(3)}" data-phs-y1="${(obj.y1 + offsetY).toFixed(3)}" data-phs-x2="${(obj.x2 + offsetX).toFixed(3)}" data-phs-y2="${(obj.y2 + offsetY).toFixed(3)}" data-phs-rot="${Number(obj.rot || 0)}" />`;
           continue;
         }
 
@@ -719,20 +741,62 @@ const exportObjects = [
       return { svg, W, H, bounds };
     }
 
-    function exportSVG() {
-      const doc = buildExportSvgDocument();
-      if (!doc) {
-        showToast("Nothing to export");
-        return;
-      }
+    function safeDownloadName(value, fallback = "whiteboard") {
+      const clean = String(value || "")
+        .trim()
+        .replace(/[\/:*?"<>|]+/g, "-")
+        .replace(/\s+/g, " ")
+        .replace(/[. ]+$/g, "")
+        .slice(0, 80);
+      return clean || fallback;
+    }
 
-      const blob = new Blob([doc.svg], { type: "image/svg+xml" });
+    function triggerBlobDownload(blob, filename) {
+      if (!(blob instanceof Blob)) throw new TypeError("A Blob is required for download");
+
+      // Appending the link before clicking is required by Safari and is more
+      // dependable in managed Chrome/Edge environments than clicking a
+      // detached element.
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.download = `whiteboard-${new Date().toISOString().slice(0, 10)}.svg`;
       a.href = url;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      a.download = filename;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+
+      try {
+        a.click();
+      } finally {
+        a.remove();
+        // Keep the object URL alive long enough for the browser download
+        // service to take ownership of it.
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
+    }
+
+    function exportSVG() {
+      try {
+        // A downloadable presentation must contain every reveal step, not
+        // only the objects currently visible on screen. The editable metadata
+        // still preserves which steps were hidden when the file was saved.
+        const doc = buildExportSvgDocument({ includeHidden: true });
+        if (!doc) {
+          showToast("Nothing to export");
+          return false;
+        }
+
+        const title = safeDownloadName(state.title || titleInput?.value, "whiteboard");
+        const date = new Date().toISOString().slice(0, 10);
+        const blob = new Blob(["\uFEFF", doc.svg], { type: "image/svg+xml;charset=utf-8" });
+        triggerBlobDownload(blob, `${title}-${date}.svg`);
+        showToast("SVG download started");
+        return true;
+      } catch (err) {
+        console.error("SVG export failed", err);
+        showToast("SVG download failed");
+        return false;
+      }
     }
 
     const EXPORT_MAX_RASTER_DIM = 8192;
@@ -1232,6 +1296,38 @@ const exportObjects = [
           const hasFill = !isNone(fillAttr);
           const hasStroke = !isNone(stroke);
 
+          if (tag === "polygon" && el.getAttribute("data-phs-kind") === "regularShape") {
+            const rawX1 = parseNumberAttr(el.getAttribute("data-phs-x1"));
+            const rawY1 = parseNumberAttr(el.getAttribute("data-phs-y1"));
+            const rawX2 = parseNumberAttr(el.getAttribute("data-phs-x2"));
+            const rawY2 = parseNumberAttr(el.getAttribute("data-phs-y2"));
+            const a = rawX1 != null && rawY1 != null ? mapCTM(el, rawX1, rawY1) : null;
+            const b = rawX2 != null && rawY2 != null ? mapCTM(el, rawX2, rawY2) : null;
+            const pb = pts.reduce((acc, p) => ({
+              minX: Math.min(acc.minX, p.x), minY: Math.min(acc.minY, p.y),
+              maxX: Math.max(acc.maxX, p.x), maxY: Math.max(acc.maxY, p.y)
+            }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+            parts.push({
+              kind: "regularShape",
+              shapeType: el.getAttribute("data-phs-shape-type") === "star" ? "star" : "polygon",
+              sides: Math.max(3, Math.min(20, Math.round(Number(el.getAttribute("data-phs-sides")) || 6))),
+              innerRatio: Math.max(0.15, Math.min(0.85, Number(el.getAttribute("data-phs-inner-ratio")) || 0.45)),
+              color: hasStroke ? stroke : (fillAttr || color),
+              opacity,
+              size: hasStroke ? size : 1,
+              lineStyle: hasStroke ? lineStyle : "solid",
+              filled: hasFill,
+              fillColor: hasFill ? fillAttr : undefined,
+              strokeVisible: hasStroke,
+              x1: a ? a.x : pb.minX,
+              y1: a ? a.y : pb.minY,
+              x2: b ? b.x : pb.maxX,
+              y2: b ? b.y : pb.maxY,
+              rot: Number(el.getAttribute("data-phs-rot")) || 0
+            });
+            continue;
+          }
+
           if (tag === "polygon" && hasFill && !hasStroke) {
             parts.push({
               kind: "polyFill",
@@ -1412,15 +1508,8 @@ redoBtn?.addEventListener("click", performRedo);
     }
 
     function downloadBlob(filename, contents, type = "application/json") {
-      const blob = new Blob([contents], { type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const blob = contents instanceof Blob ? contents : new Blob([contents], { type });
+      triggerBlobDownload(blob, filename);
     }
 
     function projectPayload(boardData, name = "") {
@@ -1498,6 +1587,23 @@ redoBtn?.addEventListener("click", performRedo);
         const board = snapshot();
         const fingerprint = JSON.stringify(board);
         if (!force && fingerprint === autosaveLastFingerprint) return false;
+
+        // A newly cleared board should not immediately replace the user's last
+        // useful recovery copy. Keep the previous autosave until the user adds
+        // new content, a title, or a background to the fresh board.
+        const isBlankBoard = !board.title && !board.bg?.src && (!Array.isArray(board.objects) || board.objects.length === 0);
+        if (!force && isBlankBoard) {
+          autosaveLastFingerprint = fingerprint;
+          const previous = await autosaveRecord();
+          if (previous?.savedAt && previous?.board) {
+            const when = new Date(previous.savedAt);
+            await updateAutosaveUI(`Blank board — previous recovery copy kept from ${when.toLocaleString()}.`);
+          } else {
+            await updateAutosaveUI(`Autosave is ready • storage: ${storageBackend}.`);
+          }
+          return false;
+        }
+
         const record = { v: 2, savedAt: new Date().toISOString(), board };
         const ok = await writeStorageRecord(AUTOSAVE_RECORD_KEY, AUTOSAVE_KEY, record);
         if (!ok) {

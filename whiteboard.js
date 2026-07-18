@@ -9,7 +9,7 @@
    - whiteboard.ui.js
 
    Keeps:
-   - pen / eraser / line / rect / circle / arc / arrow / text / polyFill / curve
+   - pen / eraser / line / rect / circle / regular polygon / star / arc / arrow / text / polyFill / curve
    - selection move / scale / rotate
    - background move / scale / rotate
    - SVG reveal + playback
@@ -76,7 +76,6 @@ const redoBtn = document.getElementById("redoBtn");
   const opacityRange = document.getElementById("opacityRange");
   const opacityOut = document.getElementById("opacityOut");
 
-  const shapeSizeBtn = document.getElementById("shapeSizeBtn");
   const shapeSizePanel = document.getElementById("shapeSizePanel");
   const shapeSizeCloseBtn = document.getElementById("shapeSizeCloseBtn");
   const shapeTypeSelect = document.getElementById("shapeTypeSelect");
@@ -88,6 +87,11 @@ const redoBtn = document.getElementById("redoBtn");
   const shapeSizeSelectionNote = document.getElementById("shapeSizeSelectionNote");
   const shapeSizeApplyBtn = document.getElementById("shapeSizeApplyBtn");
   const shapeSizeCreateBtn = document.getElementById("shapeSizeCreateBtn");
+  const regularShapeToolBtn = document.getElementById("regularShapeToolBtn");
+  const shapeRegularOptions = document.getElementById("shapeRegularOptions");
+  const shapeSidesInput = document.getElementById("shapeSidesInput");
+  const shapeSidesLabel = document.getElementById("shapeSidesLabel");
+  const shapeFilledInput = document.getElementById("shapeFilledInput");
 
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsPanel = document.getElementById("settingsPanel");
@@ -155,6 +159,7 @@ const redoBtn = document.getElementById("redoBtn");
       hidden: { color: "#1976d2", size: 10 },
       center: { color: "#d32f2f", size: 10 }
     },
+    regularShapeSettings: { shapeType: "polygon", sides: 6, innerRatio: 0.45, filled: false },
 
     pixelRatio: 1,
 
@@ -735,10 +740,11 @@ function cutSelection() {
   const {
     getLineDash,
     svgDashArray,
-    detectLineStyleFromDashArray
+    detectLineStyleFromDashArray,
+    regularShapePoints
   } = window.WBShared || {};
 
-  if (!getLineDash || !svgDashArray || !detectLineStyleFromDashArray) {
+  if (!getLineDash || !svgDashArray || !detectLineStyleFromDashArray || !regularShapePoints) {
     console.error("WBShared helpers missing. Make sure whiteboard.shared.js loads before whiteboard.js.");
   }
 
@@ -763,7 +769,7 @@ function cutSelection() {
     if (indices.length !== 1) return null;
     const index = indices[0];
     const obj = state.objects[index];
-    if (!obj || (obj.kind !== "rect" && obj.kind !== "circle")) return null;
+    if (!obj || !["rect", "circle", "regularShape"].includes(obj.kind)) return null;
     return { index, obj };
   }
 
@@ -777,44 +783,68 @@ function cutSelection() {
   }
 
   function shapeFormKind() {
-    return shapeTypeSelect?.value === "oval" || shapeTypeSelect?.value === "circle" ? "circle" : "rect";
+    const type = shapeTypeSelect?.value || "rect";
+    if (type === "polygon" || type === "star") return "regularShape";
+    return type === "oval" ? "circle" : "rect";
   }
 
   function shapeFormDimensions() {
     const type = shapeTypeSelect?.value || "rect";
     const width = Number.parseFloat(shapeWidthInput?.value || "");
     const rawHeight = Number.parseFloat(shapeHeightInput?.value || "");
-    const height = type === "square" || type === "circle" ? width : rawHeight;
+    const height = type === "polygon" || type === "star" ? width : rawHeight;
     if (!Number.isFinite(width) || width <= 0 || width > 10000) return null;
     if (!Number.isFinite(height) || height <= 0 || height > 10000) return null;
-    return { width, height, type, kind: shapeFormKind() };
+    const regular = type === "polygon" || type === "star";
+    const minimum = type === "star" ? 4 : 3;
+    const sides = regular ? Math.max(minimum, Math.min(20, Math.round(Number(shapeSidesInput?.value) || (type === "star" ? 5 : 6)))) : null;
+    return { width, height, type, kind: shapeFormKind(), sides, filled: regular ? !!shapeFilledInput?.checked : false };
   }
 
   function describeShapeType(type) {
-    return ({ rect: "rectangle", square: "square", oval: "oval", circle: "circle" })[type] || "shape";
+    return ({ rect: "rectangle", oval: "oval", polygon: "polygon", star: "star" })[type] || "shape";
   }
 
-  function updateShapeSizeForm({ prefillSelected = false } = {}) {
+  function updateShapeSizeForm({ prefillSelected = false, syncFromTool = false } = {}) {
     if (!shapeTypeSelect || !shapeWidthInput || !shapeHeightInput) return;
     const selected = selectedSingleShape();
 
     if (prefillSelected && selected) {
       const dims = shapeDimensionsMm(selected.obj);
-      const equal = Math.abs(dims.width - dims.height) <= 0.5;
-      shapeTypeSelect.value = selected.obj.kind === "rect"
-        ? (equal ? "square" : "rect")
-        : (equal ? "circle" : "oval");
-      shapeWidthInput.value = String(Math.max(1, Math.round(dims.width * 10) / 10));
-      shapeHeightInput.value = String(Math.max(1, Math.round(dims.height * 10) / 10));
-    } else if (!selected) {
-      if (state.tool === "circle" && !["oval", "circle"].includes(shapeTypeSelect.value)) shapeTypeSelect.value = "circle";
-      if (state.tool === "rect" && !["rect", "square"].includes(shapeTypeSelect.value)) shapeTypeSelect.value = "rect";
+      if (selected.obj.kind === "rect") shapeTypeSelect.value = "rect";
+      else if (selected.obj.kind === "circle") shapeTypeSelect.value = "oval";
+      else shapeTypeSelect.value = selected.obj.shapeType === "star" ? "star" : "polygon";
+      const regularSize = selected.obj.kind === "regularShape" ? Math.max(dims.width, dims.height) : null;
+      shapeWidthInput.value = String(Math.max(1, Math.round((regularSize ?? dims.width) * 10) / 10));
+      shapeHeightInput.value = String(Math.max(1, Math.round((regularSize ?? dims.height) * 10) / 10));
+      if (selected.obj.kind === "regularShape") {
+        if (shapeSidesInput) shapeSidesInput.value = String(Math.round(Number(selected.obj.sides) || (selected.obj.shapeType === "star" ? 5 : 6)));
+        if (shapeFilledInput) shapeFilledInput.checked = !!selected.obj.filled;
+      }
+    } else if (!selected && syncFromTool) {
+      if (state.tool === "circle") shapeTypeSelect.value = "oval";
+      else if (state.tool === "rect") shapeTypeSelect.value = "rect";
+      else if (state.tool === "regularShape") {
+        shapeTypeSelect.value = state.regularShapeSettings?.shapeType === "star" ? "star" : "polygon";
+        if (shapeSidesInput) shapeSidesInput.value = String(state.regularShapeSettings?.sides || 6);
+        if (shapeFilledInput) shapeFilledInput.checked = !!state.regularShapeSettings?.filled;
+      }
     }
 
     const type = shapeTypeSelect.value;
-    const oneDimension = type === "square" || type === "circle";
+    const oneDimension = type === "polygon" || type === "star";
+    const regular = type === "polygon" || type === "star";
     shapeHeightRow?.classList.toggle("is-hidden", oneDimension);
-    if (shapeWidthLabel) shapeWidthLabel.textContent = type === "square" ? "Side" : type === "circle" ? "Diameter" : "Width";
+    shapeRegularOptions?.classList.toggle("is-hidden", !regular);
+    if (shapeSidesLabel) shapeSidesLabel.textContent = type === "star" ? "Points" : "Sides";
+    if (shapeSidesInput) {
+      shapeSidesInput.min = type === "star" ? "4" : "3";
+      const min = Number(shapeSidesInput.min);
+      const fallback = type === "star" ? 5 : 6;
+      const current = Math.round(Number(shapeSidesInput.value) || fallback);
+      shapeSidesInput.value = String(Math.max(min, Math.min(20, current)));
+    }
+    if (shapeWidthLabel) shapeWidthLabel.textContent = (type === "polygon" || type === "star") ? "Across corners" : "Width";
     if (shapeHeightLabel) shapeHeightLabel.textContent = "Height";
     if (oneDimension && shapeHeightInput) shapeHeightInput.value = shapeWidthInput.value;
 
@@ -825,20 +855,32 @@ function cutSelection() {
 
     if (!shapeSizeSelectionNote) return;
     if (!selected) {
-      shapeSizeSelectionNote.textContent = "No single rectangle or oval is selected. Create places the new shape in the centre of the board.";
+      shapeSizeSelectionNote.textContent = "No single shape is selected. Create places the new shape in the centre of the board.";
     } else {
       const dims = shapeDimensionsMm(selected.obj);
-      const name = selected.obj.kind === "rect" ? "rectangle" : "oval";
+      const name = selected.obj.kind === "rect" ? "rectangle" : selected.obj.kind === "circle" ? "oval" : (selected.obj.shapeType === "star" ? "star" : "polygon");
       const sizeText = `${Math.round(dims.width * 10) / 10} × ${Math.round(dims.height * 10) / 10} mm`;
       shapeSizeSelectionNote.textContent = canApply
         ? `Selected ${name}: ${sizeText}. Apply keeps its centre and rotation.`
-        : `Selected ${name}: ${sizeText}. Choose a matching rectangle/square or oval/circle option to apply; otherwise create a new shape.`;
+        : `Selected ${name}: ${sizeText}. Choose a matching shape option to apply; otherwise create a new shape.`;
     }
   }
 
+  function syncRegularShapeSettingsFromForm() {
+    const type = shapeTypeSelect?.value;
+    if (type !== "polygon" && type !== "star") return;
+    const minimum = type === "star" ? 4 : 3;
+    state.regularShapeSettings = {
+      shapeType: type,
+      sides: Math.max(minimum, Math.min(20, Math.round(Number(shapeSidesInput?.value) || (type === "star" ? 5 : 6)))),
+      innerRatio: 0.45,
+      filled: !!shapeFilledInput?.checked
+    };
+  }
+
   function positionShapeSizePanel() {
-    if (!shapeSizePanel || !shapeSizeBtn || shapeSizePanel.classList.contains("is-hidden")) return;
-    const r = shapeSizeBtn.getBoundingClientRect();
+    if (!shapeSizePanel || !regularShapeToolBtn || shapeSizePanel.classList.contains("is-hidden")) return;
+    const r = regularShapeToolBtn.getBoundingClientRect();
     const gap = 10;
     const panelW = shapeSizePanel.offsetWidth || 330;
     const panelH = shapeSizePanel.offsetHeight || 300;
@@ -852,9 +894,9 @@ function cutSelection() {
   function openShapeSizePanel(open = true) {
     if (!shapeSizePanel) return;
     shapeSizePanel.classList.toggle("is-hidden", !open);
-    shapeSizeBtn?.setAttribute("aria-expanded", String(open));
+    regularShapeToolBtn?.setAttribute("aria-expanded", String(open));
     if (!open) return;
-    updateShapeSizeForm({ prefillSelected: true });
+    updateShapeSizeForm({ prefillSelected: true, syncFromTool: true });
     requestAnimationFrame(() => {
       positionShapeSizePanel();
       shapeWidthInput?.focus({ preventScroll: true });
@@ -866,7 +908,7 @@ function cutSelection() {
     const selected = selectedSingleShape();
     const dims = shapeFormDimensions();
     if (!selected || !dims) {
-      showToast(dims ? "Select one matching rectangle, square, circle, or oval first" : "Enter valid dimensions from 1 to 10,000 mm");
+      showToast(dims ? "Select one matching rectangle, oval, polygon, or star first" : "Enter valid dimensions from 1 to 10,000 mm");
       return false;
     }
     if (selected.obj.kind !== dims.kind) {
@@ -886,10 +928,20 @@ function cutSelection() {
     obj.y1 = cy - h / 2;
     obj.x2 = cx + w / 2;
     obj.y2 = cy + h / 2;
+    if (obj.kind === "regularShape") {
+      obj.shapeType = dims.type === "star" ? "star" : "polygon";
+      obj.sides = dims.sides;
+      obj.innerRatio = 0.45;
+      obj.filled = !!dims.filled;
+      obj.fillColor = obj.fillColor || obj.color || state.color;
+      syncRegularShapeSettingsFromForm();
+    }
     updatePerspectiveLinks();
     redrawAll();
     openShapeSizePanel(false);
-    showToast(`${describeShapeType(dims.type)} set to ${dims.width} × ${dims.height} mm`);
+    showToast(dims.kind === "regularShape"
+      ? `${describeShapeType(dims.type)} set to ${dims.width} mm across corners`
+      : `${describeShapeType(dims.type)} set to ${dims.width} × ${dims.height} mm`);
     return true;
   }
 
@@ -917,8 +969,17 @@ function cutSelection() {
       y1: centre.y - h / 2,
       x2: centre.x + w / 2,
       y2: centre.y + h / 2,
-      rot: 0
+      rot: 0,
+      ...(dims.kind === "regularShape" ? {
+        shapeType: dims.type === "star" ? "star" : "polygon",
+        sides: dims.sides,
+        innerRatio: 0.45,
+        filled: !!dims.filled,
+        fillColor: state.color,
+        strokeVisible: true
+      } : {})
     };
+    if (dims.kind === "regularShape") syncRegularShapeSettingsFromForm();
     ensureObjId(obj);
     state.objects.push(obj);
     const index = state.objects.length - 1;
@@ -927,7 +988,9 @@ function cutSelection() {
     setActiveTool("select");
     redrawAll();
     openShapeSizePanel(false);
-    showToast(`${describeShapeType(dims.type)} created at ${dims.width} × ${dims.height} mm`);
+    showToast(dims.kind === "regularShape"
+      ? `${describeShapeType(dims.type)} created at ${dims.width} mm across corners`
+      : `${describeShapeType(dims.type)} created at ${dims.width} × ${dims.height} mm`);
     return true;
   }
 
@@ -947,7 +1010,7 @@ function cutSelection() {
   }
 
   function tightObjectBounds(obj) {
-    if (obj && (obj.kind === "rect" || obj.kind === "circle") && Math.abs(obj.rot || 0) < 1e-9) {
+    if (obj && (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape") && Math.abs(obj.rot || 0) < 1e-9) {
       return {
         minX: Math.min(obj.x1, obj.x2),
         minY: Math.min(obj.y1, obj.y2),
@@ -1001,7 +1064,7 @@ function cutSelection() {
       return;
     }
 
-    if (obj.kind === "rect" || obj.kind === "circle") {
+    if (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape") {
       const cx = (obj.x1 + obj.x2) / 2;
       const cy = (obj.y1 + obj.y2) / 2;
       const centre = rotatePt({ x: cx, y: cy });
@@ -1146,7 +1209,7 @@ function cutSelection() {
     }
 
     const b = tightObjectBounds(obj);
-    const hasOwnRot = (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "text") && (obj.rot || 0);
+    const hasOwnRot = (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape" || obj.kind === "text") && (obj.rot || 0);
     if (obj.kind === "line" || obj.kind === "arrow") {
       const a = worldToScreen(obj.x1, obj.y1);
       const bpt = worldToScreen(obj.x2, obj.y2);
@@ -1172,7 +1235,7 @@ function cutSelection() {
       let w = b.maxX - b.minX;
       let h = b.maxY - b.minY;
 
-      if (obj.kind === "rect" || obj.kind === "circle") {
+      if (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape") {
         w = Math.abs(obj.x2 - obj.x1);
         h = Math.abs(obj.y2 - obj.y1);
       } else if (obj.kind === "text") {
@@ -1331,6 +1394,7 @@ function cutSelection() {
     distToSeg,
     pointInPoly,
     polyBounds,
+    regularShapePoints,
     isAngleOnArc,
     segIntersection,
     getLineDash,
@@ -1448,6 +1512,14 @@ function cutSelection() {
       return a && b ? { x1: a.x, y1: a.y, x2: b.x, y2: b.y } : null;
     }
 
+    if (obj.kind === "regularShape" && ref.kind === "regularShapeEdge") {
+      const pts = regularShapePoints(obj);
+      const i = Number(ref.index) || 0;
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      return a && b ? { x1: a.x, y1: a.y, x2: b.x, y2: b.y } : null;
+    }
+
     if (obj.kind === "text" && ref.kind === "textEdge") {
       const i = Number(ref.index) || 0;
       const a = textCornerPoint(obj, i);
@@ -1523,6 +1595,11 @@ function cutSelection() {
 
     if (obj.kind === "polyFill" && ref.kind === "polyVertex") {
       const pt = (obj.pts || [])[index];
+      return pt ? { x: pt.x, y: pt.y } : null;
+    }
+
+    if (obj.kind === "regularShape" && ref.kind === "regularShapeVertex") {
+      const pt = regularShapePoints(obj)[index];
       return pt ? { x: pt.x, y: pt.y } : null;
     }
 
@@ -2624,7 +2701,8 @@ function cutSelection() {
     uiHandles,
     getLineDash,
     findObjById,
-    perspectiveTargetPoints
+    perspectiveTargetPoints,
+    regularShapePoints
   });
 
   const {
@@ -2732,6 +2810,7 @@ function cutSelection() {
     screenToWorld,
     pointOnArc,
     rectEdges,
+    regularShapePoints,
     perspectiveTargetPoints,
     exportWorldBounds,
     ensureObjId,
@@ -2845,7 +2924,7 @@ function cutSelection() {
     color = obj.color || state.color;
     opacity = obj.opacity ?? 1;
 
-    if ((obj.kind === "rect" || obj.kind === "circle") && obj.filled && obj.fillColor) {
+    if ((obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape") && obj.filled && obj.fillColor) {
       color = obj.fillColor;
     }
 
@@ -2885,6 +2964,7 @@ function applyStylePatchToObject(obj, patch = {}) {
         break;
       case "rect":
       case "circle":
+      case "regularShape":
         obj.color = patch.color;
         if (obj.filled) obj.fillColor = patch.color;
         break;
@@ -2903,7 +2983,7 @@ function applyStylePatchToObject(obj, patch = {}) {
     else if (obj.kind === "text") obj.fontSize = Math.max(14, Math.round(Number(patch.size) * 4));
   }
 
-  if (patch.lineStyle != null && ["line", "arrow", "arc", "rect", "circle", "curve"].includes(obj.kind)) {
+  if (patch.lineStyle != null && ["line", "arrow", "arc", "rect", "circle", "regularShape", "curve"].includes(obj.kind)) {
     obj.lineStyle = patch.lineStyle;
   }
   return true;
@@ -3554,7 +3634,7 @@ function applyStyleToSelectionLive(patch = {}) {
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
     const shapeUsesOppositeCorner = kind === "scale"
-      && (state.objects[idx]?.kind === "rect" || state.objects[idx]?.kind === "circle")
+      && (state.objects[idx]?.kind === "rect" || state.objects[idx]?.kind === "circle" || state.objects[idx]?.kind === "regularShape")
       && Math.abs(state.objects[idx]?.rot || 0) < 1e-9;
     gesture.selAnchor = shapeUsesOppositeCorner
       ? (oppositeCornerAnchor(b, detail?.corner) || { x: cx, y: cy })
@@ -4242,7 +4322,7 @@ if (state.tool === "select") {
       return;
     }
 
-    if (["line", "rect", "circle", "arrow"].includes(state.tool)) {
+    if (["line", "rect", "circle", "regularShape", "arrow"].includes(state.tool)) {
       const bypassSnap = isMac ? e.metaKey : e.ctrlKey;
 
       let p0;
@@ -4268,8 +4348,16 @@ if (state.tool === "select") {
         size: state.size,
         opacity: state.opacity,
         lineStyle: state.lineStyle || "solid",
-        filled: (state.tool === "rect" || state.tool === "circle") && fillHeld,
+        filled: state.tool === "regularShape"
+          ? (fillHeld || !!state.regularShapeSettings?.filled)
+          : (state.tool === "rect" || state.tool === "circle") && fillHeld,
         fillColor: state.color,
+        ...(state.tool === "regularShape" ? {
+          shapeType: state.regularShapeSettings?.shapeType === "star" ? "star" : "polygon",
+          sides: Math.max(state.regularShapeSettings?.shapeType === "star" ? 4 : 3, Math.min(20, Math.round(Number(state.regularShapeSettings?.sides) || 6))),
+          innerRatio: Number(state.regularShapeSettings?.innerRatio) || 0.45,
+          strokeVisible: true
+        } : {}),
         x1: p0.x,
         y1: p0.y,
         x2: p0.x,
@@ -4284,6 +4372,7 @@ if (state.tool === "select") {
       if (obj.kind === "line") showMeasureTip(sx, sy, "0 mm");
       if (obj.kind === "rect") showMeasureTip(sx, sy, "0 × 0 mm");
       if (obj.kind === "circle") showMeasureTip(sx, sy, "Ø 0 mm");
+      if (obj.kind === "regularShape") showMeasureTip(sx, sy, `${obj.shapeType === "star" ? obj.sides + "-point star" : obj.sides + "-sided polygon"} • 0 mm across corners`);
 
       redrawAll();
       return;
@@ -4428,7 +4517,8 @@ if (state.tool === "select") {
       const v1 = { x: w.x - ax, y: w.y - ay };
       let fx = Math.abs(v0.x) < 0.001 ? 1 : v1.x / v0.x;
       let fy = Math.abs(v0.y) < 0.001 ? 1 : v1.y / v0.y;
-      if (e.shiftKey) {
+      const regularSingle = gesture.selStartItems.length === 1 && gesture.selStartItems[0]?.obj?.kind === "regularShape";
+      if (e.shiftKey || regularSingle) {
         const f = (Math.hypot(v1.x, v1.y) || 1) / (Math.hypot(v0.x, v0.y) || 1);
         fx = f;
         fy = f;
@@ -4484,7 +4574,7 @@ if (state.tool === "select") {
       const fyRaw = Math.abs(v0.y) < 0.001 ? 1 : v1.y / v0.y;
 
       let fx = fxRaw, fy = fyRaw;
-      if (e.shiftKey) {
+      if (e.shiftKey || obj0.kind === "regularShape") {
         const l0 = Math.hypot(v0.x, v0.y) || 1;
         const l1 = Math.hypot(v1.x, v1.y) || 1;
         const f = l1 / l0;
@@ -4650,9 +4740,9 @@ if (state.tool === "select") {
           if (gesture.forceLinkActive) autoLinkLinesTouchingDrawnLine(gesture.activeObj);
         }
       }
-      else if (k === "rect" || k === "circle") p2 = snapShapePoint(startPt, p2, bypassSnap);
+      else if (k === "rect" || k === "circle" || k === "regularShape") p2 = snapShapePoint(startPt, p2, bypassSnap);
 
-      if ((k === "rect" || k === "circle") && e.shiftKey) {
+      if (k === "regularShape" || ((k === "rect" || k === "circle") && e.shiftKey)) {
         const dx = p2.x - startPt.x;
         const dy = p2.y - startPt.y;
         const sgnX = dx >= 0 ? 1 : -1;
@@ -4679,6 +4769,12 @@ if (state.tool === "select") {
         if (Math.abs(wMm - hMm) <= 1) showMeasureTip(sx, sy, `Ø ${Math.round((wMm + hMm) / 2)} mm`);
         else showMeasureTip(sx, sy, `${Math.round(wMm)} × ${Math.round(hMm)} mm`);
       }
+      if (k === "regularShape") {
+        const wMm = Math.abs(p2.x - startPt.x) / pxPerMm();
+        const hMm = Math.abs(p2.y - startPt.y) / pxPerMm();
+        const label = gesture.activeObj.shapeType === "star" ? `${gesture.activeObj.sides}-point star` : `${gesture.activeObj.sides}-sided polygon`;
+        showMeasureTip(sx, sy, `${label} • ${Math.round(Math.min(wMm, hMm))} mm across corners`);
+      }
 
       redrawAll();
       return;
@@ -4693,7 +4789,7 @@ if (state.tool === "select") {
     if (obj.kind === "line" || obj.kind === "arrow") {
       return Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * zoom < minPx;
     }
-    if (obj.kind === "rect" || obj.kind === "circle") {
+    if (obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape") {
       return Math.abs(obj.x2 - obj.x1) * zoom < minPx || Math.abs(obj.y2 - obj.y1) * zoom < minPx;
     }
     if (obj.kind === "arc") {
@@ -5243,6 +5339,11 @@ state.selection = [];
       if (k === "e") setActiveTool("eraser");
       if (k === "k") setActiveTool("polyFill");
       if (k === "u") setActiveTool("curve");
+      if (k === "q") {
+        setActiveTool("regularShape");
+        if (shapeTypeSelect && !["polygon", "star"].includes(shapeTypeSelect.value)) shapeTypeSelect.value = state.regularShapeSettings?.shapeType === "star" ? "star" : "polygon";
+        openShapeSizePanel(true);
+      }
     }
 
     if (mod) {
@@ -5400,24 +5501,36 @@ state.selection = [];
   bindBoardManager();
   bindAutosave();
 
-  shapeSizeBtn?.setAttribute("aria-expanded", "false");
-  shapeSizeBtn?.addEventListener("click", e => {
-    e.stopPropagation();
-    openShapeSizePanel(shapeSizePanel?.classList.contains("is-hidden"));
-  });
+  regularShapeToolBtn?.setAttribute("aria-expanded", "false");
   shapeSizeCloseBtn?.addEventListener("click", () => openShapeSizePanel(false));
-  shapeTypeSelect?.addEventListener("change", () => updateShapeSizeForm());
+  shapeTypeSelect?.addEventListener("change", () => {
+    syncRegularShapeSettingsFromForm();
+    updateShapeSizeForm();
+  });
   shapeWidthInput?.addEventListener("input", () => {
-    if (shapeTypeSelect?.value === "square" || shapeTypeSelect?.value === "circle") {
+    if (["polygon", "star"].includes(shapeTypeSelect?.value)) {
       if (shapeHeightInput) shapeHeightInput.value = shapeWidthInput.value;
     }
+  });
+  shapeSidesInput?.addEventListener("input", () => {
+    syncRegularShapeSettingsFromForm();
+    updateShapeSizeForm();
+  });
+  shapeFilledInput?.addEventListener("change", syncRegularShapeSettingsFromForm);
+  regularShapeToolBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    openShapeSizePanel(true);
+    if (shapeTypeSelect) shapeTypeSelect.value = state.regularShapeSettings?.shapeType === "star" ? "star" : "polygon";
+    if (shapeSidesInput) shapeSidesInput.value = String(state.regularShapeSettings?.sides || 6);
+    if (shapeFilledInput) shapeFilledInput.checked = !!state.regularShapeSettings?.filled;
+    updateShapeSizeForm();
   });
   shapeSizeApplyBtn?.addEventListener("click", applyExactShapeSize);
   shapeSizeCreateBtn?.addEventListener("click", createExactShape);
   shapeSizePanel?.addEventListener("pointerdown", e => e.stopPropagation());
   document.addEventListener("pointerdown", e => {
     if (!shapeSizePanel || shapeSizePanel.classList.contains("is-hidden")) return;
-    if (!shapeSizePanel.contains(e.target) && !shapeSizeBtn?.contains(e.target)) openShapeSizePanel(false);
+    if (!shapeSizePanel.contains(e.target) && !regularShapeToolBtn?.contains(e.target)) openShapeSizePanel(false);
   });
   window.addEventListener("resize", positionShapeSizePanel);
   document.addEventListener("keydown", e => {
@@ -5627,7 +5740,7 @@ lineStyleCenter?.addEventListener("click", () => applyLineStylePreset("center"))
   });
 
   window.PHSWhiteboard = Object.freeze({
-    version: "11.1-exact-shape-size",
+    version: "11.6-simplified-shapes-final-qa",
     getSnapshot: () => deepClone(snapshot()),
     getSelection: () => [...(state.selection || [])],
     getPresentationState: () => ({ active: presentationState.active, blank: presentationState.blank }),

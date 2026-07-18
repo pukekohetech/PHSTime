@@ -155,6 +155,40 @@ window.WBShared = (() => {
     return inside;
   }
 
+  function regularShapePoints(obj) {
+    if (!obj) return [];
+    const type = obj.shapeType === "star" ? "star" : "polygon";
+    const minimum = type === "star" ? 4 : 3;
+    const sides = clamp(Math.round(Number(obj.sides) || (type === "star" ? 5 : 6)), minimum, 20);
+    const innerRatio = clamp(Number(obj.innerRatio) || 0.45, 0.15, 0.85);
+    const count = type === "star" ? sides * 2 : sides;
+
+    const x1 = Number(obj.x1) || 0;
+    const y1 = Number(obj.y1) || 0;
+    const x2 = Number(obj.x2) || 0;
+    const y2 = Number(obj.y2) || 0;
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+
+    // Use one common scale for both axes. Fitting the canonical vertices
+    // independently to width and height turns regular polygons into stretched
+    // polygons because their natural x/y extents are not generally equal.
+    // The stored square represents the circumscribed circle diameter.
+    const radius = Math.max(0, Math.min(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2);
+    const rotation = Number(obj.rot) || 0;
+
+    const points = [];
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 + (i / count) * Math.PI * 2 + rotation;
+      const radialScale = type === "star" && i % 2 === 1 ? innerRatio : 1;
+      points.push({
+        x: cx + Math.cos(angle) * radius * radialScale,
+        y: cy + Math.sin(angle) * radius * radialScale
+      });
+    }
+    return points;
+  }
+
   function polyBounds(pts) {
     if (!pts || !pts.length) {
       return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -263,6 +297,7 @@ function getLineDash(style, size = 1) {
     distToSeg,
     pointInPoly,
     polyBounds,
+    regularShapePoints,
     isAngleOnArc,
     getLineDash,
     svgDashArray,

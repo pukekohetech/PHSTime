@@ -20,6 +20,7 @@ window.WBGeometry = (() => {
       distToSeg,
       pointInPoly,
       polyBounds,
+      regularShapePoints,
       isAngleOnArc,
       segIntersection
     } = ctx;
@@ -213,6 +214,7 @@ window.WBGeometry = (() => {
         }));
       }
       if (target.kind === "polyFill") return (target.pts || []).map(p => ({ x: p.x, y: p.y }));
+      if (target.kind === "regularShape") return regularShapePoints(target).map(p => ({ x: p.x, y: p.y }));
       if (target.kind === "stroke" || target.kind === "erase") return (target.points || []).filter((_, i, a) => i === 0 || i === a.length - 1).map(p => ({ x: p.x, y: p.y }));
       const b = objectBounds(target);
       return [
@@ -256,6 +258,12 @@ window.WBGeometry = (() => {
       if (obj.kind === "polyFill") {
         const b = polyBounds(obj.pts || []);
         const pad = 4;
+        return { minX: b.minX - pad, minY: b.minY - pad, maxX: b.maxX + pad, maxY: b.maxY + pad };
+      }
+
+      if (obj.kind === "regularShape") {
+        const b = polyBounds(regularShapePoints(obj));
+        const pad = (obj.size || 4) * 1.0;
         return { minX: b.minX - pad, minY: b.minY - pad, maxX: b.maxX + pad, maxY: b.maxY + pad };
       }
 
@@ -411,6 +419,10 @@ window.WBGeometry = (() => {
         return pointInPoly(wx, wy, obj.pts || []);
       }
 
+      if (obj.kind === "regularShape") {
+        return pointInPoly(wx, wy, regularShapePoints(obj));
+      }
+
       if (obj.kind === "text") {
         const b = objectBounds(obj);
         return wx >= b.minX && wx <= b.maxX && wy >= b.minY && wy <= b.maxY;
@@ -539,7 +551,7 @@ window.WBGeometry = (() => {
         return;
       }
 
-      if (obj.kind === "text" || obj.kind === "rect" || obj.kind === "circle") {
+      if (obj.kind === "text" || obj.kind === "rect" || obj.kind === "circle" || obj.kind === "regularShape") {
         obj.rot = (obj.rot || 0) + angle;
         return;
       }
@@ -834,6 +846,15 @@ window.WBGeometry = (() => {
             ...pt,
             ref: obj._id ? { type: "anchor", objId: obj._id, kind: "polyVertex", index } : null,
             segRef: obj._id ? { type: "segment", objId: obj._id, kind: "polyEdge", index } : null
+          })), true, 96);
+          continue;
+        }
+
+        if (obj.kind === "regularShape") {
+          addPolyline(regularShapePoints(obj).map((pt, index) => ({
+            ...pt,
+            ref: obj._id ? { type: "anchor", objId: obj._id, kind: "regularShapeVertex", index } : null,
+            segRef: obj._id ? { type: "segment", objId: obj._id, kind: "regularShapeEdge", index } : null
           })), true, 96);
           continue;
         }
@@ -1164,7 +1185,8 @@ function snapPolyPoint(rawPt, bypassSnap) {
       return { minX, minY, maxX, maxY };
     }
 
-    function exportWorldBounds() {
+    function exportWorldBounds(options = {}) {
+      const includeHidden = !!options.includeHidden;
       let bounds = null;
 
       const bgB = backgroundBounds();
@@ -1178,7 +1200,7 @@ function snapPolyPoint(rawPt, bypassSnap) {
       }
 
       for (const obj of state.objects) {
-        if (!obj || obj.hidden) continue;
+        if (!obj || (!includeHidden && obj.hidden)) continue;
         const b = objectBounds(obj);
         if (!b) continue;
         if (![b.minX, b.minY, b.maxX, b.maxY].every(Number.isFinite)) continue;

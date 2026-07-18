@@ -27,7 +27,8 @@ window.WBRender = (() => {
       dpr,
       getLineDash,
       findObjById,
-      perspectiveTargetPoints
+      perspectiveTargetPoints,
+      regularShapePoints
     } = ctx;
 
     function clearCtx(canvasCtx, canvas) {
@@ -174,6 +175,28 @@ window.WBRender = (() => {
           inkCtx.fill();
         }
 
+        inkCtx.restore();
+        return;
+      }
+
+      if (obj.kind === "regularShape") {
+        inkCtx.globalCompositeOperation = "source-over";
+        const pts = regularShapePoints(obj);
+        if (pts.length >= 3) {
+          inkCtx.strokeStyle = obj.color || "#111111";
+          inkCtx.lineWidth = obj.size || 4;
+          inkCtx.setLineDash([].concat(getLineDash(obj.lineStyle || "solid", obj.size || 4)));
+          inkCtx.beginPath();
+          inkCtx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) inkCtx.lineTo(pts[i].x, pts[i].y);
+          inkCtx.closePath();
+          if (obj.filled) {
+            inkCtx.fillStyle = obj.fillColor || obj.color || "#111111";
+            inkCtx.fill();
+          }
+          if (obj.strokeVisible !== false) inkCtx.stroke();
+          inkCtx.setLineDash([]);
+        }
         inkCtx.restore();
         return;
       }

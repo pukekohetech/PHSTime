@@ -105,7 +105,7 @@
       <button class="dockBtn" data-tool="line" type="button" title="Line (L)" aria-label="Line">／</button>
       <button class="dockBtn" data-tool="rect" type="button" title="Rectangle — hold Shift for a square (R)" aria-label="Rectangle or square">▭</button>
       <button class="dockBtn" data-tool="circle" type="button" title="Circle or ellipse — hold Shift for a perfect circle (C)" aria-label="Circle or ellipse">◯</button>
-      <button class="dockBtn dockBtn--text" id="shapeSizeBtn" type="button" title="Create or resize a shape to exact millimetres (D)" aria-label="Exact shape size">mm</button>
+      <button class="dockBtn" data-tool="regularShape" id="regularShapeToolBtn" type="button" title="Shapes and exact sizes — choose shape, sides, and measurements (Q)" aria-label="Shapes, polygons, stars, and exact sizes" aria-expanded="false">★</button>
       <button class="dockBtn" data-tool="arrow" type="button" title="Arrow (A)" aria-label="Arrow">➤</button>
       <button class="dockBtn" data-tool="arc" type="button" title="Arc (G)" aria-label="Arc">⌒</button>
       <button class="dockBtn" data-tool="curve" type="button" title="Smooth curve (U)" aria-label="Smooth curve">〰</button>
@@ -138,8 +138,8 @@
         <section class="shapeSizePanel is-hidden" id="shapeSizePanel" role="dialog" aria-modal="false" aria-labelledby="shapeSizeTitle">
           <div class="shapeSizePanel__top">
             <div>
-              <div class="shapeSizePanel__title" id="shapeSizeTitle">Exact shape size</div>
-              <div class="shapeSizePanel__sub">Measurements use the current drawing scale.</div>
+              <div class="shapeSizePanel__title" id="shapeSizeTitle">Shapes and exact size</div>
+              <div class="shapeSizePanel__sub">Choose a shape and set its measurements. Equal rectangle or oval dimensions create a square or circle.</div>
             </div>
             <button class="shapeSizePanel__close" id="shapeSizeCloseBtn" type="button" aria-label="Close exact shape size">✕</button>
           </div>
@@ -147,9 +147,9 @@
           <label class="shapeSizePanel__label" for="shapeTypeSelect">Shape</label>
           <select class="shapeSizePanel__select" id="shapeTypeSelect">
             <option value="rect">Rectangle</option>
-            <option value="square">Square</option>
             <option value="oval">Oval</option>
-            <option value="circle">Circle</option>
+            <option value="polygon">Regular polygon</option>
+            <option value="star">Star</option>
           </select>
 
           <div class="shapeSizePanel__fields">
@@ -169,6 +169,20 @@
             </label>
           </div>
 
+          <div class="shapeSizePanel__regular is-hidden" id="shapeRegularOptions">
+            <label class="shapeSizePanel__field">
+              <span id="shapeSidesLabel">Sides</span>
+              <span class="shapeSizePanel__inputWrap">
+                <input id="shapeSidesInput" type="number" inputmode="numeric" min="3" max="20" step="1" value="6" />
+              </span>
+            </label>
+            <label class="shapeSizePanel__check">
+              <input id="shapeFilledInput" type="checkbox" />
+              <span>Filled shape</span>
+            </label>
+            <div class="shapeSizePanel__hint">Choose the sides or points here, then drag with the ★ tool. Regular polygons use equal side lengths. Stars use evenly spaced outer points and equal edge lengths.</div>
+          </div>
+
           <div class="shapeSizePanel__selection" id="shapeSizeSelectionNote">No shape selected. Create places the new shape in the centre of the board.</div>
           <div class="shapeSizePanel__actions">
             <button id="shapeSizeApplyBtn" type="button">Apply to selected</button>
@@ -178,15 +192,15 @@
 
 
         <button
-          class="pagesBtn advancedOnly"
+          class="pagesBtn pagesBtn--labelled"
           id="pagesBtn"
           type="button"
           aria-haspopup="true"
           aria-expanded="false"
-          title="Other PHS tools"
-        >🧭</button>
+          title="Open PHS Tools quick links"
+        ><span aria-hidden="true">🧭</span><span>PHS Tools</span></button>
 
-        <nav class="pagesPop is-hidden advancedOnly" id="pagesPop" aria-label="Site pages">
+        <nav class="pagesPop is-hidden" id="pagesPop" aria-label="PHS Tools quick links">
           <div class="pagesPop__head">
             <div>
               <div class="pagesPop__title">PHS Tools</div>
@@ -430,7 +444,7 @@
 
       <details class="hint">
         <summary>Keyboard and drawing help</summary>
-        <div class="hint__body">Pen P • Line L • Rectangle R • Circle C • Arrow A • Arc G • Curve U • Polygon K • Text T • Eraser E • Select V. Hold Shift while drawing for a square or perfect circle, or use the mm button to enter exact dimensions. In Select, drag around several items to use one shared group box, then drag inside it to move the group. Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected • Wheel zooms • Space+drag pans. Open Board → Specialist editing and reveal tools for transforms, scale, line repair, and reveal setup.</div>
+        <div class="hint__body">Pen P • Line L • Rectangle R • Circle C • Arrow A • Arc G • Curve U • Polygon K • Text T • Eraser E • Select V. Hold Shift while drawing for a square or perfect circle. Click ★ for polygons, stars, and exact dimensions. In Select, drag around several items to use one shared group box, then drag inside it to move the group. Ctrl/Cmd+Z undo • Ctrl/Cmd+Y redo • Delete removes selected • Wheel zooms • Space+drag pans. Open Board → Specialist editing and reveal tools for transforms, scale, line repair, and reveal setup.</div>
       </details>
     </section>
   </main>
